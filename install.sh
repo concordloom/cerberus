@@ -21,6 +21,7 @@
 #   sh install.sh              # detect what the project uses, install for it
 #   sh install.sh --claude     # .claude/skills + hooks + settings wiring
 #   sh install.sh --codex      # .agents/skills (no hooks: Codex has no equivalent)
+#   sh install.sh --setup      # and run the setup step immediately afterwards
 #   sh install.sh --dir PATH   # install into PATH instead of the current directory
 #
 # Piped through sh, arguments go after -s --, e.g. `| sh -s -- --codex`.
@@ -57,11 +58,13 @@ resolve
 TARGET=$(pwd)
 WANT_CLAUDE=0
 WANT_CODEX=0
+RUN_SETUP=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --claude) WANT_CLAUDE=1 ;;
     --codex)  WANT_CODEX=1 ;;
+    --setup)  RUN_SETUP=1 ;;
     --dir)    shift; TARGET=$1 ;;
     -h|--help) awk 'NR>1 && /^#/ {sub(/^# ?/, ""); print; next} NR>1 {exit}' "$0"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
@@ -212,4 +215,20 @@ if [ "$WANT_CODEX" -eq 1 ]; then
 fi
 
 echo
-echo "Done. Invoke the skill before claiming a change works."
+if [ "$WANT_CLAUDE" -eq 1 ]; then
+  # The example configuration's checks are placeholders, so at this point the
+  # gate refuses claims while checking nothing. Setup is what closes that, and
+  # it is the difference between installed and working — so it is offered as
+  # the next step rather than left to be discovered.
+  if [ "$RUN_SETUP" -eq 1 ]; then
+    python3 "$TARGET/.claude/hooks/cerberus_setup.py" --dir "$TARGET" || true
+  else
+    echo "One more step — it sets up the checks and shows you it working:"
+    echo
+    echo "    python3 .claude/hooks/cerberus_setup.py"
+    echo
+    echo "Until then it will refuse claims without checking anything."
+  fi
+else
+  echo "Done. Invoke the skill before claiming a change works."
+fi

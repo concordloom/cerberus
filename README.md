@@ -16,6 +16,18 @@ you a change works, it has to seriously try to prove it is broken — and fail.
 
 [Русская версия](README.ru.md) · [The skill itself](plugins/cerberus/skills/cerberus/SKILL.md) ([ru](plugins/cerberus/skills/cerberus/SKILL.ru.md))
 
+## Three heads
+
+| | what it refuses to let you say |
+|---|---|
+| **gate** | *"it works"* — until a serious attempt to break the change has failed |
+| **critic** | *"the cause is X"* — until someone independent has tried to disprove it |
+| **setup** | *"it's installed"* — until you have watched it refuse something |
+
+One plugin, one install, three [skills](plugins/cerberus/skills/). The first two
+do not cover each other: work can be right while its explanation is wrong, and a
+right explanation proves nothing ever ran.
+
 ## The problem
 
 An agent builds a feature, sees rows appear in the database and activity in the

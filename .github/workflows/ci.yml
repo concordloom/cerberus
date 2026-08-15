@@ -50,6 +50,13 @@ jobs:
           python3 scripts/check_commands.py
           python3 tests/test_commands.py
 
+      # Setup is the first thing a new user meets, and two of its properties
+      # are usually untestable: that it proves the gate fires rather than
+      # claiming it, and that what the user reads is free of vocabulary that
+      # means nothing to them. Both are pinned to checks that can fail.
+      - name: Setup works, and reads like something a person would write
+        run: python3 tests/test_setup.py
+
   docs:
     runs-on: ubuntu-latest
     name: Translation parity
