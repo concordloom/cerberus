@@ -195,13 +195,47 @@ def test_never_deletes_settings_it_cannot_write():
         assert key in after, f"{key} was deleted:\n{out}"
 
 
-def test_a_failing_suite_is_called_failing_not_missing():
+def test_a_failing_check_is_called_failing_not_absent():
     # It ran and did not pass. Reporting that as "did not run here" is false,
     # and it is the difference between a project with a broken suite and a
     # project without the tool installed.
-    root = project({**PY_PROJECT, "tests/test_demo.py": "def test_bad():\n    assert False\n"})
+    #
+    # Driven through build_checks with synthetic commands rather than through a
+    # real runner: CI has no pytest, so an earlier version of this asserted on
+    # a suite that was absent rather than failing, and went red for the wrong
+    # reason. Exit codes are the rule; the toolchain is not.
+    sys.path.insert(0, str(HOOKS))
+    import cerberus_setup
+
+    runner = {
+        "name": "Synthetic",
+        "files": [],
+        "checks": [
+            ("sh -c 'exit 0'", None),
+            ("sh -c 'exit 1'", None),
+            ("definitely-not-a-real-command-here", None),
+        ],
+        "fallback": None,
+    }
+    with tempfile.TemporaryDirectory() as d:
+        results = cerberus_setup.build_checks([runner], pathlib.Path(d))
+    codes = {cmd: code for cmd, code, _ in results}
+    assert codes["sh -c 'exit 0'"] == 0
+    assert codes["sh -c 'exit 1'"] == 1, "a check that ran and failed must not be 0 or 127"
+    assert codes["definitely-not-a-real-command-here"] == 127, codes
+
+
+def test_a_failing_check_is_reported_as_failing_end_to_end():
+    # The same rule through the whole script, using a command that cannot be
+    # missing: a Python file that does not compile makes the fallback fail.
+    # Both, so the assertion holds whether or not pytest exists here: with it,
+    # the suite runs and fails; without it, the compile fallback runs and fails
+    # on the unparseable file.
+    root = project({"pyproject.toml": '[project]\nname = "d"\nversion = "1"\n',
+                    "tests/test_demo.py": "def test_bad():\n    assert False\n",
+                    "broken.py": "def (\n"})
     rc, out = run_setup(root)
-    assert "FAILING" in out, out
+    assert "FAILING" in out or "none of its checks pass" in out, out
     assert "did not run here" not in out, out
 
 
