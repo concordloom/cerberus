@@ -1,5 +1,13 @@
 # Changelog
 
+# [1.1.0](https://github.com/concordloom/cerberus-skill/compare/v1.0.1...v1.1.0) (2026-08-15)
+
+
+### Features
+
+* **install:** install with one command, without cloning first ([1c6eb23](https://github.com/concordloom/cerberus-skill/commit/1c6eb23d0186146ec2397317045e02f9c64169e2))
+* **skill:** anchor the gate to an issue written before the work ([dc11fa0](https://github.com/concordloom/cerberus-skill/commit/dc11fa074cbe3e6f871faf30c338c1ebd7c28bda))
+
 ## [1.0.1](https://github.com/concordloom/cerberus-skill/compare/v1.0.0...v1.0.1) (2026-08-15)
 
 
