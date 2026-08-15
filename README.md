@@ -18,12 +18,15 @@ you a change works, it has to seriously try to prove it is broken — and fail.
 
 ## Quick start
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/concordloom/cerberus/main/install.sh | sh -s -- --claude --setup
+**Claude Code** — two commands, and the hooks are wired:
+
+```
+/plugin marketplace add concordloom/cerberus
+/plugin install cerberus@concordloom
 ```
 
-Installs it, works out what your checks are, runs them here, and makes the gate
-refuse a claim in front of you:
+Then ask it to set the project up. It works out what your checks are, runs them,
+and makes the gate refuse a claim in front of you:
 
 ```text
 Checks I ran here, and will run before anyone says the work is done:
@@ -32,7 +35,16 @@ Checks I ran here, and will run before anyone says the work is done:
 Tried it: saying the work was done was refused, and it named the edited file
 ```
 
-Other agents and other ways to install it: [Install](#install).
+**Codex**, and everything else reading `.agents/skills` — one command:
+
+```console
+gh skill install concordloom/cerberus --all --agent codex
+```
+
+Codex has no hook mechanism, so the gate is advisory there: followed when the
+skill is invoked, not enforced on every turn.
+
+Prefer the files committed in your own repository? See [Install](#install).
 
 ## What it does to your session
 
