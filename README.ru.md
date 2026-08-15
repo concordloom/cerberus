@@ -26,8 +26,18 @@
 /plugin install cerberus@concordloom
 ```
 
-Дальше попросите его настроить проект. Он выяснит, какие у вас проверки,
-прогонит их и заставит гейт отказать заявлению у вас на глазах:
+**Codex** — одна команда, прямо в сессии:
+
+```
+$skill-installer install https://github.com/concordloom/cerberus/tree/main/plugins/cerberus/skills/cerberus
+```
+
+Замените `cerberus` в конце на `critic` или `setup`, чтобы добавить
+остальные два.
+
+Дальше в любом случае попросите его настроить проект. Он выяснит, какие
+у вас проверки, прогонит их и заставит гейт отказать заявлению у вас
+на глазах:
 
 ```text
 Checks I ran here, and will run before anyone says the work is done:
@@ -36,17 +46,17 @@ Checks I ran here, and will run before anyone says the work is done:
 Tried it: saying the work was done was refused, and it named the edited file
 ```
 
-**Codex** и всё остальное, что читает `.agents/skills`, — одна команда:
+У Codex нет механизма хуков, поэтому там гейт совещательный: ему следуют,
+когда навык вызван, а не принуждают на каждом ходу. В Claude Code хук
+на остановку делает его механическим.
+
+**Или положите файлы в свой репозиторий** — навык, хуки и `cerberus.json`,
+который можно закоммитить. Клонировать нечего: оно само определит, что
+у проекта — `.claude/` или `.agents/`, и безопасно при повторном запуске:
 
 ```console
-gh skill install concordloom/cerberus --all --agent codex
+curl -fsSL https://raw.githubusercontent.com/concordloom/cerberus/main/install.sh | sh -s -- --setup
 ```
-
-У Codex нет механизма хуков, поэтому там гейт совещательный: ему следуют,
-когда навык вызван, а не принуждают на каждом ходу.
-
-Хочется, чтобы файлы лежали в вашем репозитории? См.
-[Установку](#установка).
 
 ## Что он делает с вашей сессией
 
@@ -83,35 +93,6 @@ Unverified files:
 
 Первые два не заменяют друг друга: работа бывает верной при неверном
 объяснении, а верное объяснение не доказывает, что хоть что-то исполнялось.
-
-## Установка
-
-**Claude Code, плагином.** Навык и хуки, подключены, править нечего:
-
-```
-/plugin marketplace add concordloom/cerberus
-/plugin install cerberus@concordloom
-```
-
-**В репозиторий.** Файлы, которые можно закоммитить, и `cerberus.json`,
-который можно править. Клонировать нечего: через `sh` скрипт сам добирает, что
-нужно, определяет, что у проекта — `.claude/` или `.agents/`, и безопасен
-при повторном запуске:
-
-```console
-curl -fsSL https://raw.githubusercontent.com/concordloom/cerberus/main/install.sh | sh -s -- --setup
-```
-
-**Codex и всё, что читает `.agents/skills`** — этот каталог общий с Copilot,
-Cursor, Gemini CLI и десятком других, так что одна установка служит всем:
-
-```console
-gh skill install concordloom/cerberus cerberus --agent codex
-```
-
-У Codex нет механизма хуков, поэтому там гейт совещательный: ему следуют,
-когда навык вызван, а не принуждают на каждом ходу. В Claude Code хук
-на остановку делает его механическим.
 
 ## Единственное, что надо настроить
 
