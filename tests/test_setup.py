@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import os
 import pathlib
+import re
 import subprocess
 import sys
 import tempfile
@@ -31,11 +32,21 @@ EXAMPLES = ROOT / "examples" / "settings.json"
 
 # Load-bearing internally, meaningless to someone being set up. The whole point
 # of the amendment on #13 is that this list is checked rather than intended.
+# Matched with word boundaries and with hyphens and underscores treated as
+# spaces: a plain substring list was defeated by writing "Stage-1",
+# "artifact kind" and "Blast-radius", which read exactly as badly.
 JARGON = [
     "oracle", "delivery boundary", "stage 0", "stage 1", "stage 2",
-    "counterexample", "blast radius", "artifact_kind", "adversary",
-    "marker", "cartesian", "cerberus_",
+    "counterexample", "counter example", "blast radius", "artifact kind",
+    "adversary", "marker", "cartesian", "sentinel", "predicate", "idempotent",
+    "topology", "semantics", "verdict",
 ]
+
+
+def jargon_in(text: str) -> list[str]:
+    flat = re.sub(r"[-_/]+", " ", text.lower())
+    flat = re.sub(r"\s+", " ", flat)
+    return [w for w in JARGON if re.search(r"\b" + re.escape(w) + r"\b", flat)]
 
 # The four keys that REPLACE the built-in lists. A machine must never write
 # them: a short guess makes the gate quietly narrower than advertised.
@@ -121,6 +132,34 @@ def test_refuses_a_project_it_cannot_recognise():
     assert not (root / ".claude" / "cerberus.json").exists(), "it guessed anyway"
 
 
+def test_a_settings_file_that_only_mentions_the_names_is_not_wiring():
+    # A substring check passed this: no hook object at all, just a comment.
+    root = project(PY_PROJECT, wired=False)
+    (root / ".claude" / "settings.json").write_text(
+        json.dumps({"//": "TODO wire up cerberus_mark.py and cerberus_gate.py", "hooks": {}}),
+        encoding="utf-8",
+    )
+    rc, out = run_setup(root)
+    assert rc == 1, out
+    assert "nothing is calling it" in out, out
+
+
+def test_a_plugin_install_is_recognised_as_wired():
+    # Hooks come from the plugin's own hooks.json and the project's settings
+    # never name them. The grep version told correctly-installed users that
+    # nothing was calling it, and exited 1 — on the install path the README
+    # puts first.
+    root = project(PY_PROJECT, wired=False)
+    hooks_json = HOOKS / "hooks.json"
+    if not hooks_json.exists():
+        return
+    (root / ".claude" / "hooks" / "hooks.json").write_text(
+        hooks_json.read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    rc, out = run_setup(root)
+    assert rc == 0, "a plugin install was told it is not wired:\n" + out
+
+
 def test_says_so_when_nothing_is_calling_it():
     # Scripts installed, settings not naming them: the state that looks
     # installed and guards nothing.
@@ -138,6 +177,42 @@ def test_leaves_a_hand_written_configuration_alone():
     assert rc == 0, out
     config = json.loads((root / ".claude" / "cerberus.json").read_text(encoding="utf-8"))
     assert config["verification"]["stage1"] == ["make test"], "it overwrote real configuration"
+
+
+def test_never_deletes_settings_it_cannot_write():
+    # It writes only the verification block — but an earlier version replaced
+    # the whole document, so a config that merely tuned the gate was deleted,
+    # custom marker and all, silently, and the gate reverted to defaults.
+    root = project({**PY_PROJECT, ".claude/cerberus.json": json.dumps({
+        "//": "hand tuned",
+        "claim_patterns": ["\\bshipped\\b"],
+        "watch_paths": ["src/"],
+        "marker": ".claude/mine-pending",
+    })})
+    rc, out = run_setup(root)
+    after = json.loads((root / ".claude" / "cerberus.json").read_text(encoding="utf-8"))
+    for key in ("claim_patterns", "watch_paths", "marker"):
+        assert key in after, f"{key} was deleted:\n{out}"
+
+
+def test_a_failing_suite_is_called_failing_not_missing():
+    # It ran and did not pass. Reporting that as "did not run here" is false,
+    # and it is the difference between a project with a broken suite and a
+    # project without the tool installed.
+    root = project({**PY_PROJECT, "tests/test_demo.py": "def test_bad():\n    assert False\n"})
+    rc, out = run_setup(root)
+    assert "FAILING" in out, out
+    assert "did not run here" not in out, out
+
+
+def test_stage2_never_holds_something_that_was_not_run():
+    # Comment lines in a list of commands exit 0 unconditionally — the
+    # placeholder this whole issue is about, one field over.
+    root = project(PY_PROJECT)
+    run_setup(root)
+    config = json.loads((root / ".claude" / "cerberus.json").read_text(encoding="utf-8"))
+    assert config["verification"]["stage2"] == [], config
+    assert "still empty" in config["verification"]["notes"], config
 
 
 def test_replaces_the_example_placeholders():
@@ -159,14 +234,43 @@ def test_check_mode_changes_nothing():
     assert not (root / ".claude" / "cerberus.json").exists(), "--check wrote a file"
 
 
-def test_the_demonstration_also_proves_it_stays_quiet():
-    # A hook that refuses everything would pass a block-only demonstration, and
-    # would be just as broken. Removing the "does not block" half must be
-    # visible, so assert the negative sentinel is exercised.
-    source = SETUP.read_text(encoding="utf-8")
-    assert "nothing is outstanding" in source, (
-        "the demonstration must check that an ordinary claim goes through"
+def test_a_broken_gate_is_not_reported_as_working():
+    # THE test. An earlier version of this greped the source for a string, so
+    # replacing the whole demonstration with `return True, "...refused..."`
+    # passed every test in this file — the one thing #13 declares must be
+    # impossible, for the price of one line.
+    #
+    # This breaks the gate instead and demands that setup notice. Nothing that
+    # returns a constant can survive it.
+    root = project(PY_PROJECT)
+    (root / ".claude" / "hooks" / "cerberus_gate.py").write_text(
+        "import sys\nsys.exit(0)\n", encoding="utf-8"
     )
+    rc, out = run_setup(root)
+    assert rc != 0, "a gate that refuses nothing was reported as working:\n" + out
+    assert "not guarding" in out, out
+
+
+def test_a_gate_that_refuses_everything_is_not_reported_as_working():
+    # The other half, and the reason the demonstration checks both directions:
+    # a hook that blocks unconditionally would pass a block-only proof and
+    # would be just as broken — it makes ordinary work impossible.
+    root = project(PY_PROJECT)
+    (root / ".claude" / "hooks" / "cerberus_gate.py").write_text(
+        "import json, sys\n"
+        "sys.stdin.read()\n"
+        "print(json.dumps({'decision': 'block', 'reason': 'no'}))\n",
+        encoding="utf-8",
+    )
+    rc, out = run_setup(root)
+    assert rc != 0, "a gate that refuses everything was reported as working:\n" + out
+
+
+def test_a_missing_mark_hook_is_not_reported_as_working():
+    root = project(PY_PROJECT)
+    (root / ".claude" / "hooks" / "cerberus_mark.py").unlink()
+    rc, out = run_setup(root)
+    assert rc != 0, "a missing hook was reported as working:\n" + out
 
 
 # ------------------------------------------------------- what the user reads
@@ -175,9 +279,8 @@ def test_the_demonstration_also_proves_it_stays_quiet():
 def test_the_output_uses_no_internal_vocabulary():
     root = project(PY_PROJECT)
     _, out = run_setup(root)
-    lowered = out.lower()
-    for word in JARGON:
-        assert word not in lowered, f"{word!r} means nothing to the reader:\n{out}"
+    found = jargon_in(out)
+    assert not found, f"{found} means nothing to the reader:\n{out}"
 
 
 def test_the_refusal_message_is_also_plain():
@@ -185,9 +288,8 @@ def test_the_refusal_message_is_also_plain():
     # least forgiving moment for vocabulary.
     root = project({"notes.txt": "hi\n"})
     _, out = run_setup(root)
-    lowered = out.lower()
-    for word in JARGON:
-        assert word not in lowered, f"{word!r} in the refusal:\n{out}"
+    found = jargon_in(out)
+    assert not found, f"{found} in the refusal:\n{out}"
 
 
 def test_the_output_fits_one_screen():
@@ -210,7 +312,9 @@ def test_questions_come_with_concrete_options():
     root = project({"notes.txt": "hi\n"})
     _, out = run_setup(root)
     assert "1." in out and "2." in out, "the questions must be enumerable: " + out
-    assert "?" not in out, "an open question is not a concrete option: " + out
+    # No assertion about question marks: an earlier one failed on output that
+    # satisfied the requirement *better* — offering options with a question and
+    # a default — which made it an accident rather than a property.
 
 
 def _main() -> int:

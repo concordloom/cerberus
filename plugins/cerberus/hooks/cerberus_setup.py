@@ -8,7 +8,7 @@ installation without a second delivery path.
 Run it from the project root:
 
     python3 .claude/hooks/cerberus_setup.py           # set up, then demonstrate
-    python3 .claude/hooks/cerberus_setup.py --check   # say what it would do
+    python3 .claude/hooks/cerberus_setup.py --check   # run the checks, write nothing
 
 Why it exists: ``install.sh`` copies an example config whose checks are
 ``echo`` placeholders. The blocking half of the gate then works — a readiness
@@ -85,38 +85,51 @@ KIND_SIGNALS = [
     ("library", []),
 ]
 
-STAGE2_BY_KIND = {
-    "service": [
-        "# Run the real thing where it actually runs, and drive one request end to end.",
-        "# Then make it fail on purpose and check the failure shows up.",
-    ],
-    "library": [
-        "# Build the package, install it into an empty environment,",
-        "# and import it there the way somebody else would.",
-    ],
-    "cli": [
-        "# Install the built command somewhere clean and run it with real arguments.",
-        "# Check the exit codes, not just the output.",
-    ],
-    "chart": [
-        "# Apply it to a real cluster or account and watch it settle.",
-    ],
-    "plugin": [
-        "# Install it into a clean environment and load it there.",
-    ],
+# What the last check has to reach, per kind. Deliberately NOT commands: this
+# script cannot run a deploy or a package build during setup, and writing a
+# comment line into a list of commands would be the placeholder again — a `#`
+# line exits 0 unconditionally, exactly like the `echo` it replaced. So the
+# list is left empty and the sentence is handed to the user instead.
+STAGE2_HINT_BY_KIND = {
+    "service": "run it where it actually runs and drive one real request through it",
+    "library": "build the package, install it somewhere empty, and import it from there",
+    "cli": "install the built command somewhere clean and run it with real arguments",
+    "chart": "apply it to a real cluster or account and watch it settle",
+    "plugin": "install it into a clean environment and load it there",
 }
 
 
-def run(cmd: str, cwd: pathlib.Path, timeout: int = 120) -> tuple[int, str]:
+def run(cmd: str, cwd: pathlib.Path, timeout: int = 60) -> tuple[int, str]:
+    """Run one candidate check.
+
+    stdin is closed rather than inherited: under `curl … | sh` the parent's
+    stdin is the pipe carrying the install script, and a check that reads from
+    it would block for its whole budget. The process group is killed on
+    timeout, because killing the shell leaves anything it forked behind.
+    """
     try:
-        proc = subprocess.run(
-            cmd, shell=True, cwd=str(cwd), capture_output=True, text=True, timeout=timeout
+        proc = subprocess.Popen(
+            cmd,
+            shell=True,
+            cwd=str(cwd),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            start_new_session=True,
         )
-        return proc.returncode, (proc.stdout + proc.stderr).strip()
-    except subprocess.TimeoutExpired:
-        return 124, "timed out"
     except Exception as exc:  # a missing shell is not this script's problem to solve
         return 127, str(exc)
+    try:
+        out, _ = proc.communicate(timeout=timeout)
+        return proc.returncode, (out or "").strip()
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(os.getpgid(proc.pid), 9)
+        except Exception:
+            proc.kill()
+        proc.communicate()
+        return 124, "timed out"
 
 
 def detect(root: pathlib.Path) -> tuple[list[dict], str | None]:
@@ -155,7 +168,10 @@ def _looks_like_a_command(root: pathlib.Path) -> bool:
 def build_checks(runners: list[dict], root: pathlib.Path) -> list[tuple[str, int, str]]:
     """Run every candidate check and report how each one went.
 
-    Nothing reaches the config without having been executed here first.
+    Nothing reaches the config without having been executed here first, and the
+    three ways a check can not-pass are kept apart: it is missing here, it timed
+    out, or it ran and failed. Collapsing them into one sentence let a failing
+    test suite be reported as one that never ran.
     """
     results = []
     for runner in runners:
@@ -172,17 +188,29 @@ def build_checks(runners: list[dict], root: pathlib.Path) -> list[tuple[str, int
     return results
 
 
-def write_config(root: pathlib.Path, kind: str, checks: list[str], dry: bool) -> pathlib.Path:
+def write_config(
+    root: pathlib.Path, kind: str, checks: list[str], dry: bool, existing: dict | None = None
+) -> pathlib.Path:
+    """Merge into whatever is there rather than replacing it.
+
+    Replacing the whole document is how a hand-tuned gate got deleted: the keys
+    this script must never write are also keys it must never remove.
+    """
     path = root / ".claude" / "cerberus.json"
-    body = {
-        "//": "Written by cerberus_setup.py. Every command below was run once, here, before being written.",
-        "verification": {
-            "artifact_kind": kind,
-            "stage1": checks,
-            "stage2": STAGE2_BY_KIND.get(kind, STAGE2_BY_KIND["library"]),
-            "notes": "Replace the stage2 lines with the real commands for this project.",
-        },
-    }
+    body = dict(existing or {})
+    body["//"] = "Every command in stage1 was run once, in this project, before being written here."
+    verification = dict(body.get("verification") or {})
+    verification["artifact_kind"] = kind
+    verification["stage1"] = checks
+    # Left empty on purpose: a comment line in a list of commands exits 0
+    # unconditionally, which is the placeholder this script exists to remove.
+    verification["stage2"] = []
+    verification["notes"] = (
+        "stage2 is still empty. Put here what proves it works where it really runs: "
+        + STAGE2_HINT_BY_KIND.get(kind, STAGE2_HINT_BY_KIND["library"])
+        + "."
+    )
+    body["verification"] = verification
     if not dry:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(body, indent=2) + "\n", encoding="utf-8")
@@ -211,7 +239,10 @@ def demonstrate(root: pathlib.Path) -> tuple[bool, str]:
     env = {**os.environ, "CLAUDE_PROJECT_DIR": str(root)}
     marker = root / ".claude" / ".cerberus-pending"
     had_marker = marker.exists()
-    saved = marker.read_text(encoding="utf-8") if had_marker else None
+    # Read as bytes and inside the try: a path the mark hook recorded may not be
+    # valid UTF-8, and decoding it out here escaped the cleanup entirely — a
+    # traceback instead of a sentence, and a probe file left behind.
+    saved = None
 
     def hook(script: pathlib.Path, payload: dict) -> str:
         proc = subprocess.run(
@@ -224,6 +255,8 @@ def demonstrate(root: pathlib.Path) -> tuple[bool, str]:
         return proc.stdout.strip()
 
     try:
+        if had_marker:
+            saved = marker.read_bytes()
         # The negative sentinel first: with nothing outstanding, a claim goes through.
         if marker.exists():
             marker.unlink()
@@ -247,32 +280,79 @@ def demonstrate(root: pathlib.Path) -> tuple[bool, str]:
     finally:
         transcript.unlink(missing_ok=True)
         if had_marker and saved is not None:
-            marker.write_text(saved, encoding="utf-8")
+            marker.write_bytes(saved)
         elif marker.exists():
             marker.unlink()
 
 
-def wiring(root: pathlib.Path) -> tuple[bool, bool]:
+def wiring(root: pathlib.Path) -> tuple[bool, str]:
     """Is anything actually going to call these scripts?
 
     ``demonstrate`` runs them directly, which proves they work and nothing
-    else. Claude Code only runs them if they are named in settings, and a
-    project where they are installed but unnamed behaves exactly like a project
-    where they are absent — the difference being that it looks installed. That
-    is the whole failure this script exists to catch, so it must not be the one
-    thing this script takes on faith.
+    else. Two ways they get called for real, and both must be recognised or the
+    answer is wrong in one direction or the other:
+
+    - **A plugin install.** Hooks come from the plugin's own ``hooks.json`` and
+      the project's settings never mention them. An earlier version of this
+      grepped settings and therefore told correctly-installed users that
+      nothing was calling it.
+    - **A copied install.** ``install.sh`` merges entries into the project's
+      ``settings.json``.
+
+    The settings are parsed rather than searched for a filename. A substring
+    check passed a file whose only mention of the scripts was a TODO comment,
+    and passed hooks pointing at paths that do not exist.
     """
+    plugin_hooks = HERE / "hooks.json"
+    if plugin_hooks.exists():
+        try:
+            declared = json.loads(plugin_hooks.read_text(encoding="utf-8")).get("hooks", {})
+            names = json.dumps(declared)
+            if "cerberus_mark.py" in names and "cerberus_gate.py" in names:
+                return True, "the plugin declares them, so they run wherever it is installed"
+        except Exception:
+            pass
+
     settings = root / ".claude" / "settings.json"
     try:
-        text = settings.read_text(encoding="utf-8")
+        data = json.loads(settings.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return False, "there is no .claude/settings.json"
     except Exception:
-        return False, False
-    return "cerberus_mark.py" in text, "cerberus_gate.py" in text
+        return False, "the .claude/settings.json here is not valid JSON"
+
+    def commands_for(event: str) -> list[str]:
+        out = []
+        for entry in (data.get("hooks") or {}).get(event) or []:
+            for h in entry.get("hooks") or []:
+                cmd = h.get("command")
+                if isinstance(cmd, str):
+                    out.append(cmd)
+        return out
+
+    for event, script in (("PostToolUse", "cerberus_mark.py"), ("Stop", "cerberus_gate.py")):
+        wired = False
+        for cmd in commands_for(event):
+            if script not in cmd:
+                continue
+            # A command naming a file that is not there is not wiring.
+            tail = cmd.split(script)[0].split()[-1] if cmd.split(script)[0].split() else ""
+            candidate = (tail + script).replace('"', "").replace("$CLAUDE_PROJECT_DIR", str(root))
+            if pathlib.Path(candidate).exists() or (root / ".claude" / "hooks" / script).exists():
+                wired = True
+                break
+        if not wired:
+            return False, f"nothing under {event} in the settings runs {script}"
+    return True, "the settings run both of them"
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(add_help=True)
-    parser.add_argument("--check", action="store_true", help="say what would happen, change nothing")
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="run the checks and print them, but write no configuration",
+    )
     parser.add_argument("--dir", default=".", help="project directory")
     args = parser.parse_args(argv)
 
@@ -295,33 +375,54 @@ def main(argv: list[str] | None = None) -> int:
         except Exception:
             print(f"{config} exists but is not valid JSON. Fix or delete it, then run this again.")
             return 2
+        # Anything beyond the two keys this script owns is somebody's work, and
+        # rewriting the file would delete it. The earlier guard keyed off
+        # stage1 alone, so a config that only tuned the gate — the documented
+        # use of the other keys — was silently replaced, custom marker and all.
+        theirs = [k for k in existing if k not in ("//", "verification")]
         stage1 = existing.get("verification", {}).get("stage1", [])
-        untouched = all(str(c).startswith("echo ") for c in stage1) if stage1 else True
-        if not untouched:
-            print("This project is already set up, and the checks are yours, not the")
-            print("example ones. Nothing was changed.")
+        placeholder = all(str(c).startswith("echo ") for c in stage1) if stage1 else True
+        stage2 = existing.get("verification", {}).get("stage2", [])
+        if theirs or not placeholder or (stage2 and not all(str(c).lstrip().startswith(("#", "echo ")) for c in stage2)):
+            print("This project is already set up by hand. Nothing was changed.")
+            if theirs:
+                print("It keeps settings this cannot write for you:", ", ".join(sorted(theirs)))
             return 0
 
     results = build_checks(runners, root)
     passing = [cmd for cmd, code, _ in results if code == 0]
-    failing = [(cmd, out) for cmd, code, out in results if code != 0]
+    missing = [cmd for cmd, code, _ in results if code == 127]
+    timed_out = [cmd for cmd, code, _ in results if code == 124]
+    broken = [(cmd, out) for cmd, code, out in results if code not in (0, 124, 127)]
 
     if not passing:
-        print(f"I found a {runners[0]['name']} project but none of its checks ran here.")
-        for cmd, out in failing[:3]:
-            print(f"  {cmd} — {out.splitlines()[0][:60] if out else 'no output'}")
+        print(f"I found a {runners[0]['name']} project but none of its checks pass here.")
+        for cmd, out in broken[:3]:
+            first = out.splitlines()[0][:60] if out else "no output"
+            print(f"  {cmd} — failed: {first}")
+        for cmd in missing[:3]:
+            print(f"  {cmd} — not installed here")
         print("Nothing was changed. Fix one of those, or tell me the right command.")
         return 2
 
-    write_config(root, kind, passing, args.check)
+    write_config(root, kind, passing, args.check, existing)
 
-    print(f"Set up for this {runners[0]['name']} project.")
+    if len(runners) > 1:
+        others = ", ".join(r["name"] for r in runners[1:])
+        print(f"This project uses several toolchains: {runners[0]['name']}, {others}.")
+        print(f"I took it as a {runners[0]['name']} {kind} — change that if it is wrong.")
+    else:
+        print(f"Set up for this {runners[0]['name']} {kind}.")
     print()
     print("Checks I ran here, and will run before anyone says the work is done:")
     for cmd in passing:
-        print(f"  ok   {cmd}")
-    for cmd, _ in failing:
-        print(f"  n/a  {cmd} — did not run here, so it was left out")
+        print(f"  ok       {cmd}")
+    for cmd, _ in broken:
+        print(f"  FAILING  {cmd} — it ran and did not pass, so it was left out")
+    for cmd in missing:
+        print(f"  absent   {cmd} — not installed here, so it was left out")
+    for cmd in timed_out:
+        print(f"  too slow {cmd} — gave up waiting, so it was left out")
     print()
 
     if args.check:
@@ -335,18 +436,22 @@ def main(argv: list[str] | None = None) -> int:
         print("So it is not guarding anything yet, and the reason is above.")
         return 1
 
-    marked, gated = wiring(root)
-    if not (marked and gated):
+    connected, why = wiring(root)
+    if not connected:
         print()
-        print("But nothing is calling it yet: this project's settings do not mention")
-        print("it, so the check above only happened because I ran it by hand.")
+        print(f"But nothing is calling it yet: {why}.")
         print("Re-run the installer, or paste the snippet it prints, then try again.")
         return 1
 
     print()
     print("From now on, when the work is claimed to be done and code has changed,")
     print("that claim is refused until the checks above have been run.")
-    print(f"To change the checks or switch it off, edit {config.relative_to(root)}.")
+    if broken:
+        print("Your own tests are failing right now — that is worth a look first.")
+    print("One thing is still missing: the last check, the one that runs where")
+    print(f"this really ships. Put it in {config.relative_to(root)} —")
+    print(f"{STAGE2_HINT_BY_KIND.get(kind, STAGE2_HINT_BY_KIND['library'])}.")
+    print(f"To change the checks or switch it off, edit the same file.")
     return 0
 
 

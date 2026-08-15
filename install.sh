@@ -220,9 +220,22 @@ if [ "$WANT_CLAUDE" -eq 1 ]; then
   # gate refuses claims while checking nothing. Setup is what closes that, and
   # it is the difference between installed and working — so it is offered as
   # the next step rather than left to be discovered.
-  if [ "$RUN_SETUP" -eq 1 ]; then
-    python3 "$TARGET/.claude/hooks/cerberus_setup.py" --dir "$TARGET" || true
+  if [ "$RUN_SETUP" -eq 1 ] && command -v python3 >/dev/null 2>&1; then
+    # Not `|| true`: that turned a refusal into a silent success and left the
+    # gate installed and unwired with exit 0 — a third route to the state this
+    # whole project is about.
+    if python3 "$TARGET/.claude/hooks/cerberus_setup.py" --dir "$TARGET"; then
+      :
+    else
+      echo
+      echo "Setup did not finish — see above. Nothing else was changed."
+      exit 1
+    fi
   else
+    if [ "$RUN_SETUP" -eq 1 ]; then
+      echo "No python3 here, so the setup step was skipped."
+      echo
+    fi
     echo "One more step — it sets up the checks and shows you it working:"
     echo
     echo "    python3 .claude/hooks/cerberus_setup.py"

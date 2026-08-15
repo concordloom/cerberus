@@ -24,8 +24,13 @@ front door.
 
 ```sh
 python3 .claude/hooks/cerberus_setup.py           # set up, then demonstrate
-python3 .claude/hooks/cerberus_setup.py --check   # say what it would do
+python3 .claude/hooks/cerberus_setup.py --check   # run the checks, write nothing
 ```
+
+That path exists after `install.sh`. Installed as a plugin the scripts live
+under the plugin directory instead, and on Codex they are not installed at all
+— there are no hooks there, so there is nothing to set up and the gate is
+advisory. Find the script rather than assuming the path.
 
 It finds the toolchain, runs each candidate check **here** before writing it
 down, saves the ones that pass, and finishes by marking a scratch file,
