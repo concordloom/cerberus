@@ -2,8 +2,8 @@
 """PostToolUse hook — record that executable code changed and is unverified.
 
 Fires after Edit/Write. When the edited file is source code (see
-``cerberus_config.py``), append it to a marker file. The marker is cleared only
-by a READY verdict from the cerberus skill; while it exists, the Stop hook
+``cerberus_config.py``), append it to a marker file. The marker is meant to be cleared only
+on a READY verdict from the cerberus skill; while it exists, the Stop hook
 (``cerberus_gate.py``) refuses to let a readiness claim end the turn.
 
 Edits to tests, docs and agent configuration do not set the marker: they are

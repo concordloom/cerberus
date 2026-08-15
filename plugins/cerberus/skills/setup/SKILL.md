@@ -6,10 +6,9 @@ when_to_use: On a first install; when .claude/cerberus.json still holds the exam
 
 # Setup — install it, then watch it refuse something
 
-The third head. The gate checks work, the critic checks claims, and this puts
-both in place — then makes the gate refuse a claim in front of you, because
-"installed" and "working" are different words and only one of them is worth
-saying.
+The gate checks work, the critic checks claims, and this puts both in place —
+then makes the gate refuse a claim in front of you, because "installed" and
+"working" are different words and only one of them is worth saying.
 
 ## Why this exists
 

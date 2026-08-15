@@ -6,7 +6,7 @@
   "ignore_patterns": ["/tests/", "/docs/", "/.github/", "README", "install.sh"],
 
   "verification": {
-    "artifact_kind": "claude-plugin",
+    "artifact_kind": "plugin",
 
     "//stage1": "Everything that can be proven without leaving the working tree.",
     "stage1": [
@@ -22,7 +22,7 @@
       "claude plugin marketplace add concordloom/cerberus",
       "claude plugin install cerberus@concordloom",
       "claude plugin list          # must read: Status ✔ enabled",
-      "claude plugin details cerberus   # must list Skills (1) and Hooks (2)",
+      "claude plugin details cerberus   # must list Skills (3) and Hooks (2)",
       "# and the installer path, which is a second, independent boundary:",
       "git clone https://github.com/concordloom/cerberus /tmp/src && cd /tmp/proj && sh /tmp/src/install.sh",
       "# then drive the installed gate: mark a source edit, claim readiness, expect decision=block"
