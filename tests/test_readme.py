@@ -179,19 +179,52 @@ def test_the_skills_do_not_claim_to_be_heads():
 
 
 def test_the_page_does_not_read_as_a_list_of_lists():
-    # Three tables inside two screens made the eye stop resolving them as
-    # separate things: the one that asks the reader to decide something was the
-    # middle stripe, which gets the least attention.
+    """At most two tables, and the two must not look alike.
+
+    Three tables inside two screens made the eye stop resolving them as
+    separate things, and the one asking the reader to decide something was the
+    middle stripe. The earlier version of this rule also banned two *adjacent*
+    tables, which is what pushed the stages into three lines separated by
+    single newlines — and markdown renders that as one run-on paragraph. That
+    was worse than the problem: shipped without ever looking at the rendered
+    page, which is the failure this repository is about.
+
+    So: two tables are allowed side by side, as long as they are shaped
+    differently enough not to stripe.
+    """
     for path in (README, README_RU):
         text = path.read_text(encoding="utf-8")
         sections = re.split(r"^## ", text, flags=re.M)[1:]
-        with_tables = [s.splitlines()[0] for s in sections if re.search(r"^\|.*\|$", s, re.M)]
-        assert len(with_tables) <= 2, f"{path.name}: tables in {with_tables}"
-        titles = [s.splitlines()[0] for s in sections]
-        for a, b in zip(titles, titles[1:]):
-            assert not (a in with_tables and b in with_tables), (
-                f"{path.name}: consecutive tables in '{a}' and '{b}'"
+        shapes = {}
+        for sec in sections:
+            rows = [r for r in sec.splitlines() if r.startswith("|")]
+            if rows:
+                shapes[sec.splitlines()[0]] = rows[0].count("|")
+        assert len(shapes) <= 2, f"{path.name}: tables in {list(shapes)}"
+        if len(shapes) == 2:
+            widths = list(shapes.values())
+            assert widths[0] != widths[1], (
+                f"{path.name}: two tables of the same width read as one block: {shapes}"
             )
+
+
+def test_no_pseudo_list_relies_on_a_single_newline():
+    """Single-newline 'lists' render as one paragraph.
+
+    This shipped: three stages written on three source lines, rendered as a
+    wall. Any run of consecutive lines that each start with a bullet-ish marker
+    must be a real markdown list.
+    """
+    marker = re.compile(r"^(?:[🟢🟡🔴✅⏳🧊❌]|\*\*\d)")
+    for path in (README, README_RU):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        run = 0
+        for line in lines:
+            if marker.match(line.strip()):
+                run += 1
+                assert run < 2, f"{path.name}: {line[:60]!r} follows another — use a list or a table"
+            elif line.strip():
+                run = 0
 
 
 def test_the_boundary_table_covers_every_documented_kind():
