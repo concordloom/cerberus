@@ -5,13 +5,12 @@
     "url": "https://github.com/concordloom"
   },
   "metadata": {
-    "description": "Verification tooling for AI coding agents.",
-    "pluginRoot": "./plugins"
+    "description": "Verification tooling for AI coding agents."
   },
   "plugins": [
     {
       "name": "cerberus",
-      "source": "cerberus",
+      "source": "./plugins/cerberus",
       "description": "Adversarial verification gate: before an agent says a change works, it has to try to prove it is broken — and fail. Ships the skill and the two hooks that make it mechanical rather than a matter of memory.",
       "version": "1.0.0",
       "author": {
