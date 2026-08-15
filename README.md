@@ -16,17 +16,41 @@ you a change works, it has to seriously try to prove it is broken — and fail.
 
 [Русская версия](README.ru.md) · [The skill itself](plugins/cerberus/skills/cerberus/SKILL.md) ([ru](plugins/cerberus/skills/cerberus/SKILL.ru.md))
 
-## Three heads
+## Quick start
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/concordloom/cerberus/main/install.sh | sh -s -- --claude --setup
+```
+
+That installs it, works out what your checks are, runs them here, and then makes
+the gate refuse a claim in front of you:
+
+```text
+Checks I ran here, and will run before anyone says the work is done:
+  ok       pytest -q
+
+Tried it: saying the work was done was refused, and it named the edited file
+```
+
+From then on your agent cannot end a turn saying the work is done while code it
+changed has not been checked. One thing is left for you: the check that runs
+where the code really ships, which nothing can work out for you.
+
+Not on Claude Code, or want the plugin instead? See [Install](#install) — on
+Codex there are no hooks, so the gate is advisory there.
+
+## What you install
+
+One plugin, three [skills](plugins/cerberus/skills/):
 
 | | what it refuses to let you say |
 |---|---|
-| **gate** | *"it works"* — until a serious attempt to break the change has failed |
+| **cerberus** | *"it works"* — until a serious attempt to break the change has failed |
 | **critic** | *"the cause is X"* — until someone independent has tried to disprove it |
 | **setup** | *"it's installed"* — until you have watched it refuse something |
 
-One plugin, one install, three [skills](plugins/cerberus/skills/). The first two
-do not cover each other: work can be right while its explanation is wrong, and a
-right explanation proves nothing ever ran.
+The first two do not cover each other: work can be right while its explanation
+is wrong, and a right explanation proves nothing ever ran.
 
 ## The problem
 
