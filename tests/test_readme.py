@@ -97,6 +97,25 @@ def test_both_languages_have_the_same_sections():
     assert len(en) == len(ru), f"{len(en)} sections in English, {len(ru)} in Russian"
 
 
+def test_the_russian_text_has_no_stray_scripts():
+    # A CJK character reached the Russian README through a bad edit and read as
+    # a word. Nothing would have caught it: it is valid UTF-8 in a prose file.
+    text = README_RU.read_text(encoding="utf-8")
+    allowed = set("—…«»🟢🟡🔴\u00a0")
+    stray = sorted({c for c in text if ord(c) > 0x2100 and c not in allowed})
+    assert not stray, f"characters from another script: {stray}"
+
+
+def test_the_install_section_is_the_only_one():
+    # The page had install instructions in two places, sixty lines apart, with
+    # the skills described twice between them.
+    for path in (README, README_RU):
+        text = path.read_text(encoding="utf-8")
+        headings = re.findall(r"^## (.+)$", text, re.M)
+        installish = [h for h in headings if re.search(r"[Ii]nstall|[Уу]станов", h)]
+        assert len(installish) == 1, f"{path.name}: {installish}"
+
+
 def test_no_link_points_at_the_old_repository_name():
     for path in (README, README_RU):
         text = path.read_text(encoding="utf-8")
