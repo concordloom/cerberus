@@ -124,6 +124,30 @@ if [ "$WANT_CLAUDE" -eq 1 ]; then
     say ".claude/cerberus.json  (kept — already present)"
   fi
 
+  # The marker is session state, not source. Left untracked and unignored it
+  # shows up in `git status` for as long as it is set, which is most of the time
+  # during real work. Read the marker path out of the config rather than
+  # assuming the default, since it is a configurable key.
+  MARKER=$(python3 - "$TARGET" <<'PY'
+import json, pathlib, sys
+target = pathlib.Path(sys.argv[1])
+default = ".claude/.cerberus-pending"
+try:
+    raw = json.loads((target / ".claude" / "cerberus.json").read_text(encoding="utf-8"))
+    print(raw.get("marker", default))
+except Exception:
+    print(default)
+PY
+)
+  if [ -n "$MARKER" ]; then
+    if [ ! -f "$TARGET/.gitignore" ] || ! grep -qxF "$MARKER" "$TARGET/.gitignore"; then
+      printf '%s\n' "$MARKER" >> "$TARGET/.gitignore"
+      say ".gitignore  (+ $MARKER)"
+    else
+      say ".gitignore  (kept — $MARKER already ignored)"
+    fi
+  fi
+
   # Wiring the hooks means merging into a JSON file the user owns. Do it only
   # when it can be done without guessing, and print the snippet otherwise: a
   # corrupted settings.json is a far worse outcome than a manual paste.

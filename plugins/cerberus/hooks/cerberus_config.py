@@ -29,10 +29,14 @@ can turn the gate down without editing this file.
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import re
 
 MARKER_DEFAULT = ".claude/.cerberus-pending"
+
+# "C:/x/y.py" after _norm. Without this it reads as a relative path.
+DRIVE_LETTER = re.compile(r"^[A-Za-z]:/")
 
 # Deliberately extension-based rather than path-based. Path layouts differ per
 # project; "a file of source code" travels.
@@ -113,10 +117,63 @@ class Config:
     def marker_path(self) -> pathlib.Path:
         return self.root / self.marker
 
+    @staticmethod
+    def _is_absolute(fp: str) -> bool:
+        """Absolute in any form the harness might send.
+
+        `PurePosixPath` calls "C:/x/y.py" relative, and a path judged relative
+        gets joined onto the project root and then looks like it is inside it.
+        """
+        return bool(fp.startswith("/") or DRIVE_LETTER.match(fp))
+
+    @staticmethod
+    def _contains(root: pathlib.Path, target: pathlib.Path) -> bool:
+        return target == root or root in target.parents
+
+    def _under_root(self, fp: str) -> bool:
+        """Is this file part of the project the gate is guarding?
+
+        An edit outside the project cannot change what this project ships, and
+        marking it arms the gate during ordinary work: a note written to a
+        scratch directory would go on to block the next readiness claim about
+        unrelated code. Reproduced 2026-08-15 — a real marker held six paths and
+        two were plain scratch files outside the repository.
+
+        Two comparisons, and a file is inside if **either** says so, because
+        each alone loses a real case:
+
+        - **Lexical**, after normalising `..` away but without resolving
+          symlinks. A package inside the project that is a symlink to a shared
+          directory elsewhere — the vendored layout — is still part of the
+          project, and resolution alone would call it foreign.
+        - **Resolved**, which catches a project reached *through* a symlink,
+          where the lexical form would call the whole tree foreign.
+
+        `..` is normalised in the lexical arm precisely so it cannot be used to
+        walk out and back in: `root/../escaped.py` normalises to a path that is
+        not under the root.
+        """
+        fp = os.path.expanduser(fp)
+        target = pathlib.Path(fp) if self._is_absolute(fp) else self.root / fp
+
+        lexical_root = pathlib.Path(os.path.normpath(str(self.root)))
+        lexical_target = pathlib.Path(os.path.normpath(str(target)))
+        if self._contains(lexical_root, lexical_target):
+            return True
+
+        try:
+            return self._contains(self.root.resolve(), target.resolve())
+        except (OSError, ValueError):
+            # Unresolvable is not provably inside, and the gate must not be
+            # armed by a path nobody can place.
+            return False
+
     def is_source_file(self, file_path: str) -> bool:
         """Does editing this file put runtime behaviour at risk?"""
         fp = self._norm(file_path)
         if not fp:
+            return False
+        if not self._under_root(fp):
             return False
         # Compare against a leading-slash form so that "/tests/" also matches a
         # path that begins with "tests/".
