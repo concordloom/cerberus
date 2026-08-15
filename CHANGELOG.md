@@ -1,5 +1,12 @@
 # Changelog
 
+# [1.2.0](https://github.com/concordloom/cerberus-skill/compare/v1.1.0...v1.2.0) (2026-08-15)
+
+
+### Features
+
+* **critic:** ship the other half of the cycle as a skill ([8db7c05](https://github.com/concordloom/cerberus-skill/commit/8db7c05e5a2df3a68268404c39f0588c312ee650))
+
 # [1.1.0](https://github.com/concordloom/cerberus-skill/compare/v1.0.1...v1.1.0) (2026-08-15)
 
 
