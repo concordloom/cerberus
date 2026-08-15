@@ -105,6 +105,13 @@ PY_PROJECT = {
     "tests/test_demo.py": "def test_ok():\n    assert True\n",
 }
 
+# A mutant got through every round by being wrong only for projects the tests
+# never built. The "never" rules are checked against these too.
+NODE_PROJECT = {"package.json": json.dumps({"name": "d", "scripts": {"test": "exit 0"}})}
+GO_PROJECT = {"go.mod": "module example.com/d\n\ngo 1.21\n"}
+MAKE_PROJECT = {"Makefile": "test:\n\t@true\n"}
+OTHER_PROJECTS = {"Node": NODE_PROJECT, "Go": GO_PROJECT}
+
 
 # --------------------------------------------------------------- behaviour
 
@@ -134,11 +141,35 @@ def test_never_writes_a_check_it_did_not_run():
 
 
 def test_never_writes_the_keys_that_replace_defaults():
-    root = project(PY_PROJECT)
-    run_setup(root)
-    raw = (root / ".claude" / "cerberus.json").read_text(encoding="utf-8")
-    for key in REPLACING_KEYS:
-        assert key not in raw, f"{key} must never be written by a machine"
+    for name, files in {"Python": PY_PROJECT, **OTHER_PROJECTS}.items():
+        root = project(files)
+        run_setup(root)
+        config = root / ".claude" / "cerberus.json"
+        if not config.exists():
+            continue  # it refused, which is its own kind of correct
+        raw = config.read_text(encoding="utf-8")
+        for key in REPLACING_KEYS:
+            assert key not in raw, f"{key} written for a {name} project"
+
+
+def test_never_writes_a_check_it_did_not_run_in_any_language():
+    for name, files in OTHER_PROJECTS.items():
+        root = project(files)
+        run_setup(root)
+        config = root / ".claude" / "cerberus.json"
+        if not config.exists():
+            continue
+        for cmd in json.loads(config.read_text(encoding="utf-8"))["verification"]["stage1"]:
+            code = subprocess.run(cmd, shell=True, cwd=str(root), capture_output=True).returncode
+            assert code == 0, f"{name}: wrote a check that does not pass here: {cmd}"
+
+
+def test_refuses_a_makefile_only_project_rather_than_guessing():
+    # A Makefile is a build system, not evidence of what the project ships.
+    root = project(MAKE_PROJECT)
+    rc, out = run_setup(root)
+    assert rc == 2, out
+    assert "could not tell" in out, out
 
 
 def test_refuses_a_project_it_cannot_recognise():
@@ -184,8 +215,12 @@ def test_a_plugin_install_is_not_called_broken():
         env={k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"},
     )
     rc, out = proc.returncode, proc.stdout + proc.stderr
-    assert rc == 0, out
+    assert rc == 3, out
     assert "as a plugin" in out, out
+    # And it must not then say the opposite: the caveat used to be followed by
+    # the closing "from now on, claims are refused", which is the sentence the
+    # user takes away and was false.
+    assert "From now on" not in out, "it said it could not tell, then said it was on:\n" + out
 
 
 def test_scripts_copied_here_but_unwired_is_a_failure():
@@ -195,6 +230,41 @@ def test_scripts_copied_here_but_unwired_is_a_failure():
     rc, out = run_setup(root)
     assert rc == 1, out
     assert "nothing here is calling it" in out, out
+
+
+def test_an_entry_under_the_wrong_matcher_is_not_wiring():
+    # Well formed, points at the real file, and fires on Bash — so nothing is
+    # ever recorded and the gate never has anything to hold.
+    root = project(PY_PROJECT, wired=False)
+    (root / ".claude" / "settings.json").write_text(json.dumps({"hooks": {
+        "PostToolUse": [{"matcher": "Bash", "hooks": [{"type": "command",
+            "command": 'python3 "$CLAUDE_PROJECT_DIR"/.claude/hooks/cerberus_mark.py'}]}],
+        "Stop": [{"hooks": [{"type": "command",
+            "command": 'python3 "$CLAUDE_PROJECT_DIR"/.claude/hooks/cerberus_gate.py'}]}],
+    }}), encoding="utf-8")
+    rc, out = run_setup(root)
+    assert rc == 1, out
+
+
+def test_an_entry_pointing_at_a_path_that_does_not_exist_is_not_wiring():
+    # The check exists and nothing asserted it, so a mutant dropping it passed.
+    root = project(PY_PROJECT, wired=False)
+    (root / ".claude" / "settings.json").write_text(json.dumps({"hooks": {
+        "PostToolUse": [{"matcher": "Write|Edit", "hooks": [{"type": "command",
+            "command": "python3 /nonexistent/elsewhere/cerberus_mark.py"}]}],
+        "Stop": [{"hooks": [{"type": "command",
+            "command": "python3 /nonexistent/elsewhere/cerberus_gate.py"}]}],
+    }}), encoding="utf-8")
+    rc, out = run_setup(root)
+    assert rc == 1, out
+
+
+def test_a_project_path_with_a_space_is_still_recognised():
+    root = project(PY_PROJECT)
+    spaced = root.parent / (root.name + " with space")
+    root.rename(spaced)
+    rc, out = run_setup(spaced)
+    assert rc == 0, "a space in the path read as unwired:\n" + out
 
 
 def test_says_so_when_nothing_is_calling_it():

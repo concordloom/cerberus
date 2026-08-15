@@ -207,16 +207,24 @@ def write_config(
     body["//"] = "Every command in stage1 was run once, in this project, before being written here."
     prior = body.get("verification")
     verification = dict(prior) if isinstance(prior, dict) else {}
-    verification["artifact_kind"] = kind
+    # The rule that top-level keys are not to be removed applies one level down
+    # too, and did not: a deliberate `migration` — a kind detect() can never
+    # produce — was downgraded to a guess, and notes naming production accounts
+    # were destroyed without a word.
+    verification.setdefault("artifact_kind", kind)
     verification["stage1"] = checks
     # Left empty on purpose: a comment line in a list of commands exits 0
     # unconditionally, which is the placeholder this script exists to remove.
     verification["stage2"] = []
-    verification["notes"] = (
-        "stage2 is still empty. Put here what proves it works where it really runs: "
-        + STAGE2_HINT_BY_KIND.get(kind, STAGE2_HINT_BY_KIND["library"])
-        + "."
-    )
+    prior_notes = str(verification.get("notes") or "")
+    if not prior_notes or prior_notes.startswith(("stage2 is still empty", "Replace the stage2")):
+        verification["notes"] = (
+            "stage2 is still empty. Put here what proves it works where it really runs: "
+            + STAGE2_HINT_BY_KIND.get(
+                verification["artifact_kind"], STAGE2_HINT_BY_KIND["library"]
+            )
+            + "."
+        )
     body["verification"] = verification
     if not dry:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -302,6 +310,16 @@ def _hooked(data: dict, event: str, script: str, root: pathlib.Path) -> bool:
     for entry in (data.get("hooks") or {}).get(event) or []:
         if not isinstance(entry, dict):
             continue
+        # The event is checked; so is the matcher, which is the same mistake one
+        # field down. An entry filed under PostToolUse with matcher "Bash" is
+        # well formed and never sees a file being written, so nothing is ever
+        # recorded and the gate has nothing to hold.
+        if event == "PostToolUse":
+            matcher = entry.get("matcher")
+            if matcher is not None and not (
+                "Write" in str(matcher) or "Edit" in str(matcher) or str(matcher) in ("", "*")
+            ):
+                continue
         for hook in entry.get("hooks") or []:
             cmd = hook.get("command") if isinstance(hook, dict) else None
             if not isinstance(cmd, str) or script not in cmd:
@@ -316,8 +334,15 @@ def _hooked(data: dict, event: str, script: str, root: pathlib.Path) -> bool:
             bare = cmd.replace('"', "").replace("'", "")
             bare = bare.replace("${CLAUDE_PROJECT_DIR}", str(root))
             bare = bare.replace("$CLAUDE_PROJECT_DIR", str(root))
-            token = next((w for w in bare.split() if script in w), "")
-            candidate = token
+            # Splitting on whitespace breaks any project path with a space in
+            # it — Documents, iCloud, most of Windows — and the check then said
+            # the installer's own wiring was not wiring. Anchor on the project
+            # path when it is there, and fall back to the token otherwise.
+            end = bare.index(script) + len(script)
+            if str(root) in bare[:end]:
+                candidate = bare[bare.index(str(root)):end]
+            else:
+                candidate = next((w for w in bare[:end].split() if script in w), script)
             path = pathlib.Path(candidate)
             if not path.is_absolute():
                 path = root / candidate
@@ -362,6 +387,60 @@ def wiring(root: pathlib.Path) -> tuple[bool, str]:
     return False, f"nothing in .claude/{found[0]} runs both of them"
 
 
+def report_state(root: pathlib.Path, kind: str = "library", failing: bool = False) -> int:
+    """Show whether the gate is on, and what is still missing.
+
+    Shared by the fresh path and the already-configured one, because skipping
+    it on a re-run answered "is it on?" without looking.
+    """
+    config = root / ".claude" / "cerberus.json"
+    worked, detail = demonstrate(root)
+    print("Tried it:", detail)
+    if not worked:
+        print()
+        print("So it is not guarding anything yet, and the reason is above.")
+        return 1
+
+    connected, why = wiring(root)
+    if not connected:
+        # Two very different situations, and guessing either way is wrong.
+        # Scripts sitting in this project mean somebody copied them here and
+        # the wiring is genuinely missing. No scripts here means they come from
+        # somewhere else — a plugin — which cannot be seen from inside the
+        # project, so it is named rather than assumed or denied.
+        copied_here = (root / ".claude" / "hooks" / "cerberus_mark.py").exists()
+        print()
+        if copied_here:
+            print(f"But nothing here is calling it: {why}.")
+            print("The files are in this project and nothing runs them. Re-run the")
+            print("installer, or paste the snippet it prints, and try again.")
+            return 1
+        print(f"I cannot see this project calling it: {why}.")
+        print("If you installed it as a plugin, that is expected — the plugin runs it")
+        print("everywhere and this cannot be seen from inside a project. If you did")
+        print("not, run the installer here.")
+        # Falling through printed this caveat and then the closing line saying
+        # claims are refused from now on — two adjacent paragraphs contradicting
+        # each other, with the false one last.
+        return 3
+
+    print()
+    print("From now on, when the work is claimed to be done and code has changed,")
+    print("that claim is refused until the checks above have been run.")
+    if failing:
+        print("Your own tests are failing right now — that is worth a look first.")
+    try:
+        stage2 = json.loads(config.read_text(encoding="utf-8"))["verification"]["stage2"]
+    except Exception:
+        stage2 = []
+    if not stage2:
+        print("One thing is still missing: the last check, the one that runs where")
+        print(f"this really ships. Put it in {config.relative_to(root)} —")
+        print(f"{STAGE2_HINT_BY_KIND.get(kind, STAGE2_HINT_BY_KIND['library'])}.")
+    print("To change the checks or switch it off, edit the same file.")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(add_help=True)
     parser.add_argument(
@@ -403,7 +482,11 @@ def main(argv: list[str] | None = None) -> int:
         if not isinstance(existing, dict):
             print(f"{config} is valid JSON but not an object. Fix or delete it, then run this again.")
             return 2
-        theirs = [k for k in existing if not k.startswith("//") and k != "verification"]
+        # Only keys that change what the gate does count. "Any key I do not
+        # recognise" parked setup permanently on a config carrying a `$schema`
+        # line, and unknown keys survive regardless, because writing is a merge.
+        TUNING = ("claim_patterns", "ignore_patterns", "source_extensions", "watch_paths", "marker")
+        theirs = [k for k in existing if k in TUNING]
         verification = existing.get("verification")
         if verification is not None and not isinstance(verification, dict):
             print(f"{config} has a 'verification' that is not an object. Fix it, then run this again.")
@@ -413,10 +496,15 @@ def main(argv: list[str] | None = None) -> int:
         placeholder = all(str(c).startswith("echo ") for c in stage1) if stage1 else True
         stage2 = verification.get("stage2", [])
         if theirs or not placeholder or (stage2 and not all(str(c).lstrip().startswith(("#", "echo ")) for c in stage2)):
-            print("This project is already set up by hand. Nothing was changed.")
+            # Nothing is written — but "is it actually on?" is the question this
+            # is most often run to answer, and returning here answered it
+            # without looking. On every project after the first run that was an
+            # unverified yes, from the tool whose whole point is not doing that.
+            print("This project is configured already, so nothing was changed.")
             if theirs:
                 print("It keeps settings this cannot write for you:", ", ".join(sorted(theirs)))
-            return 0
+            print()
+            return report_state(root, verification.get("artifact_kind") or kind)
 
     results = build_checks(runners, root)
     passing = [cmd for cmd, code, _ in results if code == 0]
@@ -458,42 +546,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Nothing was written. Drop --check to save this to {config}.")
         return 0
 
-    worked, detail = demonstrate(root)
-    print("Tried it:", detail)
-    if not worked:
-        print()
-        print("So it is not guarding anything yet, and the reason is above.")
-        return 1
-
-    connected, why = wiring(root)
-    if not connected:
-        # Two very different situations, and guessing either way is wrong.
-        # Scripts sitting in this project mean somebody copied them here and
-        # the wiring is genuinely missing. No scripts here means they come from
-        # somewhere else — a plugin — which cannot be seen from inside the
-        # project, so it is named rather than assumed or denied.
-        copied_here = (root / ".claude" / "hooks" / "cerberus_mark.py").exists()
-        print()
-        if copied_here:
-            print(f"But nothing here is calling it: {why}.")
-            print("The files are in this project and nothing runs them. Re-run the")
-            print("installer, or paste the snippet it prints, and try again.")
-            return 1
-        print(f"I cannot see this project calling it: {why}.")
-        print("If you installed it as a plugin, that is expected — the plugin runs it")
-        print("everywhere and this cannot be seen from inside a project. If you did")
-        print("not, run the installer here.")
-
-    print()
-    print("From now on, when the work is claimed to be done and code has changed,")
-    print("that claim is refused until the checks above have been run.")
-    if broken:
-        print("Your own tests are failing right now — that is worth a look first.")
-    print("One thing is still missing: the last check, the one that runs where")
-    print(f"this really ships. Put it in {config.relative_to(root)} —")
-    print(f"{STAGE2_HINT_BY_KIND.get(kind, STAGE2_HINT_BY_KIND['library'])}.")
-    print(f"To change the checks or switch it off, edit the same file.")
-    return 0
+    return report_state(root, kind, bool(broken))
 
 
 if __name__ == "__main__":
