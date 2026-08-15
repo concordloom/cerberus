@@ -40,6 +40,16 @@ jobs:
       - name: Test
         run: python3 tests/test_hooks.py
 
+      # The two slash commands drive the whole working cycle and had no check
+      # of any kind: check_parity.py globs plugins/*/skills/*, nothing here
+      # touched .claude/commands/, and `claude plugin validate` accepts
+      # frontmatter that is known broken. That is how a zero-indexed `$1`
+      # survived in the entry-point command until someone ran it by hand.
+      - name: Commands are well formed
+        run: |
+          python3 scripts/check_commands.py
+          python3 tests/test_commands.py
+
   docs:
     runs-on: ubuntu-latest
     name: Translation parity
