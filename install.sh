@@ -3,10 +3,10 @@
 #
 # Most people do not need this script.
 #
-#   Claude Code: `/plugin marketplace add concordloom/cerberus-skill` then
+#   Claude Code: `/plugin marketplace add concordloom/cerberus` then
 #                `/plugin install cerberus@concordloom` — hooks included.
 #   Codex, and everything else reading .agents/skills:
-#                `gh skill install concordloom/cerberus-skill cerberus --agent codex`
+#                `gh skill install concordloom/cerberus cerberus --agent codex`
 #                or `$skill-installer install <this repo>/tree/main/plugins/cerberus/skills/cerberus`
 #
 # What those do not do is put the files in your repository, wire the hooks into
@@ -14,7 +14,7 @@
 #
 # Nothing has to be cloned first. From inside your project:
 #
-#   curl -fsSL https://raw.githubusercontent.com/concordloom/cerberus-skill/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/concordloom/cerberus/main/install.sh | sh
 #
 # or, from a clone:
 #
@@ -90,7 +90,7 @@ say() { printf '  %s\n' "$1"; }
 if [ ! -f "$SKILL_SRC/SKILL.md" ]; then
   TMP=$(mktemp -d)
   trap 'rm -rf "$TMP"' EXIT INT TERM
-  URL="https://codeload.github.com/concordloom/cerberus-skill/tar.gz/$REF"
+  URL="https://codeload.github.com/concordloom/cerberus/tar.gz/$REF"
 
   if command -v curl >/dev/null 2>&1; then
     curl -fsSL "$URL" -o "$TMP/src.tar.gz"
@@ -102,7 +102,7 @@ if [ ! -f "$SKILL_SRC/SKILL.md" ]; then
   fi
 
   tar -xzf "$TMP/src.tar.gz" -C "$TMP"
-  # Not `-name 'cerberus-skill-*'`: GitHub names the extracted directory after
+  # Not `-name 'cerberus-*'`: GitHub names the extracted directory after
   # the repository, so pinning the repository name here means renaming the
   # repository breaks the one-liner — the install path the README puts first —
   # while the redirect works and every static check passes. There is exactly
@@ -112,7 +112,7 @@ if [ ! -f "$SKILL_SRC/SKILL.md" ]; then
 
   if [ ! -f "$SKILL_SRC/SKILL.md" ]; then
     echo "fetched $REF but the skill is not in it — report this at" >&2
-    echo "https://github.com/concordloom/cerberus-skill/issues" >&2
+    echo "https://github.com/concordloom/cerberus/issues" >&2
     exit 1
   fi
 fi

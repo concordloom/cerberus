@@ -3,13 +3,13 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/concordloom/cerberus-skill/actions/workflows/ci.yml"><img src="https://github.com/concordloom/cerberus-skill/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/concordloom/cerberus/actions/workflows/ci.yml"><img src="https://github.com/concordloom/cerberus/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT">
   <img src="https://img.shields.io/badge/Claude%20Code-plugin-8a6cff" alt="Claude Code plugin">
   <img src="https://img.shields.io/badge/Codex-skill-10a37f" alt="Codex skill">
 </p>
 
-# cerberus-skill
+# cerberus
 
 **Адверсариальный гейт готовности для ИИ-агентов, пишущих код.** Прежде чем
 агент скажет, что изменение работает, он обязан всерьёз попытаться доказать, что
@@ -81,7 +81,7 @@
 ### Claude Code — две команды
 
 ```
-/plugin marketplace add concordloom/cerberus-skill
+/plugin marketplace add concordloom/cerberus
 /plugin install cerberus@concordloom
 ```
 
@@ -91,7 +91,7 @@
 ### Codex — одна команда
 
 ```console
-gh skill install concordloom/cerberus-skill cerberus --agent codex
+gh skill install concordloom/cerberus cerberus --agent codex
 ```
 
 Ничего особенного для этого не требуется: репозиторий разложен так, как ожидает
@@ -100,7 +100,7 @@ convention», — а установку закрепляет за последн
 Codex то же самое принимает `$skill-installer`, только адресом:
 
 ```console
-$skill-installer install https://github.com/concordloom/cerberus-skill/tree/main/plugins/cerberus/skills/cerberus
+$skill-installer install https://github.com/concordloom/cerberus/tree/main/plugins/cerberus/skills/cerberus
 ```
 
 Оба пути кладут навык в `.agents/skills` — этот каталог Codex делит с Copilot,
@@ -117,7 +117,7 @@ Cursor, Gemini CLI и десятком других агентов, так чт
 там, где они есть:
 
 ```console
-curl -fsSL https://raw.githubusercontent.com/concordloom/cerberus-skill/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/concordloom/cerberus/main/install.sh | sh
 ```
 
 Клонировать ничего не нужно: запущенный через `sh` скрипт сам забирает то, что

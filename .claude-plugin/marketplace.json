@@ -17,8 +17,8 @@
         "name": "Concord Loom",
         "url": "https://github.com/concordloom"
       },
-      "homepage": "https://github.com/concordloom/cerberus-skill",
-      "repository": "https://github.com/concordloom/cerberus-skill",
+      "homepage": "https://github.com/concordloom/cerberus",
+      "repository": "https://github.com/concordloom/cerberus",
       "license": "MIT",
       "category": "quality",
       "tags": [

@@ -19,12 +19,12 @@
     "//stage2": "The boundary here is the plugin loader, not a server. Nothing in stage 1 can see it: static checks of the manifests validate one reading of the documentation, while the loader has its own. Both defects found on 2026-08-15 - a source path form the loader rejects, and a hooks declaration that made the plugin fail to load - passed every static check and were caught only by installing for real.",
     "stage2": [
       "export CLAUDE_CONFIG_DIR=$(mktemp -d)",
-      "claude plugin marketplace add concordloom/cerberus-skill",
+      "claude plugin marketplace add concordloom/cerberus",
       "claude plugin install cerberus@concordloom",
       "claude plugin list          # must read: Status ✔ enabled",
       "claude plugin details cerberus   # must list Skills (1) and Hooks (2)",
       "# and the installer path, which is a second, independent boundary:",
-      "git clone https://github.com/concordloom/cerberus-skill /tmp/src && cd /tmp/proj && sh /tmp/src/install.sh",
+      "git clone https://github.com/concordloom/cerberus /tmp/src && cd /tmp/proj && sh /tmp/src/install.sh",
       "# then drive the installed gate: mark a source edit, claim readiness, expect decision=block"
     ],
 
