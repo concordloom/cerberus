@@ -124,6 +124,19 @@ jobs:
           print("manifests ok")
           PY
 
+      # The one-liner is what the README puts first, and it exercises code the
+      # clone path never reaches: piped through sh there is no source tree beside
+      # the script, so it has to fetch its own payload over the network. Pinned
+      # to this revision rather than main, or the test would pass on someone
+      # else's commit.
+      - name: The one-liner installs without a clone
+        env:
+          CERBERUS_REF: ${{ github.sha }}
+        run: |
+          mkdir -p /tmp/oneliner && cd /tmp/oneliner
+          cat "$GITHUB_WORKSPACE/install.sh" | sh -s -- --codex
+          test -f .agents/skills/cerberus/SKILL.md
+
       # The installer is what people run when they are not on Claude Code, and
       # a broken one fails in someone else's repository rather than here.
       - name: Installer produces a working project

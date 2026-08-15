@@ -73,9 +73,13 @@
 ### Codex или файлы в своём репозитории
 
 ```console
-git clone https://github.com/concordloom/cerberus-skill
-cd ваш-проект && sh ../cerberus-skill/install.sh
+curl -fsSL https://raw.githubusercontent.com/concordloom/cerberus-skill/main/install.sh | sh
 ```
+
+Клонировать ничего не нужно: запущенный через `sh` скрипт сам забирает то, что
+ему требуется. Чтобы принудительно выбрать раскладку Codex, допишите
+`-s -- --codex`. Если хочется сначала прочитать скрипт — `git clone …` и затем
+`sh ../cerberus-skill/install.sh` делают ровно то же самое.
 
 Скрипт сам определит, что использует проект — `.claude/` или `.agents/`, —
 положит файлы куда надо, подключит хуки там, где они есть, и его безопасно

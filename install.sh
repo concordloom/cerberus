@@ -6,19 +6,33 @@
 # does everything, hooks included. This script exists for Codex, for other
 # agents, and for anyone who would rather have the files in the repository.
 #
+# Nothing has to be cloned first. From inside your project:
+#
+#   curl -fsSL https://raw.githubusercontent.com/concordloom/cerberus-skill/main/install.sh | sh
+#
+# or, from a clone:
+#
 #   sh install.sh              # detect what the project uses, install for it
 #   sh install.sh --claude     # .claude/skills + hooks + settings wiring
 #   sh install.sh --codex      # .agents/skills (no hooks: Codex has no equivalent)
 #   sh install.sh --dir PATH   # install into PATH instead of the current directory
+#
+# Piped through sh, arguments go after -s --, e.g. `| sh -s -- --codex`.
+# Set CERBERUS_REF to install from a branch or tag other than main.
 #
 # Re-running is safe: existing files are overwritten, existing configuration is
 # left alone.
 
 set -eu
 
+REF=${CERBERUS_REF:-main}
 SRC=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-SKILL_SRC="$SRC/plugins/cerberus/skills/cerberus"
-HOOKS_SRC="$SRC/plugins/cerberus/hooks"
+
+resolve() {
+  SKILL_SRC="$SRC/plugins/cerberus/skills/cerberus"
+  HOOKS_SRC="$SRC/plugins/cerberus/hooks"
+}
+resolve
 
 TARGET=$(pwd)
 WANT_CLAUDE=0
@@ -29,7 +43,7 @@ while [ $# -gt 0 ]; do
     --claude) WANT_CLAUDE=1 ;;
     --codex)  WANT_CODEX=1 ;;
     --dir)    shift; TARGET=$1 ;;
-    -h|--help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) awk 'NR>1 && /^#/ {sub(/^# ?/, ""); print; next} NR>1 {exit}' "$0"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
   shift
@@ -47,9 +61,32 @@ fi
 
 say() { printf '  %s\n' "$1"; }
 
+# Piped straight from the network there is no source tree next to the script, so
+# fetch one. This is the whole difference between a two-step install and a
+# one-liner, and it is the path most people will take.
 if [ ! -f "$SKILL_SRC/SKILL.md" ]; then
-  echo "cannot find the skill at $SKILL_SRC — run this from a clone of the repository" >&2
-  exit 1
+  TMP=$(mktemp -d)
+  trap 'rm -rf "$TMP"' EXIT INT TERM
+  URL="https://codeload.github.com/concordloom/cerberus-skill/tar.gz/$REF"
+
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "$URL" -o "$TMP/src.tar.gz"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO "$TMP/src.tar.gz" "$URL"
+  else
+    echo "need curl or wget to fetch the skill, and found neither" >&2
+    exit 1
+  fi
+
+  tar -xzf "$TMP/src.tar.gz" -C "$TMP"
+  SRC=$(find "$TMP" -mindepth 1 -maxdepth 1 -type d -name 'cerberus-skill-*' | head -n 1)
+  resolve
+
+  if [ ! -f "$SKILL_SRC/SKILL.md" ]; then
+    echo "fetched $REF but the skill is not in it — report this at" >&2
+    echo "https://github.com/concordloom/cerberus-skill/issues" >&2
+    exit 1
+  fi
 fi
 
 echo "Installing cerberus into $TARGET"

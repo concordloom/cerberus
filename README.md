@@ -71,9 +71,13 @@ to copy and no settings file to edit.
 ### Codex, or files in your repository
 
 ```console
-git clone https://github.com/concordloom/cerberus-skill
-cd your-project && sh ../cerberus-skill/install.sh
+curl -fsSL https://raw.githubusercontent.com/concordloom/cerberus-skill/main/install.sh | sh
 ```
+
+There is nothing to clone: piped through `sh`, the script fetches what it needs.
+Append `-s -- --codex` to force the Codex layout, or read it first and run it
+from a clone — `git clone …` then `sh ../cerberus-skill/install.sh` — which does
+exactly the same thing.
 
 It detects whether the project uses `.claude/` or `.agents/`, installs into the
 right place, wires the hooks where they exist, and is safe to re-run.
