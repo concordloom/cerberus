@@ -66,7 +66,7 @@ independently of what you happened to build.
 
 3. **Do the work.**
 
-4. **A critic examines the claims — if the work produced any.** A diagnosis
+4. **A [critic](../critic/SKILL.md) examines the claims — if the work produced any.** A diagnosis
    ("the cause is X"), an explanation of a mechanism, a statement about the
    codebase ("every writer does this", "the class is closed") is a claim, and it
    needs an independent adversary whose mandate is to *refute* it. Changes that

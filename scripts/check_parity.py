@@ -17,9 +17,7 @@ import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-SKILLS = ROOT / "plugins" / "cerberus" / "skills" / "cerberus"
-EN = SKILLS / "SKILL.md"
-RU = SKILLS / "SKILL.ru.md"
+SKILLS = sorted((ROOT / "plugins").glob("*/skills/*"))
 
 HEADING = re.compile(r"^(#{1,6})\s+\S")
 CHECKLIST = re.compile(r"^- \[ \]")
@@ -45,28 +43,45 @@ def profile(path: pathlib.Path) -> dict:
     return {"headings": levels, "checklist": checklist, "fences": fences // 2}
 
 
-def main() -> int:
-    if not EN.exists() or not RU.exists():
-        print("both SKILL.md and SKILL.ru.md must exist", file=sys.stderr)
-        return 1
+def compare(skill: pathlib.Path) -> list[str]:
+    en, ru = skill / "SKILL.md", skill / "SKILL.ru.md"
+    name = skill.name
 
-    en, ru = profile(EN), profile(RU)
+    if not en.exists():
+        return [f"{name}: no SKILL.md"]
+    if not ru.exists():
+        # A skill shipped without its translation is not a parity failure to
+        # paper over — but it is a decision, so it has to be a visible one.
+        return [f"{name}: SKILL.md has no SKILL.ru.md beside it"]
+
+    a, b = profile(en), profile(ru)
     problems: list[str] = []
 
-    if en["headings"] != ru["headings"]:
+    if a["headings"] != b["headings"]:
         problems.append(
-            "heading structure differs\n"
-            f"  SKILL.md    : {len(en['headings'])} headings, levels {en['headings']}\n"
-            f"  SKILL.ru.md : {len(ru['headings'])} headings, levels {ru['headings']}"
+            f"{name}: heading structure differs\n"
+            f"  SKILL.md    : {len(a['headings'])} headings, levels {a['headings']}\n"
+            f"  SKILL.ru.md : {len(b['headings'])} headings, levels {b['headings']}"
         )
-    if en["checklist"] != ru["checklist"]:
+    if a["checklist"] != b["checklist"]:
         problems.append(
-            f"self-check length differs: {en['checklist']} vs {ru['checklist']} items"
+            f"{name}: self-check length differs: {a['checklist']} vs {b['checklist']} items"
         )
-    if en["fences"] != ru["fences"]:
+    if a["fences"] != b["fences"]:
         problems.append(
-            f"number of code blocks differs: {en['fences']} vs {ru['fences']}"
+            f"{name}: number of code blocks differs: {a['fences']} vs {b['fences']}"
         )
+    return problems
+
+
+def main() -> int:
+    if not SKILLS:
+        print("no skills found under plugins/*/skills/*", file=sys.stderr)
+        return 1
+
+    problems: list[str] = []
+    for skill in SKILLS:
+        problems.extend(compare(skill))
 
     if problems:
         print("Translation parity failed. English is canonical.\n", file=sys.stderr)
@@ -74,10 +89,12 @@ def main() -> int:
             print(f"- {p}", file=sys.stderr)
         return 1
 
-    print(
-        f"parity ok: {len(en['headings'])} headings, "
-        f"{en['checklist']} checklist items, {en['fences']} code blocks"
-    )
+    for skill in SKILLS:
+        p = profile(skill / "SKILL.md")
+        print(
+            f"parity ok: {skill.name} — {len(p['headings'])} headings, "
+            f"{p['checklist']} checklist items, {p['fences']} code blocks"
+        )
     return 0
 
 

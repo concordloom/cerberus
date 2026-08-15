@@ -35,8 +35,22 @@ REF=${CERBERUS_REF:-main}
 SRC=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
 resolve() {
-  SKILL_SRC="$SRC/plugins/cerberus/skills/cerberus"
+  SKILLS_SRC="$SRC/plugins/cerberus/skills"
+  SKILL_SRC="$SKILLS_SRC/cerberus"
   HOOKS_SRC="$SRC/plugins/cerberus/hooks"
+}
+
+# Every skill under the plugin, not just the gate: the critic is the other half
+# of the same cycle, and installing one of them is worse than installing
+# neither, because the missing half is the one nobody notices is missing.
+copy_skills() {
+  for dir in "$SKILLS_SRC"/*/; do
+    [ -f "$dir/SKILL.md" ] || continue
+    name=$(basename "$dir")
+    mkdir -p "$1/$name"
+    cp "$dir/SKILL.md" "$1/$name/SKILL.md"
+    say "${1#"$TARGET/"}/$name/SKILL.md"
+  done
 }
 resolve
 
@@ -98,10 +112,9 @@ fi
 echo "Installing cerberus into $TARGET"
 
 if [ "$WANT_CLAUDE" -eq 1 ]; then
-  mkdir -p "$TARGET/.claude/skills/cerberus" "$TARGET/.claude/hooks"
-  cp "$SKILL_SRC/SKILL.md" "$TARGET/.claude/skills/cerberus/SKILL.md"
+  mkdir -p "$TARGET/.claude/skills" "$TARGET/.claude/hooks"
+  copy_skills "$TARGET/.claude/skills"
   cp "$HOOKS_SRC"/*.py "$TARGET/.claude/hooks/"
-  say ".claude/skills/cerberus/SKILL.md"
   say ".claude/hooks/cerberus_{mark,gate,config}.py"
 
   if [ ! -f "$TARGET/.claude/cerberus.json" ]; then
@@ -158,9 +171,8 @@ PY
 fi
 
 if [ "$WANT_CODEX" -eq 1 ]; then
-  mkdir -p "$TARGET/.agents/skills/cerberus"
-  cp "$SKILL_SRC/SKILL.md" "$TARGET/.agents/skills/cerberus/SKILL.md"
-  say ".agents/skills/cerberus/SKILL.md"
+  mkdir -p "$TARGET/.agents/skills"
+  copy_skills "$TARGET/.agents/skills"
   say "note: Codex has no hook mechanism, so the gate is advisory there —"
   say "      the skill is followed when invoked, not enforced on every turn."
 fi

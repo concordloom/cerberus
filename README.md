@@ -30,16 +30,22 @@ were known.
 
 ## What this is
 
-Three things that work together:
+Four things that work together:
 
 1. **A skill** ([SKILL.md](plugins/cerberus/skills/cerberus/SKILL.md)) describing what verification has to
    consist of: enumerate the behaviour space before testing it, trace what reads
    the values you write, and then try to break the change past its delivery
    boundary with a check that could actually come back `BROKEN`.
-2. **Two hooks** that make it mechanical rather than a matter of memory. One
+2. **A second skill, [the critic](plugins/cerberus/skills/critic/SKILL.md)**, for the other half of the
+   cycle. The gate asks whether the thing does what you say it does; the critic
+   asks whether what you *said* is true — a diagnosis, a mechanism, a claim
+   about the codebase — by spawning an adversary whose mandate is to refute it.
+   Work can be right while its explanation is wrong, and a right explanation
+   proves nothing ran, so neither covers the other.
+3. **Two hooks** that make it mechanical rather than a matter of memory. One
    records that executable code changed; the other refuses to let a turn end
    with a readiness claim while that record stands.
-3. **A verdict** that is either `READY` with evidence, or `NOT READY` with
+4. **A verdict** that is either `READY` with evidence, or `NOT READY` with
    reproductions. Only `READY` clears the record.
 
 ## The three heads
