@@ -79,8 +79,11 @@ independently of what you happened to build.
    what you say it does, past its delivery boundary. Work can be correct while
    its explanation is wrong, and a correct explanation proves nothing ran.
 
-6. **The verdict goes back to the issue**, with the evidence: `READY` closes it,
-   `NOT READY` keeps it open with the reproductions attached. Putting the
+6. **The verdict goes back to the issue**, with the evidence. `NOT READY` keeps
+   it open with the reproductions attached. `READY` hands the closing to
+   whatever ships the change: a merged pull request closes it, so the tracker
+   and the shipped branch never disagree, and only work that ships without one
+   is closed by the verdict itself. Putting the
    evidence in the thread rather than in a chat log is the difference between a
    record and a memory — the next person to touch this reads the issue.
 

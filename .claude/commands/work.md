@@ -34,15 +34,24 @@ replacement for it.
    stand in for.
 
 6. **Post the verdict to the issue** with the evidence: what was run, what came
-   back, and what a broken version would have produced instead. `READY` closes
-   it; `NOT READY` leaves it open with the reproductions attached.
+   back, and what a broken version would have produced instead. `NOT READY`
+   leaves it open with the reproductions attached. `READY` does **not** close it
+   here — the pull request below closes it at merge, so the tracker and `main`
+   never disagree. Close it directly only when the work ships without a pull
+   request, because then nothing else will.
 
 7. **If a `BLOCKER` was fixed, the verdict is void.** Start a fresh round on the
    new revision, as a new comment, and carry the findings-dynamics line so the
-   sequence stays readable.
+   sequence stays readable. Since step 6 hands the closing to the merge, this
+   also means **do not merge on a verdict the last fix superseded** — the
+   merge, not the verdict, is now what closes the issue.
 
-Then open the pull request, `Closes #$issue`, with the verdict linked rather than
-restated.
+Then open the pull request, `Closes #$issue`, with the verdict linked rather
+than restated. Two things that wording depends on: the keyword only closes when
+the pull request targets the default branch, and closing the issue before the
+pull request exists voids the state change the keyword would have made — the
+link itself survives, so the issue still shows on the pull request, already
+closed on a change that has not landed and stays closed if it never does.
 
 If you skip a step, say which and why in the issue. A step skipped in the open
 is a decision; a step skipped quietly is the thing this repository refuses.
