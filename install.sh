@@ -102,7 +102,12 @@ if [ ! -f "$SKILL_SRC/SKILL.md" ]; then
   fi
 
   tar -xzf "$TMP/src.tar.gz" -C "$TMP"
-  SRC=$(find "$TMP" -mindepth 1 -maxdepth 1 -type d -name 'cerberus-skill-*' | head -n 1)
+  # Not `-name 'cerberus-skill-*'`: GitHub names the extracted directory after
+  # the repository, so pinning the repository name here means renaming the
+  # repository breaks the one-liner — the install path the README puts first —
+  # while the redirect works and every static check passes. There is exactly
+  # one directory in the extraction; take it.
+  SRC=$(find "$TMP" -mindepth 1 -maxdepth 1 -type d | head -n 1)
   resolve
 
   if [ ! -f "$SKILL_SRC/SKILL.md" ]; then
