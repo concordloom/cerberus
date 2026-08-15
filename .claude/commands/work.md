@@ -1,15 +1,14 @@
 ---
 description: Work an issue through the full cycle — matrix, work, critic, gate, verdict.
 argument-hint: <issue number>
-arguments: [issue]
 allowed-tools: Bash(gh issue view:*), Bash(gh issue comment:*), Bash(gh issue close:*), Bash(gh pr create:*)
 ---
 
-Take issue **$issue** through the cycle in `plugins/cerberus/skills/cerberus/SKILL.md`.
+Take issue **$1** through the cycle in `plugins/cerberus/skills/cerberus/SKILL.md`.
 Read that skill before starting; what follows is the order of operations, not a
 replacement for it.
 
-1. **Read the issue.** `gh issue view $issue --comments`. If it has no answer to
+1. **Read the issue.** `gh issue view $1 --comments`. If it has no answer to
    *what would settle it*, stop and say so: the work has no oracle, and Stage 2
    would have nothing to aim at. Ask for one rather than inventing it.
 
@@ -41,7 +40,7 @@ replacement for it.
    new revision, as a new comment, and carry the findings-dynamics line so the
    sequence stays readable.
 
-Then open the pull request, `Closes #$issue`, with the verdict linked rather than
+Then open the pull request, `Closes #$1`, with the verdict linked rather than
 restated.
 
 If you skip a step, say which and why in the issue. A step skipped in the open
