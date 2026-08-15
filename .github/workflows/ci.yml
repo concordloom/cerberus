@@ -1,0 +1,53 @@
+# A verification gate that is itself unverified would be self-refuting.
+#
+# The failure mode that matters here is the quiet one: a hook that never fires
+# looks exactly like a project where nothing is ever wrong. The tests below
+# assert both directions — that the gate blocks an over-claim, and that it stays
+# out of the way during ordinary work.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # The oldest supported runtime is not a formality: the hooks ship into
+        # other people's projects, and that is where a version-specific syntax
+        # error would surface instead of here.
+        python-version: ["3.10", "3.13"]
+    name: Hooks (py${{ matrix.python-version }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Compile
+        run: python3 -m compileall -q hooks scripts tests
+      - name: Test
+        run: python3 tests/test_hooks.py
+
+  docs:
+    runs-on: ubuntu-latest
+    name: Translation parity
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Two language versions drift silently: a section gets added to one and
+      # not the other, and whoever follows the stale one misses a step.
+      - name: English and Russian describe the same thing
+        run: python3 scripts/check_parity.py
+      - name: Example configuration is valid JSON
+        run: |
+          python3 -c "import json; json.load(open('cerberus.example.json'))"
+          python3 -c "import json; json.load(open('examples/settings.json'))"

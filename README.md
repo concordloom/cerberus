@@ -1,0 +1,98 @@
+# cerberus-skill
+
+**An adversarial verification gate for AI coding agents.** Before an agent tells
+you a change works, it has to seriously try to prove it is broken — and fail.
+
+[Русская версия](README.ru.md) · [The skill itself](SKILL.md) ([ru](SKILL.ru.md))
+
+## The problem
+
+An agent builds a feature, sees rows appear in the database and activity in the
+logs, and reports "works end to end". The credential it wrote was never resolved
+at runtime by anything. No real run had ever happened.
+
+That is not a model being careless. It is a structural property of how
+verification usually goes: the author checks their own work, along the path they
+already have in mind, and everything they look at agrees with them. Written
+instructions do not fix it — the rules forbidding all of it already existed and
+were known.
+
+## What this is
+
+Three things that work together:
+
+1. **A skill** ([SKILL.md](SKILL.md)) describing what verification has to
+   consist of: enumerate the behaviour space before testing it, trace what reads
+   the values you write, and then try to break the change past its delivery
+   boundary with a check that could actually come back `BROKEN`.
+2. **Two hooks** that make it mechanical rather than a matter of memory. One
+   records that executable code changed; the other refuses to let a turn end
+   with a readiness claim while that record stands.
+3. **A verdict** that is either `READY` with evidence, or `NOT READY` with
+   reproductions. Only `READY` clears the record.
+
+## Install
+
+```console
+git clone https://github.com/concordloom/cerberus-skill
+cd your-project
+
+mkdir -p .claude/skills/cerberus .claude/hooks
+cp ../cerberus-skill/SKILL.md            .claude/skills/cerberus/SKILL.md
+cp ../cerberus-skill/hooks/*.py          .claude/hooks/
+cp ../cerberus-skill/cerberus.example.json .claude/cerberus.json
+```
+
+Then merge [`examples/settings.json`](examples/settings.json) into your
+`.claude/settings.json`, and edit `.claude/cerberus.json` to describe your
+project.
+
+Nothing else is required: every configuration key has a working default, because
+a gate that stays inert until someone configures it is indistinguishable from no
+gate at all.
+
+## What it actually asks for
+
+**Enumerate before you test.** Write down the axes of the feature and their
+cartesian product, mark coverage per cell, and pay attention to the mixed cells —
+some entities succeeded, some failed. Bugs live there. There is a tell for
+skipping this step: *if the user is adding test cases for you, you skipped it.*
+
+**Trace the consumption path.** For everything the change writes, find
+everything that reads it at runtime. "The endpoint returned 200" is not "the
+runtime uses this".
+
+**Cross the delivery boundary.** Verification on your own terms — your tree,
+your fixtures, your imports — cannot see what only breaks elsewhere. Find the
+boundary by asking *what is the first thing that stops being under my control*,
+and verify from its far side, using the artifact as produced.
+
+For a service that is a deployed instance. For a library it is the built package
+installed into a clean environment and imported as a consumer would — which is
+where a missing export or an incompatible dependency range lives, invisible to
+every in-repo test, because those import from source.
+
+**Make the check falsifiable.** Before the first real call, write down what would
+refute the fix: the incompleteness hypothesis, the adverse precondition, the
+evidence that the adverse path was actually reached, and a failure oracle that
+can return `BROKEN`. "The logs looked quiet" proves nothing and closes nothing.
+An empty result set is a gap, not a pass.
+
+**Report findings, not worries.** A finding is a reproduced failure with
+evidence. "This could break" is not one. A gate that cries wolf gets switched
+off, and a gate that is off protects nothing.
+
+## Requirements
+
+Python 3.10+ for the hooks. Nothing else.
+
+The skill format and hook events are those of [Claude
+Code](https://claude.com/claude-code); the method in `SKILL.md` is not specific
+to any agent and can be followed by hand.
+
+## Origin and license
+
+Extracted from the internal engineering rules of an AI automation platform,
+where it was written after the incident described above and hardened against
+every subsequent way the gate was found to be evadable. MIT — see
+[LICENSE](LICENSE).

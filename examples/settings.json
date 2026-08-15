@@ -1,0 +1,26 @@
+{
+  "//": "Merge these hooks into your project's .claude/settings.json. Both are needed: the first records that unverified code changed, the second refuses to let a readiness claim end the turn while that record exists.",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/cerberus_mark.py"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/cerberus_gate.py"
+          }
+        ]
+      }
+    ]
+  }
+}
