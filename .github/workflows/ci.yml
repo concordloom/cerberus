@@ -56,6 +56,27 @@ jobs:
         run: |
           python3 -c "import json; json.load(open('cerberus.example.json'))"
           python3 -c "import json; json.load(open('examples/settings.json'))"
+      # A malformed issue form does not error anywhere — GitHub quietly falls
+      # back to a blank issue, and the one field the cycle depends on stops
+      # being asked for. Nothing else in this repository would notice.
+      - name: Issue forms parse
+        run: |
+          python3 - <<'PY'
+          import pathlib, sys, yaml
+
+          for path in sorted(pathlib.Path(".github/ISSUE_TEMPLATE").glob("*.yml")):
+              data = yaml.safe_load(path.read_text(encoding="utf-8"))
+              print(f"ok: {path}")
+              if path.name == "config.yml":
+                  continue
+              required = [
+                  f["id"] for f in data["body"]
+                  if f.get("validations", {}).get("required")
+              ]
+              if "oracle" not in required:
+                  print(f"{path}: the 'what would settle it' field must stay required", file=sys.stderr)
+                  sys.exit(1)
+          PY
 
   plugin:
     runs-on: ubuntu-latest

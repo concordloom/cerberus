@@ -13,6 +13,41 @@ readiness claims made without crossing the boundary.
 Before saying a change works, run the skill and finish both stages. The commands
 for this repository are declared in [`.claude/cerberus.json`](.claude/cerberus.json).
 
+## From discussion to issue to work
+
+Work here starts from an issue, and the issue is written **before** the work.
+That is not process for its own sake: the gate is only as good as the claim it
+is aimed at, and a claim written afterwards is whatever the change happened to
+do.
+
+The mechanics are two commands, both of which read the skills rather than
+repeating them:
+
+| | |
+|---|---|
+| `/issue` | ends a discussion by opening the issue it was heading towards |
+| `/work <n>` | takes that issue through matrix → work → critic → gate → verdict |
+
+[The issue form](.github/ISSUE_TEMPLATE/work.yml) requires one field that the
+rest of the cycle depends on: **what would settle it** — the observation that
+decides, stated so it could come back negative. An issue that cannot answer it
+is not ready to be worked, and saying so is a real answer. Blank issues are
+disabled so nothing skips the field; questions belong in Discussions.
+
+Two things then happen in the open, on the issue itself:
+
+- **the Stage 0 matrix is posted before the work.** This is what makes the tell
+  checkable rather than a matter of memory — if someone adds cases after your
+  matrix, you skipped Stage 0;
+- **the verdict is posted after it**, with the evidence. An issue closed without
+  one is a claim nobody checked.
+
+One caveat worth knowing, because it bit this repository. The hooks in
+`.claude/settings.json` are loaded from the project the session is working in.
+Editing this repository from a session rooted somewhere else means they never
+fire — the gate is not in the loop at all, and the dogfooding above is nominal.
+Work on this repository from this repository.
+
 ## Stage 1 — what the working tree can prove
 
 ```console

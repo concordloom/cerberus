@@ -1,0 +1,7 @@
+# A blank issue skips the one field the cycle depends on, so the form is the
+# only door. Questions belong in Discussions, which have no such requirement.
+blank_issues_enabled: false
+contact_links:
+  - name: Question or idea
+    url: https://github.com/concordloom/cerberus-skill/discussions
+    about: For anything not yet shaped as work. A discussion ends by opening an issue.

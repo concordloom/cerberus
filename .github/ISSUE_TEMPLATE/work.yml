@@ -1,0 +1,74 @@
+name: Work item
+description: Something to fix, add or change — stated so that it can be settled.
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This form exists because of one field: **what would settle it**. Written
+        after the work, the answer is whatever the change happens to do. Written
+        first, it is a claim the work has to meet — and it is what the
+        verification gate aims at. An issue without it can be worked, but nobody
+        can say when it is done.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is wrong
+      description: The symptom, and how it shows up. Sources beat adjectives.
+      placeholder: |
+        Installing on a fresh machine leaves the hooks unwired, so the gate
+        never fires. Seen on 1.2.0, macOS, no prior .claude/ directory.
+    validations:
+      required: true
+
+  - type: textarea
+    id: oracle
+    attributes:
+      label: What would settle it
+      description: >
+        The observation that decides — not "it should work". Something you
+        could look at and be wrong about. If you cannot name one, say so
+        explicitly; that is a useful answer and it means the issue is not ready
+        to be worked yet.
+      placeholder: |
+        On a machine with no .claude/, the documented install command leaves a
+        settings.json whose Stop hook fires: a readiness claim with the marker
+        set comes back `decision: block`.
+    validations:
+      required: true
+
+  - type: input
+    id: boundary
+    attributes:
+      label: Delivery boundary
+      description: >
+        The first thing that stops being under our control once this ships —
+        the plugin loader, the published tag, a consumer's install. Stage 2 is
+        verified from its far side. Leave blank if the change executes nothing.
+      placeholder: the plugin loader, on a real `claude plugin install`
+    validations:
+      required: false
+
+  - type: textarea
+    id: axes
+    attributes:
+      label: Axes, if you already know them
+      description: >
+        Dimensions the behaviour varies along — agent, scope, fresh vs existing
+        config, one skill vs several. The matrix gets posted here before the
+        work starts; anything you add now is one cell nobody has to discover
+        later.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: cycle
+    attributes:
+      label: How this issue will be worked
+      options:
+        - label: >
+            The Stage 0 matrix is posted here before the work, and the verdict
+            with its evidence is posted here after it. An issue closed without a
+            verdict is a claim nobody checked.
+          required: true
