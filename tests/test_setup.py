@@ -195,7 +195,7 @@ def test_write_config_never_emits_the_replacing_keys_for_any_kind():
                 (root / "Cargo.toml").write_text("[package]\nname='d'\n", encoding="utf-8")
                 (root / "go.mod").write_text("module d\n", encoding="utf-8")
                 (root / "package.json").write_text("{}", encoding="utf-8")
-                cerberus_setup.write_config(root, kind, ["true"], False, dict(seed), True)
+                cerberus_setup.write_config(root, kind, ["true"], False, dict(seed))
                 written = json.loads(
                     (root / ".claude" / "cerberus.json").read_text(encoding="utf-8")
                 )
@@ -364,6 +364,19 @@ def test_settings_local_json_is_read():
     )
     rc, out = run_setup(root)
     assert rc == 0, "wiring in settings.local.json was ignored:\n" + out
+
+
+def test_a_commented_out_entry_is_not_wiring():
+    # How a person disables a hook, since JSON has no comments.
+    root = project(PY_PROJECT, wired=False)
+    (root / ".claude" / "settings.json").write_text(json.dumps({"hooks": {
+        "PostToolUse": [{"matcher": "Write|Edit", "hooks": [{"type": "command",
+            "command": '# python3 "$CLAUDE_PROJECT_DIR"/.claude/hooks/cerberus_mark.py'}]}],
+        "Stop": [{"hooks": [{"type": "command",
+            "command": 'python3 "$CLAUDE_PROJECT_DIR"/.claude/hooks/cerberus_gate.py'}]}],
+    }}), encoding="utf-8")
+    rc, out = run_setup(root)
+    assert rc == 1, out
 
 
 def test_an_entry_under_the_wrong_matcher_is_not_wiring():
@@ -630,6 +643,109 @@ def test_the_documented_one_liner_leaves_a_complete_configuration():
 
 def is_placeholder_text(commands) -> bool:
     return all(str(c).startswith("echo ") for c in commands)
+
+
+def test_the_example_markers_still_match_the_shipped_file():
+    # The one decidable member of the existing-config population is identified
+    # by two strings copied out of cerberus.example.json. If that file changes
+    # and these do not, the installer's own copy stops being recognised and the
+    # one-liner silently stops finishing. This is the drift guard.
+    sys.path.insert(0, str(HOOKS))
+    import cerberus_setup
+
+    example = json.loads((ROOT / "cerberus.example.json").read_text(encoding="utf-8"))
+    assert cerberus_setup.EXAMPLE_MARKER_COMMENT == example["//"]
+    assert cerberus_setup.EXAMPLE_MARKER_STAGE1 == example["verification"]["stage1"]
+
+
+def test_an_existing_configuration_is_never_modified():
+    # Whatever is in it. Three rounds tried to tell "the user chose this" from
+    # "the installer wrote it" and each proxy destroyed somebody's work, so the
+    # question is no longer asked of anything but the installer's exact copy.
+    original = {
+        "verification": {
+            "artifact_kind": "migration",
+            "stage1": [],
+            "stage2": [],
+            "notes": "Prod creds in vault/eu-prod. NEVER run stage2 against eu.",
+        }
+    }
+    root = project({**PY_PROJECT, ".claude/cerberus.json": json.dumps(original)})
+    run_setup(root)
+    after = json.loads((root / ".claude" / "cerberus.json").read_text(encoding="utf-8"))
+    assert after == original, after
+
+
+def test_a_timed_out_check_is_never_written():
+    # Round two hardened run() and nothing asserted any of it: a mutant that
+    # counted 124 as success wrote a hanging command into the config and
+    # printed "ok" and "too slow" about it in adjacent lines.
+    sys.path.insert(0, str(HOOKS))
+    import cerberus_setup
+
+    runner = {"name": "Synthetic", "files": [], "checks": [("sleep 30", None)], "fallback": None}
+    with tempfile.TemporaryDirectory() as d:
+        original = cerberus_setup.run
+        cerberus_setup.run = lambda cmd, cwd, timeout=1: original(cmd, cwd, timeout=1)
+        try:
+            results = cerberus_setup.build_checks([runner], pathlib.Path(d))
+        finally:
+            cerberus_setup.run = original
+    assert results and results[0][1] == 124, results
+
+
+def test_only_a_passing_check_is_ever_written():
+    # The rule the config depends on, at the function. A timeout, a missing
+    # command and a failure are each their own outcome and none of them is
+    # writable — a mutant treating 124 as success wrote a hanging command into
+    # stage1 and nothing noticed.
+    sys.path.insert(0, str(HOOKS))
+    import cerberus_setup
+
+    results = [("green", 0, ""), ("slow", 124, "timed out"), ("gone", 127, ""), ("red", 1, "boom")]
+    passing, missing, timed_out, broken = cerberus_setup.sort_results(results)
+    assert passing == ["green"], passing
+    assert missing == ["gone"] and timed_out == ["slow"], (missing, timed_out)
+    assert [c for c, _ in broken] == ["red"], broken
+
+
+def test_a_check_never_inherits_stdin():
+    # Under `curl … | sh` the parent's stdin is the install script itself, and a
+    # check that reads it blocked for its whole budget.
+    sys.path.insert(0, str(HOOKS))
+    import cerberus_setup
+
+    read, write = os.pipe()
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-c",
+             "import sys, pathlib; sys.path.insert(0, %r); import cerberus_setup as c;"
+             "print(c.run('read x', pathlib.Path('.'), timeout=8)[0])" % str(HOOKS)],
+            stdin=read, capture_output=True, text=True, timeout=30,
+        )
+    finally:
+        os.close(read)
+        os.close(write)
+    # The point is that it returns at once rather than blocking for its whole
+    # budget; `read` with no input exits non-zero, which is fine.
+    assert proc.stdout.strip() != "124", proc.stdout + proc.stderr
+
+
+def test_a_timed_out_check_does_not_leave_the_tree_running():
+    sys.path.insert(0, str(HOOKS))
+    import cerberus_setup
+
+    with tempfile.TemporaryDirectory() as d:
+        root = pathlib.Path(d)
+        stamp = root / "still-running"
+        code, _ = cerberus_setup.run(
+            f"(sleep 4; touch {stamp}) & sleep 30", root, timeout=1
+        )
+    assert code == 124, code
+    import time
+
+    time.sleep(5)
+    assert not stamp.exists(), "the process group outlived the timeout"
 
 
 # ------------------------------------------------------- what the user reads

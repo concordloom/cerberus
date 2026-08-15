@@ -90,6 +90,18 @@ KIND_SIGNALS = [
 # comment line into a list of commands would be the placeholder again — a `#`
 # line exits 0 unconditionally, exactly like the `echo` it replaced. So the
 # list is left empty and the sentence is handed to the user instead.
+# The installer's own copy of cerberus.example.json, identified by the two
+# strings it ships. This is the only existing configuration that can be
+# rewritten without guessing whether a human chose its values — everything else
+# is left alone, because `cerberus.json` records no distinction between "the
+# user set this" and "the installer did", and three rounds of proxies for that
+# distinction each produced a defect.
+#
+# tests/test_setup.py asserts these still match the shipped example.
+EXAMPLE_MARKER_COMMENT = 'Copy to .claude/cerberus.json. Safe to use as-is: only the key that has no sensible default is set. Everything else keeps the built-in defaults, so copying this verbatim never narrows the gate by accident.'
+EXAMPLE_MARKER_STAGE1 = ["echo 'replace with this project: tests, lint, type check'"]
+
+
 STAGE2_HINT_BY_KIND = {
     "service": "run it where it actually runs and drive one real request through it",
     "library": "build the package, install it somewhere empty, and import it from there",
@@ -194,20 +206,35 @@ def build_checks(runners: list[dict], root: pathlib.Path) -> list[tuple[str, int
     return results
 
 
-def is_placeholder(commands: list) -> bool:
-    """Is this the example's stub rather than somebody's step?
+def sort_results(results: list) -> tuple[list, list, list, list]:
+    """Split check results into what may be written and what may not.
 
-    `echo 'running the suite' && pytest -q --maxfail=1` starts with `echo ` and
-    is a real step; treating it as the stub replaced hand-written commands
-    silently.
+    A function rather than four comprehensions inside main, because the rule —
+    only exit 0 is written — was untestable from outside and a mutant counting
+    a timeout as success wrote a hanging command into the config while printing
+    "ok" and "too slow" about it in adjacent lines.
     """
-    if not commands:
-        return True
-    for cmd in commands:
-        text = str(cmd)
-        if not text.startswith("echo ") or any(sep in text for sep in ("&&", ";", "|", "`", "$(")):
-            return False
-    return True
+    passing = [cmd for cmd, code, _ in results if code == 0]
+    missing = [cmd for cmd, code, _ in results if code == 127]
+    timed_out = [cmd for cmd, code, _ in results if code == 124]
+    broken = [(cmd, out) for cmd, code, out in results if code not in (0, 124, 127)]
+    return passing, missing, timed_out, broken
+
+
+def is_the_installers_copy(existing: dict) -> bool:
+    """Is this file still exactly what install.sh put there?
+
+    A fact about bytes, not an inference about intent. Every previous attempt to
+    tell "the user chose this" from "the installer wrote it" was a proxy — a key
+    inventory, then a key-name allowlist, then a flag that was never computed —
+    and each one destroyed somebody's configuration in a different way. The
+    distinction is not recorded in the file, so only the exactly-known case is
+    claimed and everything else is left untouched.
+    """
+    return (
+        existing.get("//") == EXAMPLE_MARKER_COMMENT
+        and existing.get("verification", {}).get("stage1") == EXAMPLE_MARKER_STAGE1
+    )
 
 
 def write_config(
@@ -216,7 +243,6 @@ def write_config(
     checks: list[str],
     dry: bool,
     existing: dict | None = None,
-    untouched: bool = True,
 ) -> pathlib.Path:
     """Merge into whatever is there rather than replacing it.
 
@@ -232,23 +258,14 @@ def write_config(
     # too, and did not: a deliberate `migration` — a kind detect() can never
     # produce — was downgraded to a guess, and notes naming production accounts
     # were destroyed without a word.
-    # `untouched` means the file is still the installer's copy of the example,
-    # whose artifact_kind is "service" and whose notes describe the field. Those
-    # are the installer's values, not anybody's decision, and preserving them
-    # shipped a Python library labelled a service with self-describing notes —
-    # while the closing paragraph of the same run gave the library advice.
-    if untouched:
-        verification["artifact_kind"] = kind
-    else:
-        verification.setdefault("artifact_kind", kind)
+    # Reached only for an absent config or the installer's own copy, so these
+    # are never anybody's choice.
+    verification["artifact_kind"] = kind
     verification["stage1"] = checks
     # Left empty on purpose: a comment line in a list of commands exits 0
     # unconditionally, which is the placeholder this script exists to remove.
     verification["stage2"] = []
-    prior_notes = str(verification.get("notes") or "")
-    if untouched or not prior_notes or prior_notes.startswith(
-        ("stage2 is still empty", "Replace the stage2", "Free text the agent should know")
-    ):
+    if True:
         verification["notes"] = (
             "stage2 is still empty. Put here what proves it works where it really runs: "
             + STAGE2_HINT_BY_KIND.get(
@@ -385,6 +402,20 @@ def _hooked(data: dict, event: str, script: str, root: pathlib.Path) -> bool:
             token = next((w for w in bare[:end].split() if script in w), "")
             if token:
                 candidates.append(token)
+            # A mention is not an invocation. A whitelist of interpreters was
+            # tried and collided with project paths containing spaces, so this
+            # is a narrow list of forms that provably run nothing: a commented
+            # out entry — which is how a person disables a hook inside JSON —
+            # and the path handed to echo or printf. `false && python3 X` and
+            # the script appearing as an argument to a real command are not
+            # caught, and are written down as known limits rather than guessed
+            # at: deciding whether a command would execute is a different and
+            # much larger problem than whether it names a file that exists.
+            stripped = bare.strip()
+            if stripped.startswith("#"):
+                continue
+            if stripped.split(" ")[0] in ("echo", "printf", ":", "true", "false"):
+                continue
             for candidate in candidates:
                 path = pathlib.Path(candidate)
                 if not path.is_absolute():
@@ -506,57 +537,46 @@ def main(argv: list[str] | None = None) -> int:
         except Exception:
             print(f"{config} exists but is not valid JSON. Fix or delete it, then run this again.")
             return 2
-        # Anything beyond the two keys this script owns is somebody's work, and
-        # rewriting the file would delete it. The earlier guard keyed off
-        # stage1 alone, so a config that only tuned the gate — the documented
-        # use of the other keys — was silently replaced, custom marker and all.
-        # `//`-prefixed keys are comments — cerberus.example.json ships seven of
-        # them. Counting those as somebody's hand-tuning made a freshly
-        # installed example look configured, so the documented one-liner left
-        # the echo placeholders in place and reported success. That is this
-        # issue's own title, reproduced by the fix for it.
         if not isinstance(existing, dict):
             print(f"{config} is valid JSON but not an object. Fix or delete it, then run this again.")
             return 2
-        # Only keys that change what the gate does count. "Any key I do not
-        # recognise" parked setup permanently on a config carrying a `$schema`
-        # line, and unknown keys survive regardless, because writing is a merge.
-        TUNING = ("claim_patterns", "ignore_patterns", "source_extensions", "watch_paths", "marker")
-        theirs = [k for k in existing if k in TUNING]
         verification = existing.get("verification")
         if verification is not None and not isinstance(verification, dict):
             print(f"{config} has a 'verification' that is not an object. Fix it, then run this again.")
             return 2
         verification = verification or {}
-        stage1 = verification.get("stage1", [])
-        placeholder = is_placeholder(stage1)
-        stage2 = verification.get("stage2", [])
-        if theirs or not placeholder or (stage2 and not all(str(c).lstrip().startswith(("#", "echo ")) for c in stage2)):
-            # Nothing is written — but "is it actually on?" is the question this
-            # is most often run to answer, and returning here answered it
-            # without looking. On every project after the first run that was an
-            # unverified yes, from the tool whose whole point is not doing that.
-            print("This project is configured already, so nothing was changed.")
-            if theirs:
-                print("It keeps settings this cannot write for you:", ", ".join(sorted(theirs)))
-            # And its checks are run, not assumed. Certifying that the gate
-            # fires while the checks it points at cannot pass is the split this
-            # whole issue is about, and the re-run had it.
+
+        if not is_the_installers_copy(existing):
+            # Never modified. Its checks are run and reported, the ones found
+            # here are printed beside them, and the user decides.
+            print("This project already has its own configuration, so nothing was")
+            print("changed. Here is how it stands.")
             print()
-            print("Checks this project already lists:")
-            still_failing = False
-            for cmd in stage1:
-                code, _ = run(str(cmd), root)
-                if code == 0:
-                    print(f"  ok       {cmd}")
-                elif code == 127:
-                    print(f"  absent   {cmd} — not installed here")
-                    still_failing = True
-                else:
-                    print(f"  FAILING  {cmd}")
-                    still_failing = True
+            listed = verification.get("stage1") or []
+            still_failing = not listed
+            if listed:
+                print("Checks it lists:")
+                for cmd in listed:
+                    code, out = run(str(cmd), root)
+                    if code == 0:
+                        print(f"  ok       {cmd}")
+                    else:
+                        first = out.splitlines()[0][:50] if out else "no output"
+                        label = "absent  " if code == 127 else "too slow" if code == 124 else "FAILING "
+                        print(f"  {label} {cmd} — {first}")
+                        still_failing = True
+            else:
+                print("It lists no checks at all, so there is nothing to run before a")
+                print("claim that the work is done.")
+            if runners:
+                found = [c for c, code, _ in build_checks(runners, root) if code == 0]
+                if found:
+                    print()
+                    print("Checks I found here and ran, if you want them:")
+                    for cmd in found:
+                        print(f"  ok       {cmd}")
             print()
-            return report_state(root, verification.get("artifact_kind") or kind, still_failing)
+            return report_state(root, verification.get("artifact_kind") or kind or "library", still_failing)
 
     # Only now, because a project this cannot recognise may already be
     # configured by hand — and those are exactly the projects that most need
@@ -570,10 +590,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     results = build_checks(runners, root)
-    passing = [cmd for cmd, code, _ in results if code == 0]
-    missing = [cmd for cmd, code, _ in results if code == 127]
-    timed_out = [cmd for cmd, code, _ in results if code == 124]
-    broken = [(cmd, out) for cmd, code, out in results if code not in (0, 124, 127)]
+    passing, missing, timed_out, broken = sort_results(results)
 
     if not passing:
         print(f"I found a {runners[0]['name']} project but none of its checks pass here.")
@@ -585,14 +602,15 @@ def main(argv: list[str] | None = None) -> int:
         print("Nothing was changed. Fix one of those, or tell me the right command.")
         return 2
 
-    write_config(root, kind, passing, args.check, existing, untouched=True)
+    write_config(root, kind, passing, args.check, existing)
 
     if len(runners) > 1:
         others = ", ".join(r["name"] for r in runners[1:])
         print(f"This project uses several toolchains: {runners[0]['name']}, {others}.")
         print(f"I took it as a {runners[0]['name']} {kind} — change that if it is wrong.")
     else:
-        print(f"Set up for this {runners[0]['name']} {kind}.")
+        print(f"Set up for this {runners[0]['name']} project.")
+        print(f"I took it as a {kind} — change that if it is wrong.")
     print()
     print("Checks I ran here, and will run before anyone says the work is done:")
     for cmd in passing:
