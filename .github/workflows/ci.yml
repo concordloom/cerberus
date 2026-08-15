@@ -61,6 +61,9 @@ jobs:
       # being asked for. Nothing else in this repository would notice.
       - name: Issue forms parse
         run: |
+          # Not in the runner's Python, though it is in most local ones — which
+          # is how this step failed the first time it ran.
+          pip install --quiet pyyaml
           python3 - <<'PY'
           import pathlib, sys, yaml
 
