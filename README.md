@@ -98,9 +98,11 @@ scripts and a file.
 The three heads on the gate are the three stages the agent owes you before that
 note comes off.
 
-🟢 **Stage 0** — enumerate the behaviour space before testing any of it.
-🟡 **Stage 1** — break the code: consumption paths, completeness, negatives.
-🔴 **Stage 2** — break it past the delivery boundary, with a check that can fail.
+| | Stage | What the agent has to do |
+|---|---|---|
+| 🟢 | **0** | Enumerate the behaviour space, before testing any of it |
+| 🟡 | **1** | Break the code: consumption paths, completeness, negative cases |
+| 🔴 | **2** | Break it past the delivery boundary, with a check that can fail |
 
 Skipping the first is the usual failure. The other two verify what you tried to
 break; only Stage 0 decides what there was to break in the first place. All of
