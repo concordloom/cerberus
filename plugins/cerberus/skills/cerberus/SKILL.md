@@ -87,9 +87,11 @@ independently of what you happened to build.
    evidence in the thread rather than in a chat log is the difference between a
    record and a memory — the next person to touch this reads the issue.
 
-7. **A `BLOCKER` fix voids the verdict**, so an issue does not close on a
-   superseded one. The new round is a new comment against the new revision, and
-   the findings-dynamics line makes the sequence legible.
+7. **A `BLOCKER` fix voids the verdict**, so nothing ships on a superseded
+   one. Since step 6 hands the closing to the merge, that also means not
+   merging on a verdict the last fix superseded. The new round is a new
+   comment against the new revision, and the findings-dynamics line makes
+   the sequence legible.
 
 The cycle survives the parts being skipped, but says which was skipped and why.
 An issue closed without a verdict is a claim nobody checked; say so in the

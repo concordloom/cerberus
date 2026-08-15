@@ -149,9 +149,13 @@ class Config:
         - **Resolved**, which catches a project reached *through* a symlink,
           where the lexical form would call the whole tree foreign.
 
-        `..` is normalised in the lexical arm precisely so it cannot be used to
-        walk out and back in: `root/../escaped.py` normalises to a path that is
-        not under the root.
+        `..` is normalised in the lexical arm so the obvious escape does not
+        work: `root/../escaped.py` normalises to a path outside the root. The
+        claim stops there. A `..` that traverses an in-project symlink pointing
+        out — `link/../secret.py` where `link` leaves the tree — normalises
+        lexically back inside and marks, while the real target is elsewhere.
+        That is inherent to accepting either arm, and marking one file too many
+        is the safe direction for a gate.
         """
         fp = os.path.expanduser(fp)
         target = pathlib.Path(fp) if self._is_absolute(fp) else self.root / fp

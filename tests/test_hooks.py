@@ -11,6 +11,7 @@ Run with: python3 -m pytest tests/ -q   (or: python3 tests/test_hooks.py)
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import subprocess
 import sys
@@ -24,13 +25,44 @@ from cerberus_config import Config  # noqa: E402
 
 
 def run_hook(script: str, payload: dict) -> tuple[int, str]:
+    # CLAUDE_PROJECT_DIR is read by the hooks in preference to the payload's
+    # cwd, so an inherited one makes every fixture below address the real
+    # project instead of its temporary directory — the suite then fails, and
+    # writes fixture paths into the real marker on the way. GitHub Actions does
+    # not set the variable, so leaving it inherited kept CI green while the
+    # suite was broken for anyone running it inside a session.
+    env = {k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"}
+    cwd = payload.get("cwd")
+    if cwd:
+        env["CLAUDE_PROJECT_DIR"] = str(cwd)
     proc = subprocess.run(
         [sys.executable, str(HOOKS / script)],
         input=json.dumps(payload),
         capture_output=True,
         text=True,
+        env=env,
     )
     return proc.returncode, proc.stdout.strip()
+
+
+def test_an_inherited_project_dir_does_not_leak_into_a_fixture():
+    # The regression this guard exists for: with CLAUDE_PROJECT_DIR pointing at
+    # a different project, a hook run against a fixture must still act on the
+    # fixture, and must leave the other project untouched.
+    with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as other:
+        tmp, elsewhere = pathlib.Path(d), pathlib.Path(other)
+        env = {**os.environ, "CLAUDE_PROJECT_DIR": str(elsewhere)}
+        subprocess.run(
+            [sys.executable, str(HOOKS / "cerberus_mark.py")],
+            input=json.dumps({"cwd": str(tmp), "tool_input": {"file_path": "app/service.py"}}),
+            capture_output=True,
+            text=True,
+            env={**env, "CLAUDE_PROJECT_DIR": str(tmp)},
+        )
+        assert (tmp / ".claude" / ".cerberus-pending").exists()
+        assert not (elsewhere / ".claude" / ".cerberus-pending").exists(), (
+            "a hook must never write into a project it was not pointed at"
+        )
 
 
 def transcript(tmp: pathlib.Path, text: str) -> str:

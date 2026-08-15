@@ -128,7 +128,11 @@ if [ "$WANT_CLAUDE" -eq 1 ]; then
   # shows up in `git status` for as long as it is set, which is most of the time
   # during real work. Read the marker path out of the config rather than
   # assuming the default, since it is a configurable key.
-  MARKER=$(python3 - "$TARGET" <<'PY'
+  # Unguarded, this exits the whole script under `set -e` when python3 is
+  # missing — after the hooks are copied and before they are wired, which is
+  # the worst state a gate can be left in: present and silent. The settings
+  # block below is guarded for the same reason.
+  MARKER=$(python3 - "$TARGET" 2>/dev/null <<'PY' || true
 import json, pathlib, sys
 target = pathlib.Path(sys.argv[1])
 default = ".claude/.cerberus-pending"
@@ -139,13 +143,19 @@ except Exception:
     print(default)
 PY
 )
-  if [ -n "$MARKER" ]; then
-    if [ ! -f "$TARGET/.gitignore" ] || ! grep -qxF "$MARKER" "$TARGET/.gitignore"; then
-      printf '%s\n' "$MARKER" >> "$TARGET/.gitignore"
-      say ".gitignore  (+ $MARKER)"
-    else
-      say ".gitignore  (kept — $MARKER already ignored)"
+  [ -n "$MARKER" ] || MARKER=".claude/.cerberus-pending"
+
+  if [ ! -f "$TARGET/.gitignore" ] || ! grep -qxF "$MARKER" "$TARGET/.gitignore"; then
+    # A .gitignore whose last line has no newline is common, and appending
+    # blindly merges the marker onto that line — destroying both patterns and
+    # leaving a second run unable to see its own entry.
+    if [ -s "$TARGET/.gitignore" ] && [ -n "$(tail -c 1 "$TARGET/.gitignore")" ]; then
+      printf '\n' >> "$TARGET/.gitignore"
     fi
+    printf '%s\n' "$MARKER" >> "$TARGET/.gitignore"
+    say ".gitignore  (+ $MARKER)"
+  else
+    say ".gitignore  (kept — $MARKER already ignored)"
   fi
 
   # Wiring the hooks means merging into a JSON file the user owns. Do it only
