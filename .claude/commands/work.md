@@ -42,12 +42,16 @@ replacement for it.
 
 7. **If a `BLOCKER` was fixed, the verdict is void.** Start a fresh round on the
    new revision, as a new comment, and carry the findings-dynamics line so the
-   sequence stays readable.
+   sequence stays readable. Since step 6 hands the closing to the merge, this
+   also means **do not merge on a verdict the last fix superseded** — the
+   merge, not the verdict, is now what closes the issue.
 
-Then open the pull request, `Closes #$issue`, with the verdict linked rather than
-restated. Closing the issue before that pull request exists makes the `Closes`
-a no-op, and if the pull request is later rejected the issue stays closed on a
-change that never landed.
+Then open the pull request, `Closes #$issue`, with the verdict linked rather
+than restated. Two things that wording depends on: the keyword only closes when
+the pull request targets the default branch, and closing the issue before the
+pull request exists voids the state change the keyword would have made — the
+link itself survives, so the issue still shows on the pull request, already
+closed on a change that has not landed and stays closed if it never does.
 
 If you skip a step, say which and why in the issue. A step skipped in the open
 is a decision; a step skipped quietly is the thing this repository refuses.
