@@ -19,12 +19,15 @@
 
 ## Быстрый старт
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/concordloom/cerberus/main/install.sh | sh -s -- --claude --setup
+**Claude Code** — две команды, и хуки подключены:
+
+```
+/plugin marketplace add concordloom/cerberus
+/plugin install cerberus@concordloom
 ```
 
-Ставит, выясняет, какие у вас проверки, прогоняет их здесь — и заставляет
-гейт отказать заявлению у вас на глазах:
+Дальше попросите его настроить проект. Он выяснит, какие у вас проверки,
+прогонит их и заставит гейт отказать заявлению у вас на глазах:
 
 ```text
 Checks I ran here, and will run before anyone says the work is done:
@@ -33,7 +36,17 @@ Checks I ran here, and will run before anyone says the work is done:
 Tried it: saying the work was done was refused, and it named the edited file
 ```
 
-Другие агенты и другие способы установки — в разделе [Установка](#установка).
+**Codex** и всё остальное, что читает `.agents/skills`, — одна команда:
+
+```console
+gh skill install concordloom/cerberus --all --agent codex
+```
+
+У Codex нет механизма хуков, поэтому там гейт совещательный: ему следуют,
+когда навык вызван, а не принуждают на каждом ходу.
+
+Хочется, чтобы файлы лежали в вашем репозитории? См.
+[Установку](#установка).
 
 ## Что он делает с вашей сессией
 

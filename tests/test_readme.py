@@ -32,39 +32,70 @@ def section(text: str, heading: str) -> str:
     return rest if end == -1 else rest[:end]
 
 
+def fenced(text: str) -> list[tuple[str, str]]:
+    """(language, body) for each fenced block, parsed rather than matched.
+
+    A regex over fences cannot tell an opening fence from a closing one: an
+    earlier version matched from the *closing* fence of a tagged block to the
+    opening of the next, and counted the prose between them as a command.
+    """
+    blocks, language, buffer, inside = [], "", [], False
+    for line in text.splitlines():
+        if line.startswith("```"):
+            if inside:
+                blocks.append((language, "\n".join(buffer).strip()))
+                language, buffer, inside = "", [], False
+            else:
+                language, inside = line[3:].strip(), True
+            continue
+        if inside:
+            buffer.append(line)
+    return blocks
+
+
 def shell_blocks(text: str) -> list[str]:
-    return [b.strip() for b in re.findall(r"```sh\n(.*?)```", text, re.S)]
+    """Untagged blocks: what the reader types into an agent, not into a shell."""
+    return [body for lang, body in fenced(text) if lang == ""]
 
 
-def test_the_quick_start_command_runs():
+def console_blocks(text: str) -> list[str]:
+    """Blocks a shell can run, and therefore blocks a test can run."""
+    return [body for lang, body in fenced(text) if lang in ("console", "sh")]
+
+
+def test_the_codex_quick_start_command_runs():
     """Extracted from README.md, not retyped, and executed for real.
 
     It fetches over the network by design: that is what the reader will do, and
-    the difference between the script beside the page and the script the page
-    points at is exactly where an install breaks.
+    the difference between what the page says and what the registry serves is
+    exactly where an install breaks.
     """
-    blocks = shell_blocks(section(README.read_text(encoding="utf-8"), "## Quick start"))
-    assert len(blocks) == 1, f"expected one command in the quick start, found {len(blocks)}"
+    blocks = console_blocks(section(README.read_text(encoding="utf-8"), "## Quick start"))
+    assert len(blocks) == 1, f"expected one runnable command, found {len(blocks)}"
     command = blocks[0]
-    assert command.count("\n") == 0, "the quick start must be one line to copy: " + command
+    assert command.count("\n") == 0, "it must be one line to copy: " + command
 
     with tempfile.TemporaryDirectory() as d:
         root = pathlib.Path(d)
-        (root / "tests").mkdir()
-        (root / "pyproject.toml").write_text(
-            '[project]\nname = "d"\nversion = "1"\n', encoding="utf-8"
-        )
-        (root / "tests" / "test_demo.py").write_text(
-            "def test_ok():\n    assert True\n", encoding="utf-8"
-        )
         proc = subprocess.run(
             command, shell=True, cwd=str(root), capture_output=True, text=True, timeout=600,
-            env={k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"},
         )
         assert proc.returncode == 0, command + "\n" + proc.stdout + proc.stderr
-        assert (root / ".claude" / "cerberus.json").exists(), proc.stdout
-        # And the page's promise: the refusal is shown, not described.
-        assert "was refused" in proc.stdout, proc.stdout
+        installed = sorted(p.parent.name for p in (root / ".agents" / "skills").rglob("SKILL.md"))
+        assert installed == ["cerberus", "critic", "setup"], installed
+
+
+def test_the_claude_quick_start_is_the_documented_plugin_pair():
+    """The plugin commands cannot run here — they need credentials and a
+    session — so their shape is asserted instead, and the verdict says they are
+    verified by hand rather than pretending this covers them."""
+    blocks = shell_blocks(section(README.read_text(encoding="utf-8"), "## Quick start"))
+    assert len(blocks) == 1, f"expected one plugin block, found {len(blocks)}"
+    lines = [line.strip() for line in blocks[0].splitlines() if line.strip()]
+    assert lines == [
+        "/plugin marketplace add concordloom/cerberus",
+        "/plugin install cerberus@concordloom",
+    ], lines
 
 
 def test_the_quick_start_shows_what_success_looks_like():
