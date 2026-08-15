@@ -22,6 +22,13 @@ What this checks, and why each rule earns its place:
    would be a rule tightened without the incentive changing — formal compliance,
    not the behaviour.
 
+   Its limit, stated rather than hidden: **arity is a property of the
+   invocation, not of the file.** `$N` binds to whatever the user typed, so no
+   file-local fact makes `$1` provably wrong. `arguments:` names positions and
+   `argument-hint` is autocomplete decoration; both are self-certified, and
+   padding the hint silences this rule. It is a lint over the declaration an
+   author wrote, and it catches the case that actually shipped.
+
 2. **Declared arguments are used.** `arguments: [issue]` with no `$issue` in the
    body is a declaration that does nothing, which is how a rename half-lands.
 
@@ -32,11 +39,13 @@ What this checks, and why each rule earns its place:
    `plugins/cerberus/skills/*/SKILL.md`; a move that misses them turns a step
    into a dead end.
 
-Deliberately NOT checked: an undeclared `$name`. Named placeholders and shell
-variables are spelled identically, so `$CLAUDE_PROJECT_DIR` in an example
-command line is indistinguishable from a typo'd argument name. A rule that
-cannot tell them apart would produce false findings, and false findings are how
-a check gets ignored.
+5. **Named placeholders are declared.** An undeclared `$name` expands to an
+   **empty string**, so `Closes #$isue` ships as `Closes #` with nothing to
+   notice — #1's silent form, in the line that closes the issue. This was
+   skipped in the first round on the grounds that `$CLAUDE_PROJECT_DIR` in an
+   example is indistinguishable from a typo. It is distinguishable: argument
+   names are lowercase and shell variables are conventionally upper-case, and
+   the rule only fires when `arguments:` is present.
 
 Run: python3 scripts/check_commands.py
 """
@@ -52,13 +61,26 @@ COMMANDS = ROOT / ".claude" / "commands"
 
 # A backticked token is treated as a repository path when it has a directory
 # separator and a known extension. Anything looser starts flagging prose.
+#
+# URLs and globs are excluded deliberately: both used to be flagged, and the
+# glob case was absurd — the rule rejected the very example its own docstring
+# uses to describe it.
 PATH_LIKE = re.compile(r"`([^`\s]*/[^`\s]*\.(?:md|py|json|ya?ml|sh))`")
+NOT_A_REPO_PATH = re.compile(r"^[a-z][a-z0-9+.-]*://|^~|[*?\[]")
 POSITIONAL = re.compile(r"\$(\d+)(?!\w)")
+# Argument names are lowercase; shell variables are conventionally upper-case,
+# which is what makes the two separable after all.
+NAMED = re.compile(r"\$([a-z][a-z0-9_]*)\b")
 HINT_TOKEN = re.compile(r"<[^>]+>|\[[^\]]+\]")
 
 
-def parse_frontmatter(text: str, problems: list[str], name: str) -> dict[str, str]:
-    """Return the frontmatter as raw strings, or {} after recording a problem.
+def parse_frontmatter(text: str, problems: list[str], name: str) -> dict[str, str] | None:
+    """Return the frontmatter as raw strings, or None after recording a problem.
+
+    None and {} are different answers and conflating them switched every
+    remaining check off: a file whose frontmatter was well formed but empty
+    returned {}, which read as "there was a problem, stop" while no problem had
+    been recorded, so it passed with nothing checked at all.
 
     A deliberately small parser rather than PyYAML: this has to run in the same
     job as the hook tests, which install nothing.
@@ -66,12 +88,12 @@ def parse_frontmatter(text: str, problems: list[str], name: str) -> dict[str, st
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---":
         problems.append(f"{name}: no frontmatter — the file must open with ---")
-        return {}
+        return None
     try:
         end = lines.index("---", 1)
     except ValueError:
         problems.append(f"{name}: frontmatter is never closed with ---")
-        return {}
+        return None
 
     data: dict[str, str] = {}
     for raw in lines[1:end]:
@@ -111,7 +133,7 @@ def check(path: pathlib.Path, problems: list[str], root: pathlib.Path = ROOT) ->
         name = path.name
     text = path.read_text(encoding="utf-8")
     front = parse_frontmatter(text, problems, str(name))
-    if not front:
+    if front is None:
         return
 
     body = text.split("---", 2)[-1]
@@ -132,7 +154,19 @@ def check(path: pathlib.Path, problems: list[str], root: pathlib.Path = ROOT) ->
         if f"${arg}" not in body:
             problems.append(f"{name}: declares argument {arg!r} and never uses `${arg}`")
 
+    if args:
+        declared = {a for a in args if not a.startswith("<")}
+        if declared:
+            for placeholder in sorted(set(NAMED.findall(body)) - declared):
+                problems.append(
+                    f"{name}: `${placeholder}` is not in `arguments:` {sorted(declared)}. "
+                    f"An undeclared named placeholder expands to an empty string, "
+                    f"so a typo ships silently"
+                )
+
     for ref in PATH_LIKE.findall(body):
+        if NOT_A_REPO_PATH.search(ref):
+            continue  # a URL, a glob or a home path — not a reference into this tree
         if not (root / ref).exists():
             problems.append(f"{name}: references `{ref}`, which does not exist")
 
