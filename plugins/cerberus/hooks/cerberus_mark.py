@@ -51,7 +51,12 @@ def main() -> int:
     tool_input = data.get("tool_input") or {}
     file_path = tool_input.get("file_path") or tool_input.get("path") or ""
 
-    root = pathlib.Path(data.get("cwd") or os.getcwd())
+    # CLAUDE_PROJECT_DIR first: cwd can be a subdirectory, and since the
+    # containment check landed a wrong root no longer merely misplaces the
+    # marker — it drops entries and the gate silently disarms.
+    root = pathlib.Path(
+        os.environ.get("CLAUDE_PROJECT_DIR") or data.get("cwd") or os.getcwd()
+    )
     cfg = Config.load(root)
 
     if not cfg.is_source_file(file_path):

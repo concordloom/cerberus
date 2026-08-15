@@ -98,7 +98,12 @@ def main() -> int:
     except Exception:
         return 0
 
-    root = pathlib.Path(data.get("cwd") or os.getcwd())
+    # CLAUDE_PROJECT_DIR first: cwd can be a subdirectory, and since the
+    # containment check landed a wrong root no longer merely misplaces the
+    # marker — it drops entries and the gate silently disarms.
+    root = pathlib.Path(
+        os.environ.get("CLAUDE_PROJECT_DIR") or data.get("cwd") or os.getcwd()
+    )
     cfg = Config.load(root)
 
     marker = cfg.marker_path()

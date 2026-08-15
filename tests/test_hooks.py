@@ -72,13 +72,18 @@ def test_does_not_mark_tests_docs_or_agent_config():
 
 
 def test_does_not_mark_files_outside_the_project():
-    # Reproduced 2026-08-15: a real marker held six paths and four were outside
-    # the repository — two scratch files and two from the assistant's own memory
-    # directory. Writing a note somewhere else armed this project's gate.
+    # Reproduced 2026-08-15: writing a note to a scratch directory armed this
+    # project's gate, because nothing asked whether the path was in the project.
     #
-    # Every assertion here runs against a marker that already has an entry, and
-    # the in-project write is re-checked afterwards. Without that pairing a hook
-    # that marks nothing at all would pass this test.
+    # Every path below is one that the *old* code marked. An earlier version of
+    # this test also listed a `.md` under a `.claude/` directory; that assertion
+    # was inert — the default ignore patterns already contain "/.claude/", so it
+    # could not fail under either implementation. An assertion that cannot fail
+    # is worse than no assertion, because it reads as coverage.
+    #
+    # Every assertion runs against a marker that already has an entry, and the
+    # in-project write is re-checked afterwards, so a hook that marks nothing at
+    # all cannot pass this.
     with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as elsewhere:
         tmp = pathlib.Path(d)
         marker = tmp / ".claude" / ".cerberus-pending"
@@ -87,19 +92,60 @@ def test_does_not_mark_files_outside_the_project():
         assert marker.exists(), "sentinel: an in-project edit must still mark"
         before = marker.read_text(encoding="utf-8")
 
-        for path in (
+        outside = [
             str(pathlib.Path(elsewhere) / "note.py"),
-            str(pathlib.Path(elsewhere) / "memory" / "MEMORY.md"),
+            str(pathlib.Path(elsewhere) / "nested" / "deep.py"),
             "../escaped.py",
             "../../also_escaped.py",
-        ):
+            "C:/windows/style.py",
+        ]
+        cfg_old_would_mark = Config(tmp)
+        for path in outside:
             run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": path}})
             assert marker.read_text(encoding="utf-8") == before, path
+            assert not cfg_old_would_mark.is_source_file(path), path
 
         # And the hook is still alive at the end, rather than having been
         # switched off by the change under test.
         run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/other.py"}})
         assert "app/other.py" in marker.read_text(encoding="utf-8")
+
+
+def test_a_symlinked_package_inside_the_project_still_marks():
+    # The vendored layout: proj/packages/foo is a symlink to a shared directory
+    # outside the tree. The file is part of the project and editing it changes
+    # what the project ships, so it must mark. Resolving the path and comparing
+    # only that would call it foreign — this is the cell issue #5's matrix said
+    # had to be picked and justified, and it is the one a purely resolved
+    # implementation gets wrong.
+    with tempfile.TemporaryDirectory() as d:
+        base = pathlib.Path(d)
+        root = base / "proj"
+        (root / "packages").mkdir(parents=True)
+        shared = base / "shared" / "foo"
+        shared.mkdir(parents=True)
+        (shared / "x.py").write_text("", encoding="utf-8")
+        (root / "packages" / "foo").symlink_to(shared)
+
+        cfg = Config(root)
+        assert cfg.is_source_file(str(root / "packages" / "foo" / "x.py"))
+        assert cfg.is_source_file("packages/foo/x.py")
+
+
+def test_a_project_reached_through_a_symlink_still_marks():
+    # The mirror case: the root itself is a symlink. Comparing only lexically
+    # would call the entire tree foreign — which is why neither comparison is
+    # used alone.
+    with tempfile.TemporaryDirectory() as d:
+        base = pathlib.Path(d)
+        real = base / "real"
+        (real / "app").mkdir(parents=True)
+        (real / "app" / "x.py").write_text("", encoding="utf-8")
+        link = base / "link"
+        link.symlink_to(real)
+
+        assert Config(link).is_source_file(str(real / "app" / "x.py"))
+        assert Config(real).is_source_file(str(link / "app" / "x.py"))
 
 
 def test_marks_an_absolute_path_inside_the_project():
