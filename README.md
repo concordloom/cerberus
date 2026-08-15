@@ -3,13 +3,13 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/concordloom/cerberus-skill/actions/workflows/ci.yml"><img src="https://github.com/concordloom/cerberus-skill/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/concordloom/cerberus/actions/workflows/ci.yml"><img src="https://github.com/concordloom/cerberus/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT">
   <img src="https://img.shields.io/badge/Claude%20Code-plugin-8a6cff" alt="Claude Code plugin">
   <img src="https://img.shields.io/badge/Codex-skill-10a37f" alt="Codex skill">
 </p>
 
-# cerberus-skill
+# cerberus
 
 **An adversarial verification gate for AI coding agents.** Before an agent tells
 you a change works, it has to seriously try to prove it is broken — and fail.
@@ -79,7 +79,7 @@ break; only Stage 0 decides what there was to break in the first place.
 ### Claude Code — two commands
 
 ```
-/plugin marketplace add concordloom/cerberus-skill
+/plugin marketplace add concordloom/cerberus
 /plugin install cerberus@concordloom
 ```
 
@@ -89,7 +89,7 @@ to copy and no settings file to edit.
 ### Codex — one command
 
 ```console
-gh skill install concordloom/cerberus-skill cerberus --agent codex
+gh skill install concordloom/cerberus cerberus --agent codex
 ```
 
 Nothing special is needed for this: the repository is laid out the way the
@@ -98,7 +98,7 @@ the plugins/ convention"* — and pins the install to the latest release tag.
 Inside Codex, `$skill-installer` takes the same thing as a URL:
 
 ```console
-$skill-installer install https://github.com/concordloom/cerberus-skill/tree/main/plugins/cerberus/skills/cerberus
+$skill-installer install https://github.com/concordloom/cerberus/tree/main/plugins/cerberus/skills/cerberus
 ```
 
 Both land in `.agents/skills`, which Codex shares with Copilot, Cursor, Gemini
@@ -116,7 +116,7 @@ When you would rather have the thing in the project — the skill, the hooks and
 settings where they exist:
 
 ```console
-curl -fsSL https://raw.githubusercontent.com/concordloom/cerberus-skill/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/concordloom/cerberus/main/install.sh | sh
 ```
 
 There is nothing to clone: piped through `sh`, the script fetches what it needs.

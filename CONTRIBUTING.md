@@ -75,7 +75,7 @@ So:
 
 ```console
 export CLAUDE_CONFIG_DIR=$(mktemp -d)     # never the real one: it changes your own session
-claude plugin marketplace add concordloom/cerberus-skill
+claude plugin marketplace add concordloom/cerberus
 claude plugin install cerberus@concordloom
 claude plugin list                        # Status must read: ✔ enabled
 claude plugin details cerberus            # Skills (1), Hooks (2)
@@ -92,7 +92,7 @@ Then check the installer, which is a second and independent boundary — it does
 not go through the loader at all:
 
 ```console
-git clone https://github.com/concordloom/cerberus-skill /tmp/src
+git clone https://github.com/concordloom/cerberus /tmp/src
 mkdir /tmp/proj && cd /tmp/proj && sh /tmp/src/install.sh
 ```
 
