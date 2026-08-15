@@ -1,0 +1,26 @@
+{
+  "//": "This repository runs its own gate. The hooks are referenced in place under plugins/ rather than copied into .claude/hooks, so there is exactly one copy of each script and no chance of the vendored copy drifting from the published one.",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/plugins/cerberus/hooks/cerberus_mark.py"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/plugins/cerberus/hooks/cerberus_gate.py"
+          }
+        ]
+      }
+    ]
+  }
+}

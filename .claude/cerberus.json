@@ -1,0 +1,33 @@
+{
+  "//": "This repository's own gate configuration. It is also the worked example the documentation refers to: an artifact whose delivery boundary is not a deployment.",
+
+  "//watched": "Hooks mark edits to the hooks themselves, the skill text and the scripts. The manifests are JSON and carry no extension the default list covers, so they are named here: a broken manifest is exactly the kind of change that must not be claimed as working unverified.",
+  "source_extensions": [".py", ".json", ".sh", ".md"],
+  "ignore_patterns": ["/tests/", "/docs/", "/.github/", "README", "install.sh"],
+
+  "verification": {
+    "artifact_kind": "claude-plugin",
+
+    "//stage1": "Everything that can be proven without leaving the working tree.",
+    "stage1": [
+      "python3 -m compileall -q plugins scripts tests",
+      "python3 tests/test_hooks.py",
+      "python3 scripts/check_parity.py",
+      "sh -n install.sh"
+    ],
+
+    "//stage2": "The boundary here is the plugin loader, not a server. Nothing in stage 1 can see it: static checks of the manifests validate one reading of the documentation, while the loader has its own. Both defects found on 2026-08-15 - a source path form the loader rejects, and a hooks declaration that made the plugin fail to load - passed every static check and were caught only by installing for real.",
+    "stage2": [
+      "export CLAUDE_CONFIG_DIR=$(mktemp -d)",
+      "claude plugin marketplace add concordloom/cerberus-skill",
+      "claude plugin install cerberus@concordloom",
+      "claude plugin list          # must read: Status ✔ enabled",
+      "claude plugin details cerberus   # must list Skills (1) and Hooks (2)",
+      "# and the installer path, which is a second, independent boundary:",
+      "git clone https://github.com/concordloom/cerberus-skill /tmp/src && cd /tmp/proj && sh /tmp/src/install.sh",
+      "# then drive the installed gate: mark a source edit, claim readiness, expect decision=block"
+    ],
+
+    "notes": "Use an isolated CLAUDE_CONFIG_DIR: installing into the real one changes the operator's own session. Verify against the pushed commit, not the working tree - the marketplace installs from GitHub, so an unpushed fix proves nothing. `claude plugin marketplace update` before reinstalling, or the cached copy is what gets tested."
+  }
+}

@@ -31,7 +31,12 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Compile
-        run: python3 -m compileall -q hooks scripts tests
+        # `compileall` on a missing path prints a complaint and exits 0, so the
+        # path is asserted first. This step silently compiled nothing after the
+        # hooks moved under plugins/ and stayed green throughout.
+        run: |
+          test -d plugins/cerberus/hooks
+          python3 -m compileall -q plugins/cerberus/hooks scripts tests
       - name: Test
         run: python3 tests/test_hooks.py
 
@@ -73,6 +78,13 @@ jobs:
           problems = []
 
           for entry in market["plugins"]:
+              # The loader rejects a bare name even when metadata.pluginRoot is
+              # set, with "source: Invalid input". The documentation permits that
+              # form; the loader is the authority. Caught 2026-08-15 by a real
+              # install, after every static check had passed.
+              if not str(entry["source"]).startswith("./"):
+                  problems.append(f"{entry['name']}: source must be an explicit relative path, got {entry['source']!r}")
+                  continue
               plugin_dir = pathlib.Path(root) / entry["source"]
               manifest = plugin_dir / ".claude-plugin" / "plugin.json"
               if not manifest.exists():
@@ -83,11 +95,22 @@ jobs:
                   problems.append(f"{entry['name']}: name disagrees with plugin.json ({plugin['name']})")
               if plugin.get("version") != entry.get("version"):
                   problems.append(f"{entry['name']}: version disagrees with plugin.json")
+              # skills/ and hooks/hooks.json are loaded by convention. Naming
+              # them in the manifest registers the same files twice and the
+              # plugin fails to load *after* installing successfully - which
+              # reads as a working install right up until the first hook should
+              # have fired. Caught 2026-08-15.
               for key in ("skills", "hooks"):
-                  target = plugin_dir / str(plugin[key]).lstrip("./")
-                  if not target.exists():
-                      problems.append(f"{entry['name']}: {key} points at missing {target}")
-              hooks = json.load(open(plugin_dir / "hooks" / "hooks.json"))
+                  if key in plugin:
+                      problems.append(f"{entry['name']}: plugin.json must not declare {key!r} - it is loaded by convention and declaring it duplicates the load")
+              hooks_file = plugin_dir / "hooks" / "hooks.json"
+              if not hooks_file.exists():
+                  problems.append(f"{entry['name']}: no hooks/hooks.json at the conventional path")
+                  continue
+              skills_dir = plugin_dir / "skills"
+              if not skills_dir.is_dir():
+                  problems.append(f"{entry['name']}: no skills/ directory at the conventional path")
+              hooks = json.load(open(hooks_file))
               for event, entries in hooks["hooks"].items():
                   for e in entries:
                       for h in e["hooks"]:
