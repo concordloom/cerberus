@@ -149,13 +149,79 @@ def test_the_quick_start_fits_above_the_fold():
 
 
 def test_three_heads_means_one_thing():
-    # The stages own the phrase: the hero image colours three heads green,
-    # amber and red, which are Stage 0, 1 and 2. A second section claiming it
-    # for the three skills left the picture illustrating nothing.
+    # The stages own the phrase: the hero image colours three heads green, amber
+    # and red, which are Stage 0, 1 and 2. A section claiming it for the three
+    # skills left the picture illustrating nothing.
     for path, pattern in ((README, r"^## .*[Tt]hree heads"), (README_RU, r"^## .*[Тт]ри головы")):
         text = path.read_text(encoding="utf-8")
         found = re.findall(pattern, text, re.M)
         assert len(found) == 1, f"{path.name}: {found}"
+
+
+def test_the_skills_do_not_claim_to_be_heads():
+    # This guard used to read only the READMEs, so it enforced one meaning while
+    # `setup/SKILL.md` opened with "The third head" and shipped the other. Both
+    # definitions were in the product at once, and the test that existed to
+    # prevent exactly that could not see half of it.
+    for skill in sorted((ROOT / "plugins").glob("*/skills/*/SKILL*.md")):
+        text = skill.read_text(encoding="utf-8").lower()
+        for phrase in ("third head", "second head", "first head", "третья голова",
+                       "вторая голова", "первая голова"):
+            assert phrase not in text, f"{skill}: '{phrase}' — heads are the stages"
+
+
+def test_the_page_does_not_read_as_a_list_of_lists():
+    # Three tables inside two screens made the eye stop resolving them as
+    # separate things: the one that asks the reader to decide something was the
+    # middle stripe, which gets the least attention.
+    for path in (README, README_RU):
+        text = path.read_text(encoding="utf-8")
+        sections = re.split(r"^## ", text, flags=re.M)[1:]
+        with_tables = [s.splitlines()[0] for s in sections if re.search(r"^\|.*\|$", s, re.M)]
+        assert len(with_tables) <= 2, f"{path.name}: tables in {with_tables}"
+        titles = [s.splitlines()[0] for s in sections]
+        for a, b in zip(titles, titles[1:]):
+            assert not (a in with_tables and b in with_tables), (
+                f"{path.name}: consecutive tables in '{a}' and '{b}'"
+            )
+
+
+def test_the_boundary_table_matches_the_documented_kinds():
+    # The README listed four of the seven artifact kinds the example config
+    # documents, so a reader shipping a migration or a prompt concluded the tool
+    # was not for them.
+    example = (ROOT / "cerberus.example.json").read_text(encoding="utf-8")
+    kinds = re.search(r"artifact_kind: ([^\"]+)", example).group(1)
+    documented = {k.strip().rstrip(".") for k in kinds.split("|")}
+    rows = section(README.read_text(encoding="utf-8"), "## The one thing to configure")
+    listed = re.findall(r"^\| a[n]? ([^|]+?) *\|", rows, re.M)
+    assert len(listed) >= len(documented) - 1, f"{len(listed)} rows for {len(documented)} kinds: {listed}"
+
+
+def test_the_page_says_how_to_switch_it_off():
+    # tests/test_setup.py already demands this of the setup output. The front
+    # door — where someone decides whether to install a thing that intercepts
+    # every turn — did not say it at all.
+    for path, phrases in (
+        (README, ("switch it off", "turn it off", "uninstall")),
+        (README_RU, ("выключить", "удалите")),
+    ):
+        text = path.read_text(encoding="utf-8").lower()
+        assert any(p in text for p in phrases), path.name
+
+
+def test_the_page_does_not_claim_a_mechanism_that_does_not_exist():
+    # It said the record is "cleared by one thing: a READY verdict". Nothing in
+    # the hooks clears it — the agent deletes the file. Claiming a mechanism
+    # this project does not have, on the page that argues against exactly that,
+    # was the worst sentence here.
+    hooks = (ROOT / "plugins" / "cerberus" / "hooks")
+    clears = [h.name for h in hooks.glob("cerberus_*.py")
+              if h.name != "cerberus_setup.py" and "unlink" in h.read_text(encoding="utf-8")]
+    assert not clears, f"a hook clears the marker now — the README may say so: {clears}"
+    for path in (README, README_RU):
+        text = path.read_text(encoding="utf-8").lower()
+        assert "cleared by one thing" not in text, path.name
 
 
 def test_both_languages_have_the_same_sections():
