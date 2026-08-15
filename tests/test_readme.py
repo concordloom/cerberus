@@ -63,12 +63,12 @@ def console_blocks(text: str) -> list[str]:
     return [body for lang, body in fenced(text) if lang in ("console", "sh")]
 
 
-def test_the_codex_quick_start_command_runs():
-    """Extracted from README.md, not retyped, and executed for real.
+def test_the_installer_command_runs():
+    """The one command on this page a shell can run, extracted and executed.
 
     It fetches over the network by design: that is what the reader will do, and
-    the difference between what the page says and what the registry serves is
-    exactly where an install breaks.
+    the difference between the script beside the page and the script the page
+    points at is exactly where an install breaks.
     """
     blocks = console_blocks(section(README.read_text(encoding="utf-8"), "## Quick start"))
     assert len(blocks) == 1, f"expected one runnable command, found {len(blocks)}"
@@ -77,25 +77,61 @@ def test_the_codex_quick_start_command_runs():
 
     with tempfile.TemporaryDirectory() as d:
         root = pathlib.Path(d)
+        (root / "tests").mkdir()
+        (root / "pyproject.toml").write_text(
+            '[project]\nname = "d"\nversion = "1"\n', encoding="utf-8"
+        )
+        (root / "tests" / "test_demo.py").write_text(
+            "def test_ok():\n    assert True\n", encoding="utf-8"
+        )
         proc = subprocess.run(
             command, shell=True, cwd=str(root), capture_output=True, text=True, timeout=600,
+            env={k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"},
         )
         assert proc.returncode == 0, command + "\n" + proc.stdout + proc.stderr
-        installed = sorted(p.parent.name for p in (root / ".agents" / "skills").rglob("SKILL.md"))
-        assert installed == ["cerberus", "critic", "setup"], installed
+        assert (root / ".claude" / "cerberus.json").exists(), proc.stdout
+        assert "was refused" in proc.stdout, proc.stdout
 
 
-def test_the_claude_quick_start_is_the_documented_plugin_pair():
-    """The plugin commands cannot run here — they need credentials and a
-    session — so their shape is asserted instead, and the verdict says they are
-    verified by hand rather than pretending this covers them."""
+def test_the_agent_commands_are_the_documented_ones():
+    """Neither of these can run here.
+
+    The plugin pair needs credentials and a session. `$skill-installer` exists
+    only inside Codex and is not a program on any machine that runs these
+    tests — it has never been executed by anything in this repository, and the
+    URL it is given is asserted to resolve rather than assumed to.
+
+    So their text is pinned, and the verdict says they are unverified rather
+    than letting a shape check read as coverage.
+    """
     blocks = shell_blocks(section(README.read_text(encoding="utf-8"), "## Quick start"))
-    assert len(blocks) == 1, f"expected one plugin block, found {len(blocks)}"
-    lines = [line.strip() for line in blocks[0].splitlines() if line.strip()]
-    assert lines == [
+    assert len(blocks) == 2, f"expected the plugin pair and the Codex line, found {len(blocks)}"
+    plugin = [line.strip() for line in blocks[0].splitlines() if line.strip()]
+    assert plugin == [
         "/plugin marketplace add concordloom/cerberus",
         "/plugin install cerberus@concordloom",
-    ], lines
+    ], plugin
+    codex = blocks[1].strip()
+    assert codex.startswith("$skill-installer install https://github.com/concordloom/cerberus/"), codex
+
+
+def test_the_url_the_codex_command_is_given_resolves():
+    """The half of the Codex line that *can* be checked.
+
+    Whether `$skill-installer` accepts it is unknown here; whether the thing it
+    is pointed at exists is not, and a dead URL is the likelier of the two
+    failures — the repository was renamed today.
+    """
+    import urllib.request
+
+    blocks = shell_blocks(section(README.read_text(encoding="utf-8"), "## Quick start"))
+    url = blocks[1].split()[-1]
+    raw = url.replace("https://github.com/", "https://raw.githubusercontent.com/").replace(
+        "/tree/", "/"
+    ) + "/SKILL.md"
+    with urllib.request.urlopen(raw, timeout=30) as response:
+        assert response.status == 200, raw
+        assert b"name: cerberus" in response.read(400), raw
 
 
 def test_the_quick_start_shows_what_success_looks_like():
@@ -107,7 +143,9 @@ def test_the_quick_start_shows_what_success_looks_like():
 def test_the_quick_start_fits_above_the_fold():
     body = section(README.read_text(encoding="utf-8"), "## Quick start")
     lines = [line for line in body.splitlines() if line.strip()]
-    assert len(lines) <= 25, f"{len(lines)} lines is not a quick start"
+    # It carries three install paths now, so the bound is about staying
+    # scannable rather than about fitting a terminal.
+    assert len(lines) <= 35, f"{len(lines)} lines is not a quick start"
 
 
 def test_three_heads_means_one_thing():
@@ -137,14 +175,20 @@ def test_the_russian_text_has_no_stray_scripts():
     assert not stray, f"characters from another script: {stray}"
 
 
-def test_the_install_section_is_the_only_one():
-    # The page had install instructions in two places, sixty lines apart, with
-    # the skills described twice between them.
+def test_installing_is_explained_in_exactly_one_place():
+    # The page had install instructions in two places sixty lines apart, with
+    # the skills described twice between them. There is now no separate install
+    # section at all: everything that installs anything is in the quick start,
+    # and this fails if a second home for it reappears.
     for path in (README, README_RU):
         text = path.read_text(encoding="utf-8")
         headings = re.findall(r"^## (.+)$", text, re.M)
         installish = [h for h in headings if re.search(r"[Ii]nstall|[Уу]станов", h)]
-        assert len(installish) == 1, f"{path.name}: {installish}"
+        assert not installish, f"{path.name}: installing has its own section again: {installish}"
+        quick = section(text, "## Quick start") if "## Quick start" in text else section(
+            text, "## Быстрый старт"
+        )
+        assert "plugin install" in quick and "skill-installer" in quick, path.name
 
 
 def test_no_link_points_at_the_old_repository_name():

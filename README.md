@@ -25,8 +25,16 @@ you a change works, it has to seriously try to prove it is broken — and fail.
 /plugin install cerberus@concordloom
 ```
 
-Then ask it to set the project up. It works out what your checks are, runs them,
-and makes the gate refuse a claim in front of you:
+**Codex** — one command, in the session:
+
+```
+$skill-installer install https://github.com/concordloom/cerberus/tree/main/plugins/cerberus/skills/cerberus
+```
+
+Swap `cerberus` at the end for `critic` or `setup` to add the other two.
+
+Either way, then ask it to set the project up. It works out what your checks
+are, runs them, and makes the gate refuse a claim in front of you:
 
 ```text
 Checks I ran here, and will run before anyone says the work is done:
@@ -35,16 +43,17 @@ Checks I ran here, and will run before anyone says the work is done:
 Tried it: saying the work was done was refused, and it named the edited file
 ```
 
-**Codex**, and everything else reading `.agents/skills` — one command:
+Codex has no hook mechanism, so the gate is advisory there: followed when the
+skill is invoked, not enforced on every turn. On Claude Code the Stop hook
+makes it mechanical.
+
+**Or put the files in your own repository** — the skill, the hooks and a
+`cerberus.json` you can commit. Nothing to clone; it detects whether the
+project uses `.claude/` or `.agents/`, and is safe to re-run:
 
 ```console
-gh skill install concordloom/cerberus --all --agent codex
+curl -fsSL https://raw.githubusercontent.com/concordloom/cerberus/main/install.sh | sh -s -- --setup
 ```
-
-Codex has no hook mechanism, so the gate is advisory there: followed when the
-skill is invoked, not enforced on every turn.
-
-Prefer the files committed in your own repository? See [Install](#install).
 
 ## What it does to your session
 
@@ -81,36 +90,6 @@ that is off protects nothing.
 
 The first two do not cover each other: work can be right while its explanation
 is wrong, and a right explanation proves nothing ever ran.
-
-## Install
-
-**Claude Code, as a plugin.** Skill and hooks, wired, nothing to edit:
-
-```
-/plugin marketplace add concordloom/cerberus
-/plugin install cerberus@concordloom
-```
-
-**Into your repository.** Files you can commit and a `cerberus.json` you can
-edit. Nothing to clone — piped through `sh` the script fetches what it needs,
-detects whether the project uses `.claude/` or `.agents/`, and is safe to
-re-run:
-
-```console
-curl -fsSL https://raw.githubusercontent.com/concordloom/cerberus/main/install.sh | sh -s -- --setup
-```
-
-**Codex, and everything else reading `.agents/skills`** — a directory it shares
-with Copilot, Cursor, Gemini CLI and a dozen others, so one install serves them
-all:
-
-```console
-gh skill install concordloom/cerberus cerberus --agent codex
-```
-
-Codex has no hook mechanism, so the gate is advisory there: followed when
-invoked, not enforced on every turn. On Claude Code the Stop hook makes it
-mechanical.
 
 ## The one thing to configure
 
