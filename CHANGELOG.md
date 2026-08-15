@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.1](https://github.com/concordloom/cerberus/compare/v1.4.0...v1.4.1) (2026-08-15)
+
+
+### Bug Fixes
+
+* **install:** do not pin the repository name in the tarball path ([#16](https://github.com/concordloom/cerberus/issues/16)) ([e30c292](https://github.com/concordloom/cerberus/commit/e30c292d9615778c3c17afe7d9e02a7f4f1140b9)), closes [#15](https://github.com/concordloom/cerberus/issues/15)
+
 # [1.4.0](https://github.com/concordloom/cerberus-skill/compare/v1.3.0...v1.4.0) (2026-08-15)
 
 
