@@ -1,5 +1,21 @@
 # Changelog
 
+# 1.0.0 (2026-08-15)
+
+
+### Bug Fixes
+
+* **marketplace:** source должен быть явным относительным путём ([8fe1e07](https://github.com/concordloom/cerberus-skill/commit/8fe1e07a35c021fdf8913089c073ae5c019c14f0))
+* **plugin:** не объявлять skills и hooks в манифесте — они грузятся по соглашению ([281c2c0](https://github.com/concordloom/cerberus-skill/commit/281c2c0e80d9dcca45fe57cd4e70466ea967d52b))
+* пример конфигурации молча сужал гейт ([d575d61](https://github.com/concordloom/cerberus-skill/commit/d575d61d1831c8d7b51e1eb9603a00c37e40f563))
+
+
+### Features
+
+* адверсариальный гейт готовности, обобщённый под любой артефакт ([f6ef861](https://github.com/concordloom/cerberus-skill/commit/f6ef86127166e19a4a59284e572b2953f3d0a86f))
+* площадка плагинов, простая установка, шапка и знак ([faaebf7](https://github.com/concordloom/cerberus-skill/commit/faaebf7c55d8e00ed64ba92aae1a8b57bbbcc1ec))
+* цербер включён на самом себе, уроки загрузчика закодированы в CI ([5e3c37a](https://github.com/concordloom/cerberus-skill/commit/5e3c37a29aa4c8ed4d497833bdfce9425d866478))
+
 ## 1.0.1 — 2026-08-15
 
 The first version that actually installs. `1.0.0` was published and could not be
