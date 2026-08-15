@@ -1,33 +1,25 @@
 {
-  "//": "Copy to .claude/cerberus.json in your project. Every key is optional.",
+  "//": "Copy to .claude/cerberus.json. Safe to use as-is: only the key that has no sensible default is set. Everything else keeps the built-in defaults, so copying this verbatim never narrows the gate by accident.",
 
-  "//watch_paths": "Narrow marking to these directories. Empty or absent means anywhere in the project.",
-  "watch_paths": [],
-
-  "//source_extensions": "What counts as executable source. Extension-based rather than path-based, because layouts differ per project but 'a file of source code' travels.",
-  "source_extensions": [".py", ".ts", ".tsx", ".go"],
-
-  "//ignore_patterns": "Never mark these. Tests are excluded on purpose: a test edit is not what the two stages verify.",
-  "ignore_patterns": ["/tests/", ".test.", "/docs/", "/.claude/"],
-
-  "//claim_patterns": "Regexes that count as claiming readiness. REPLACES the defaults rather than extending them, so a project can turn the gate down without editing the hooks. If the gate cries wolf, narrow this — do not delete the hook.",
-  "claim_patterns": ["\\bit works\\b", "\\ball green\\b", "\\bdone\\b"],
-
-  "//marker": "Where the pending marker lives, relative to the project root.",
-  "marker": ".claude/.cerberus-pending",
-
-  "//verification": "Declares the delivery boundary so Stage 2 is a fact rather than a guess. artifact_kind is one of: service, library, cli, chart, migration, model-boundary, plugin.",
+  "//verification": "Declares the delivery boundary, so Stage 2 is a fact about this project rather than a guess each time. artifact_kind: service | library | cli | chart | migration | model-boundary | plugin.",
   "verification": {
     "artifact_kind": "service",
     "stage1": [
-      "pytest -q",
-      "ruff check ."
+      "echo 'replace with this project: tests, lint, type check'"
     ],
     "stage2": [
-      "# whatever crosses the boundary for this artifact, e.g.:",
-      "curl -sf https://dev.example.com/health",
-      "python3 scripts/e2e_smoke.py"
+      "echo 'replace with whatever crosses the boundary for this artifact'",
+      "echo 'service: curl the deployed health endpoint, then a real end-to-end run'",
+      "echo 'library: build the package, install it into a fresh venv, import it as a consumer'"
     ],
-    "notes": "Free text the agent should know: where the dev environment is, which account to use, what must never be touched."
-  }
+    "notes": "Free text the agent should know: where the environment is, which account to use, what must never be touched."
+  },
+
+  "//tuning": "The keys below are OPTIONAL and shown for reference only — they are not set here on purpose. Uncomment one only when you mean to change it, and note that claim_patterns REPLACES the defaults rather than extending them, so a short list silently makes the gate weaker.",
+
+  "//watch_paths": ["src/", "backend/"],
+  "//source_extensions": [".py", ".ts", ".tsx", ".go"],
+  "//ignore_patterns": ["/tests/", ".test.", "/docs/", "/.claude/"],
+  "//claim_patterns": ["\\bit works\\b", "\\ball green\\b", "\\bdone\\b"],
+  "//marker": ".claude/.cerberus-pending"
 }

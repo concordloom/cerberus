@@ -185,6 +185,31 @@ def test_claim_patterns_can_be_replaced():
         assert not cfg.claims_readiness("it works")
 
 
+def test_shipped_example_config_does_not_narrow_the_gate():
+    """Copying cerberus.example.json verbatim must not weaken anything.
+
+    The example is the first thing a new project copies. If it sets the tuning
+    keys, the gate silently becomes narrower than the documented defaults - and
+    a gate that is quietly weaker than advertised is the failure this whole
+    skill is about.
+    """
+    with tempfile.TemporaryDirectory() as d:
+        tmp = pathlib.Path(d)
+        (tmp / ".claude").mkdir()
+        example = (ROOT / "cerberus.example.json").read_text(encoding="utf-8")
+        (tmp / ".claude" / "cerberus.json").write_text(example, encoding="utf-8")
+        cfg = Config.load(tmp)
+
+        defaults = Config(tmp)
+        assert cfg.claim_patterns == defaults.claim_patterns, "example must not replace claim_patterns"
+        assert cfg.source_extensions == defaults.source_extensions, "example must not narrow source_extensions"
+        assert cfg.ignore_patterns == defaults.ignore_patterns, "example must not replace ignore_patterns"
+        assert cfg.watch_paths == [], "example must not restrict watched paths"
+        # And it still behaves: a Russian claim is caught with the example in place.
+        assert cfg.claims_readiness("готово")
+        assert cfg.is_source_file("app/service.rb")
+
+
 def _main() -> int:
     failures = 0
     for name, fn in sorted(globals().items()):
