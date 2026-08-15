@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/concordloom/cerberus-skill/compare/v1.2.0...v1.2.1) (2026-08-15)
+
+
+### Bug Fixes
+
+* **commands:** address the issue by name, not by a zero-indexed placeholder ([#2](https://github.com/concordloom/cerberus-skill/issues/2)) ([7d1d843](https://github.com/concordloom/cerberus-skill/commit/7d1d843860e09734450f3aebe5919152f3e2be5a)), closes [#1](https://github.com/concordloom/cerberus-skill/issues/1)
+
 # [1.2.0](https://github.com/concordloom/cerberus-skill/compare/v1.1.0...v1.2.0) (2026-08-15)
 
 
