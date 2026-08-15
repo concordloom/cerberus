@@ -17,7 +17,7 @@ import sys
 import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-HOOKS = ROOT / "hooks"
+HOOKS = ROOT / "plugins" / "cerberus" / "hooks"
 sys.path.insert(0, str(HOOKS))
 
 from cerberus_config import Config  # noqa: E402

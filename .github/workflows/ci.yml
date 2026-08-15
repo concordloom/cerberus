@@ -51,3 +51,81 @@ jobs:
         run: |
           python3 -c "import json; json.load(open('cerberus.example.json'))"
           python3 -c "import json; json.load(open('examples/settings.json'))"
+
+  plugin:
+    runs-on: ubuntu-latest
+    name: Plugin and installer
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # A malformed manifest makes the whole plugin fail to load, and the
+      # marketplace is the path most people will use.
+      - name: Manifests are valid and point at files that exist
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, sys
+
+          market = json.load(open(".claude-plugin/marketplace.json"))
+          root = pathlib.Path(market.get("metadata", {}).get("pluginRoot", "."))
+          problems = []
+
+          for entry in market["plugins"]:
+              plugin_dir = pathlib.Path(root) / entry["source"]
+              manifest = plugin_dir / ".claude-plugin" / "plugin.json"
+              if not manifest.exists():
+                  problems.append(f"{entry['name']}: no manifest at {manifest}")
+                  continue
+              plugin = json.load(open(manifest))
+              if plugin["name"] != entry["name"]:
+                  problems.append(f"{entry['name']}: name disagrees with plugin.json ({plugin['name']})")
+              if plugin.get("version") != entry.get("version"):
+                  problems.append(f"{entry['name']}: version disagrees with plugin.json")
+              for key in ("skills", "hooks"):
+                  target = plugin_dir / str(plugin[key]).lstrip("./")
+                  if not target.exists():
+                      problems.append(f"{entry['name']}: {key} points at missing {target}")
+              hooks = json.load(open(plugin_dir / "hooks" / "hooks.json"))
+              for event, entries in hooks["hooks"].items():
+                  for e in entries:
+                      for h in e["hooks"]:
+                          script = h["command"].split("}")[-1].strip('"').lstrip("/")
+                          if not (plugin_dir / script).exists():
+                              problems.append(f"{entry['name']}: {event} hook missing {script}")
+
+          if problems:
+              print("\n".join("- " + p for p in problems), file=sys.stderr)
+              sys.exit(1)
+          print("manifests ok")
+          PY
+
+      # The installer is what people run when they are not on Claude Code, and
+      # a broken one fails in someone else's repository rather than here.
+      - name: Installer produces a working project
+        run: |
+          mkdir -p /tmp/proj && cd /tmp/proj
+          sh "$GITHUB_WORKSPACE/install.sh" --claude
+          test -f .claude/skills/cerberus/SKILL.md
+          test -f .claude/hooks/cerberus_gate.py
+          test -f .claude/cerberus.json
+          python3 -c "import json; json.load(open('.claude/settings.json'))"
+
+          # It must be idempotent: people re-run installers.
+          sh "$GITHUB_WORKSPACE/install.sh" --claude
+          python3 - <<'PY'
+          import json
+          hooks = json.load(open("/tmp/proj/.claude/settings.json"))["hooks"]
+          assert len(hooks["PostToolUse"]) == 1, hooks
+          assert len(hooks["Stop"]) == 1, hooks
+          print("installer is idempotent")
+          PY
+
+          # And the installed gate must actually block an over-claim.
+          echo '{"cwd":"/tmp/proj","tool_input":{"file_path":"app/x.py"}}' \
+            | python3 .claude/hooks/cerberus_mark.py
+          printf '%s\n' '{"role":"assistant","message":{"content":"done, it works"}}' > /tmp/t.jsonl
+          echo '{"cwd":"/tmp/proj","transcript_path":"/tmp/t.jsonl"}' \
+            | python3 .claude/hooks/cerberus_gate.py \
+            | python3 -c "import json,sys; assert json.load(sys.stdin)['decision']=='block'; print('installed gate blocks over-claims')"

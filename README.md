@@ -1,9 +1,20 @@
+<p align="center">
+  <img src="docs/assets/hero.jpg" alt="Cerberus: a three-headed hound standing over a gate of fire, one head green, one amber, one red" width="100%">
+</p>
+
+<p align="center">
+  <a href="https://github.com/concordloom/cerberus-skill/actions/workflows/ci.yml"><img src="https://github.com/concordloom/cerberus-skill/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT">
+  <img src="https://img.shields.io/badge/Claude%20Code-plugin-8a6cff" alt="Claude Code plugin">
+  <img src="https://img.shields.io/badge/Codex-skill-10a37f" alt="Codex skill">
+</p>
+
 # cerberus-skill
 
 **An adversarial verification gate for AI coding agents.** Before an agent tells
 you a change works, it has to seriously try to prove it is broken — and fail.
 
-[Русская версия](README.ru.md) · [The skill itself](SKILL.md) ([ru](SKILL.ru.md))
+[Русская версия](README.ru.md) · [The skill itself](plugins/cerberus/skills/cerberus/SKILL.md) ([ru](plugins/cerberus/skills/cerberus/SKILL.ru.md))
 
 ## The problem
 
@@ -21,7 +32,7 @@ were known.
 
 Three things that work together:
 
-1. **A skill** ([SKILL.md](SKILL.md)) describing what verification has to
+1. **A skill** ([SKILL.md](plugins/cerberus/skills/cerberus/SKILL.md)) describing what verification has to
    consist of: enumerate the behaviour space before testing it, trace what reads
    the values you write, and then try to break the change past its delivery
    boundary with a check that could actually come back `BROKEN`.
@@ -31,25 +42,50 @@ Three things that work together:
 3. **A verdict** that is either `READY` with evidence, or `NOT READY` with
    reproductions. Only `READY` clears the record.
 
+## The three heads
+
+Each head is a stage, and its eye colour is that stage throughout the project —
+in the mark, in the documentation, everywhere.
+
+| | Stage | What it does |
+|---|---|---|
+| 🟢 | **Stage 0** | Enumerate the behaviour space before testing any of it |
+| 🟡 | **Stage 1** | Break the code: consumption paths, completeness, negatives |
+| 🔴 | **Stage 2** | Break it past the delivery boundary, with a falsifiable check |
+
+Skipping the first is the usual failure. The other two verify what you tried to
+break; only Stage 0 decides what there was to break in the first place.
+
 ## Install
+
+### Claude Code — two commands
+
+```
+/plugin marketplace add concordloom/cerberus-skill
+/plugin install cerberus@concordloom
+```
+
+That is all. The skill and both hooks are installed and wired; there is nothing
+to copy and no settings file to edit.
+
+### Codex, or files in your repository
 
 ```console
 git clone https://github.com/concordloom/cerberus-skill
-cd your-project
-
-mkdir -p .claude/skills/cerberus .claude/hooks
-cp ../cerberus-skill/SKILL.md            .claude/skills/cerberus/SKILL.md
-cp ../cerberus-skill/hooks/*.py          .claude/hooks/
-cp ../cerberus-skill/cerberus.example.json .claude/cerberus.json
+cd your-project && sh ../cerberus-skill/install.sh
 ```
 
-Then merge [`examples/settings.json`](examples/settings.json) into your
-`.claude/settings.json`, and edit `.claude/cerberus.json` to describe your
-project.
+It detects whether the project uses `.claude/` or `.agents/`, installs into the
+right place, wires the hooks where they exist, and is safe to re-run.
 
-Nothing else is required: every configuration key has a working default, because
-a gate that stays inert until someone configures it is indistinguishable from no
-gate at all.
+Codex has no hook mechanism, so there the gate is advisory: the skill is
+followed when invoked rather than enforced on every turn. On Claude Code the
+Stop hook makes it mechanical.
+
+Nothing needs configuring to start. Every key has a working default, because a
+gate that stays inert until someone configures it is indistinguishable from no
+gate at all. When you are ready, describe your project's delivery boundary in
+`.claude/cerberus.json` so Stage 2 is a fact rather than a guess.
 
 ## What it actually asks for
 

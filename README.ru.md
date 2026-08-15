@@ -1,10 +1,21 @@
+<p align="center">
+  <img src="docs/assets/hero.jpg" alt="Цербер: трёхголовый пёс над огненными вратами; глаза зелёный, янтарный и красный" width="100%">
+</p>
+
+<p align="center">
+  <a href="https://github.com/concordloom/cerberus-skill/actions/workflows/ci.yml"><img src="https://github.com/concordloom/cerberus-skill/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT">
+  <img src="https://img.shields.io/badge/Claude%20Code-plugin-8a6cff" alt="Claude Code plugin">
+  <img src="https://img.shields.io/badge/Codex-skill-10a37f" alt="Codex skill">
+</p>
+
 # cerberus-skill
 
 **Адверсариальный гейт готовности для ИИ-агентов, пишущих код.** Прежде чем
 агент скажет, что изменение работает, он обязан всерьёз попытаться доказать, что
 оно сломано, — и не суметь.
 
-[English](README.md) · [Сам навык](SKILL.ru.md) ([en](SKILL.md))
+[English](README.md) · [Сам навык](plugins/cerberus/skills/cerberus/SKILL.ru.md) ([en](plugins/cerberus/skills/cerberus/SKILL.md))
 
 ## Проблема
 
@@ -22,7 +33,7 @@
 
 Три вещи, работающие вместе:
 
-1. **Навык** ([SKILL.ru.md](SKILL.ru.md)), описывающий, из чего обязана состоять
+1. **Навык** ([SKILL.ru.md](plugins/cerberus/skills/cerberus/SKILL.ru.md)), описывающий, из чего обязана состоять
    проверка: перечислить пространство поведения до того, как его проверять;
    проследить, кто читает записанные значения; и затем попытаться сломать
    изменение за границей поставки проверкой, которая действительно способна
@@ -33,24 +44,51 @@
 3. **Вердикт** — либо `READY` с доказательствами, либо `NOT READY` с
    воспроизведениями. Запись снимает только `READY`.
 
+## Три головы
+
+Каждая голова — стадия, и цвет её глаза означает эту стадию везде: в знаке, в
+документации, в отчётах.
+
+| | Стадия | Что делает |
+|---|---|---|
+| 🟢 | **Стадия 0** | Перечислить пространство поведения до того, как что-то проверять |
+| 🟡 | **Стадия 1** | Ломать код: пути потребления, полнота, негатив |
+| 🔴 | **Стадия 2** | Ломать за границей поставки, проверкой, способной опровергнуть |
+
+Пропускают обычно первую. Две другие проверяют то, что ты пытался сломать, и
+только Стадия 0 решает, что там вообще было ломать.
+
 ## Установка
+
+### Claude Code — две команды
+
+```
+/plugin marketplace add concordloom/cerberus-skill
+/plugin install cerberus@concordloom
+```
+
+Это всё. Навык и оба хука установлены и подключены: ничего копировать и никаких
+настроек править не нужно.
+
+### Codex или файлы в своём репозитории
 
 ```console
 git clone https://github.com/concordloom/cerberus-skill
-cd ваш-проект
-
-mkdir -p .claude/skills/cerberus .claude/hooks
-cp ../cerberus-skill/SKILL.md            .claude/skills/cerberus/SKILL.md
-cp ../cerberus-skill/hooks/*.py          .claude/hooks/
-cp ../cerberus-skill/cerberus.example.json .claude/cerberus.json
+cd ваш-проект && sh ../cerberus-skill/install.sh
 ```
 
-Затем добавьте содержимое [`examples/settings.json`](examples/settings.json) в
-свой `.claude/settings.json` и опишите проект в `.claude/cerberus.json`.
+Скрипт сам определит, что использует проект — `.claude/` или `.agents/`, —
+положит файлы куда надо, подключит хуки там, где они есть, и его безопасно
+запускать повторно.
 
-Больше ничего не требуется: у каждого ключа настройки есть рабочее умолчание,
+У Codex механизма хуков нет, поэтому там гейт рекомендательный: навык
+выполняется при вызове, а не принуждается на каждом ходу. В Claude Code его
+делает механикой Stop-хук.
+
+Настраивать для старта ничего не нужно: у каждого ключа есть рабочее умолчание,
 потому что гейт, который бездействует, пока его не настроят, неотличим от
-отсутствующего.
+отсутствующего. Когда дойдут руки — опишите границу поставки своего проекта в
+`.claude/cerberus.json`, чтобы Стадия 2 была фактом, а не догадкой.
 
 ## Чего он на самом деле требует
 

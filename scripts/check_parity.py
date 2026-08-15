@@ -17,8 +17,9 @@ import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-EN = ROOT / "SKILL.md"
-RU = ROOT / "SKILL.ru.md"
+SKILLS = ROOT / "plugins" / "cerberus" / "skills" / "cerberus"
+EN = SKILLS / "SKILL.md"
+RU = SKILLS / "SKILL.ru.md"
 
 HEADING = re.compile(r"^(#{1,6})\s+\S")
 CHECKLIST = re.compile(r"^- \[ \]")

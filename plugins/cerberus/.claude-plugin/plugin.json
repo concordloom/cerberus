@@ -1,0 +1,22 @@
+{
+  "name": "cerberus",
+  "displayName": "Cerberus",
+  "version": "1.0.0",
+  "description": "Adversarial verification gate. Before claiming a change works, prove it is broken — and fail. Includes a Stop hook that refuses to let a readiness claim end a turn while executable changes are unverified.",
+  "author": {
+    "name": "Concord Loom",
+    "url": "https://github.com/concordloom"
+  },
+  "homepage": "https://github.com/concordloom/cerberus-skill",
+  "repository": "https://github.com/concordloom/cerberus-skill",
+  "license": "MIT",
+  "keywords": [
+    "verification",
+    "quality",
+    "testing",
+    "adversarial",
+    "hooks"
+  ],
+  "skills": "./skills",
+  "hooks": "./hooks/hooks.json"
+}

@@ -1,0 +1,35 @@
+{
+  "name": "concordloom",
+  "owner": {
+    "name": "Concord Loom",
+    "url": "https://github.com/concordloom"
+  },
+  "metadata": {
+    "description": "Verification tooling for AI coding agents.",
+    "pluginRoot": "./plugins"
+  },
+  "plugins": [
+    {
+      "name": "cerberus",
+      "source": "cerberus",
+      "description": "Adversarial verification gate: before an agent says a change works, it has to try to prove it is broken — and fail. Ships the skill and the two hooks that make it mechanical rather than a matter of memory.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Concord Loom",
+        "url": "https://github.com/concordloom"
+      },
+      "homepage": "https://github.com/concordloom/cerberus-skill",
+      "repository": "https://github.com/concordloom/cerberus-skill",
+      "license": "MIT",
+      "category": "quality",
+      "tags": [
+        "verification",
+        "testing",
+        "quality",
+        "hooks",
+        "adversarial",
+        "code-review"
+      ]
+    }
+  ]
+}

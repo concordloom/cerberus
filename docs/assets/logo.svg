@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="512" height="512" role="img" aria-label="Cerberus mark: a gate with three heads">
+  <title>Cerberus — the gate and its three heads</title>
+
+  <!--
+    The ring is the one body; the three heads stand on it. Every base sits at
+    radius 29 against a ring spanning 28..32, so the heads fuse into the ring
+    instead of piercing it. The centre stays empty: a gate is something you get
+    through, not a filled badge.
+
+    Eye colours are sampled from the artwork in the README header, so the mark
+    and the illustration share one palette:
+      #78BC28 green  stage 0   #ECAE26 amber  stage 1   #F03C27 red  stage 2
+  -->
+  <rect width="100" height="100" fill="#0B0E14"/>
+
+  <circle cx="50" cy="52" r="30" fill="none" stroke="#EEF1F6" stroke-width="4"/>
+
+  <g fill="#EEF1F6" stroke="#EEF1F6" stroke-width="1.2" stroke-linejoin="round">
+    <path d="M23.72 39.74 L14.54 24.30 L31.75 29.46 Z"/>
+    <path d="M42.74 23.92 L50.00 3.00 L57.26 23.92 Z"/>
+    <path d="M68.25 29.46 L85.46 24.30 L76.28 39.74 Z"/>
+  </g>
+
+  <g>
+    <circle cx="21.85" cy="30.01" r="3.3" fill="#ECAE26"/><!-- stage 1 -->
+    <circle cx="50.00" cy="14.60" r="3.3" fill="#78BC28"/><!-- stage 0 -->
+    <circle cx="78.15" cy="30.01" r="3.3" fill="#F03C27"/><!-- stage 2 -->
+  </g>
+</svg>
