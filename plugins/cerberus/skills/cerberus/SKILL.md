@@ -46,6 +46,52 @@ Before any readiness claim, if the change touches:
 Not required for: documentation, agent configuration, comments, or a refactor
 with an equivalence test. Those change nothing that can be observed to run.
 
+## The working cycle
+
+The gate is stronger when it is anchored to a claim written **before** the work.
+An issue is that anchor, and its value is not bookkeeping: without it Stage 0
+enumerates from the diff, which is the change-focused failure this whole skill
+exists to prevent. An issue written first says what should become true
+independently of what you happened to build.
+
+1. **The issue states what would settle it.** Not just the symptom — the
+   observation that decides. If nobody can say what result would prove the thing
+   fixed, there is no oracle, and Stage 2 will have nothing to aim at. Write that
+   down before writing code, or admit the issue is not ready to be worked.
+
+2. **Stage 0 is derived from the issue, and posted to it before the work.** The
+   thread then shows who enumerated the cells. This is what makes the tell
+   checkable rather than a matter of memory: *if someone adds cases to the issue
+   after your matrix, you skipped Stage 0.*
+
+3. **Do the work.**
+
+4. **A critic examines the claims — if the work produced any.** A diagnosis
+   ("the cause is X"), an explanation of a mechanism, a statement about the
+   codebase ("every writer does this", "the class is closed") is a claim, and it
+   needs an independent adversary whose mandate is to *refute* it. Changes that
+   assert nothing beyond "this now behaves as the issue asked" skip this step.
+
+5. **Cerberus examines the work.** Both stages, evidence per item.
+
+   These two are not interchangeable and neither covers the other. The critic
+   asks whether what you *said* is true. The gate asks whether the thing *does*
+   what you say it does, past its delivery boundary. Work can be correct while
+   its explanation is wrong, and a correct explanation proves nothing ran.
+
+6. **The verdict goes back to the issue**, with the evidence: `READY` closes it,
+   `NOT READY` keeps it open with the reproductions attached. Putting the
+   evidence in the thread rather than in a chat log is the difference between a
+   record and a memory — the next person to touch this reads the issue.
+
+7. **A `BLOCKER` fix voids the verdict**, so an issue does not close on a
+   superseded one. The new round is a new comment against the new revision, and
+   the findings-dynamics line makes the sequence legible.
+
+The cycle survives the parts being skipped, but says which was skipped and why.
+An issue closed without a verdict is a claim nobody checked; say so in the
+thread rather than leaving the absence to be inferred.
+
 ## Stage 0 — Behaviour matrix (blocking, before both stages)
 
 Stages 1 and 2 verify what you tried to break. First you have to know *what
@@ -439,6 +485,11 @@ verdict about one ticket must not be presented as readiness of a whole stage.
 
 ## Self-check before the verdict
 
+- [ ] Cycle: does the issue state the observation that would settle it, and was
+      the matrix posted there before the work rather than after?
+- [ ] Cycle: if the work asserts a diagnosis, a mechanism or a property of the
+      codebase, did an independent critic try to refute that claim — separately
+      from this gate, which examines the work?
 - [ ] Stage 0: matrix built (axes × cells), mixed cells enumerated, coverage
       marked per cell (✅/⏳/🧊/❌)?
 - [ ] Stage 0: did *I* generate the cells, rather than the user supplying them?
