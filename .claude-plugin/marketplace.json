@@ -12,7 +12,7 @@
       "name": "cerberus",
       "source": "./plugins/cerberus",
       "description": "Adversarial verification gate: before an agent says a change works, it has to try to prove it is broken — and fail. Ships the skill and the two hooks that make it mechanical rather than a matter of memory.",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": {
         "name": "Concord Loom",
         "url": "https://github.com/concordloom"
