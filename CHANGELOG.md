@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.2](https://github.com/concordloom/cerberus-skill/compare/v1.2.1...v1.2.2) (2026-08-15)
+
+
+### Bug Fixes
+
+* **commands:** let the pull request close the issue, not the verdict ([#7](https://github.com/concordloom/cerberus-skill/issues/7)) ([ee85b88](https://github.com/concordloom/cerberus-skill/commit/ee85b8853a0ed50f670ae4f2193626ed0f90ced2)), closes [#3](https://github.com/concordloom/cerberus-skill/issues/3) [#2](https://github.com/concordloom/cerberus-skill/issues/2) [#1](https://github.com/concordloom/cerberus-skill/issues/1)
+* **hooks:** only mark files that belong to the project ([#8](https://github.com/concordloom/cerberus-skill/issues/8)) ([4dec65a](https://github.com/concordloom/cerberus-skill/commit/4dec65aa2a7e6610b3d12b924c58e3457364788d)), closes [#5](https://github.com/concordloom/cerberus-skill/issues/5)
+
 ## [1.2.1](https://github.com/concordloom/cerberus-skill/compare/v1.2.0...v1.2.1) (2026-08-15)
 
 
