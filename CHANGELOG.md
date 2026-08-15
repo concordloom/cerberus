@@ -1,5 +1,17 @@
 # Changelog
 
+# [1.3.0](https://github.com/concordloom/cerberus-skill/compare/v1.2.2...v1.3.0) (2026-08-15)
+
+
+### Bug Fixes
+
+* four regressions the [#3](https://github.com/concordloom/cerberus-skill/issues/3) and [#5](https://github.com/concordloom/cerberus-skill/issues/5) fixes introduced ([#12](https://github.com/concordloom/cerberus-skill/issues/12)) ([02b4e7f](https://github.com/concordloom/cerberus-skill/commit/02b4e7fc203610f833578fa3478bfd9ba5384a1d)), closes [#11](https://github.com/concordloom/cerberus-skill/issues/11) [#11](https://github.com/concordloom/cerberus-skill/issues/11)
+
+
+### Features
+
+* **ci:** check the slash commands, which nothing checked before ([#9](https://github.com/concordloom/cerberus-skill/issues/9)) ([e5d2c98](https://github.com/concordloom/cerberus-skill/commit/e5d2c981b42a34950974e530930baaefae9d60d0)), closes [#1](https://github.com/concordloom/cerberus-skill/issues/1) [#1](https://github.com/concordloom/cerberus-skill/issues/1) [#4](https://github.com/concordloom/cerberus-skill/issues/4)
+
 ## [1.2.2](https://github.com/concordloom/cerberus-skill/compare/v1.2.1...v1.2.2) (2026-08-15)
 
 

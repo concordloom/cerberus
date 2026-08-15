@@ -1,7 +1,7 @@
 {
   "name": "cerberus",
   "displayName": "Cerberus",
-  "version": "1.2.2",
+  "version": "1.3.0",
   "description": "Adversarial verification gate. Before claiming a change works, prove it is broken — and fail. Includes a Stop hook that refuses to let a readiness claim end a turn while executable changes are unverified.",
   "author": {
     "name": "Concord Loom",
