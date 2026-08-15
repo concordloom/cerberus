@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+"""Tests for the README, which is where a stranger meets this project.
+
+The one that matters extracts the quick start's command **from the file** and
+runs it. A test that retypes the command proves the command works; it does not
+prove the page is right, and the page is the artifact. A quick start whose
+commands were never run is the failure this repository is about, printed on its
+own front door.
+
+Run with: python3 tests/test_readme.py
+"""
+
+from __future__ import annotations
+
+import os
+import pathlib
+import re
+import subprocess
+import sys
+import tempfile
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+README = ROOT / "README.md"
+README_RU = ROOT / "README.ru.md"
+
+
+def section(text: str, heading: str) -> str:
+    """The body of one `## heading`, up to the next one."""
+    start = text.index(heading)
+    rest = text[start + len(heading):]
+    end = rest.find("\n## ")
+    return rest if end == -1 else rest[:end]
+
+
+def shell_blocks(text: str) -> list[str]:
+    return [b.strip() for b in re.findall(r"```sh\n(.*?)```", text, re.S)]
+
+
+def test_the_quick_start_command_runs():
+    """Extracted from README.md, not retyped, and executed for real.
+
+    It fetches over the network by design: that is what the reader will do, and
+    the difference between the script beside the page and the script the page
+    points at is exactly where an install breaks.
+    """
+    blocks = shell_blocks(section(README.read_text(encoding="utf-8"), "## Quick start"))
+    assert len(blocks) == 1, f"expected one command in the quick start, found {len(blocks)}"
+    command = blocks[0]
+    assert command.count("\n") == 0, "the quick start must be one line to copy: " + command
+
+    with tempfile.TemporaryDirectory() as d:
+        root = pathlib.Path(d)
+        (root / "tests").mkdir()
+        (root / "pyproject.toml").write_text(
+            '[project]\nname = "d"\nversion = "1"\n', encoding="utf-8"
+        )
+        (root / "tests" / "test_demo.py").write_text(
+            "def test_ok():\n    assert True\n", encoding="utf-8"
+        )
+        proc = subprocess.run(
+            command, shell=True, cwd=str(root), capture_output=True, text=True, timeout=600,
+            env={k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"},
+        )
+        assert proc.returncode == 0, command + "\n" + proc.stdout + proc.stderr
+        assert (root / ".claude" / "cerberus.json").exists(), proc.stdout
+        # And the page's promise: the refusal is shown, not described.
+        assert "was refused" in proc.stdout, proc.stdout
+
+
+def test_the_quick_start_shows_what_success_looks_like():
+    body = section(README.read_text(encoding="utf-8"), "## Quick start")
+    assert "```text" in body, "the reader is told to run something with no idea what it prints"
+    assert "refused" in body, body
+
+
+def test_the_quick_start_fits_above_the_fold():
+    body = section(README.read_text(encoding="utf-8"), "## Quick start")
+    lines = [line for line in body.splitlines() if line.strip()]
+    assert len(lines) <= 25, f"{len(lines)} lines is not a quick start"
+
+
+def test_three_heads_means_one_thing():
+    # The stages own the phrase: the hero image colours three heads green,
+    # amber and red, which are Stage 0, 1 and 2. A second section claiming it
+    # for the three skills left the picture illustrating nothing.
+    for path, pattern in ((README, r"^## .*[Tt]hree heads"), (README_RU, r"^## .*[Тт]ри головы")):
+        text = path.read_text(encoding="utf-8")
+        found = re.findall(pattern, text, re.M)
+        assert len(found) == 1, f"{path.name}: {found}"
+
+
+def test_both_languages_have_the_same_sections():
+    # check_parity.py compares the skills, not the READMEs, so these two can
+    # drift with nothing noticing — which is how one language gets a fix.
+    en = re.findall(r"^## ", README.read_text(encoding="utf-8"), re.M)
+    ru = re.findall(r"^## ", README_RU.read_text(encoding="utf-8"), re.M)
+    assert len(en) == len(ru), f"{len(en)} sections in English, {len(ru)} in Russian"
+
+
+def test_no_link_points_at_the_old_repository_name():
+    for path in (README, README_RU):
+        text = path.read_text(encoding="utf-8")
+        assert "cerberus-skill" not in text, path.name
+
+
+def _main() -> int:
+    failures = 0
+    for name, fn in sorted(globals().items()):
+        if name.startswith("test_") and callable(fn):
+            try:
+                fn()
+                print(f"  ok   {name}")
+            except AssertionError as exc:
+                failures += 1
+                print(f"  FAIL {name}: {exc}")
+    print(f"\n{'FAILED' if failures else 'all tests passed'}")
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    sys.exit(_main())

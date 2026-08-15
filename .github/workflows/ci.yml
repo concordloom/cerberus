@@ -57,6 +57,15 @@ jobs:
       - name: Setup works, and reads like something a person would write
         run: python3 tests/test_setup.py
 
+      # The quick start's command is extracted from README.md and run over the
+      # network, because the difference between the script beside the page and
+      # the script the page points at is exactly where an install breaks — and
+      # a front page whose command was never run is this project's own failure
+      # printed on its own door.
+      - name: The README's quick start actually works
+        if: matrix.python-version == '3.12' || matrix.python-version == '3.13'
+        run: python3 tests/test_readme.py
+
   docs:
     runs-on: ubuntu-latest
     name: Translation parity
