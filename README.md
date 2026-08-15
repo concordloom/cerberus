@@ -68,23 +68,42 @@ break; only Stage 0 decides what there was to break in the first place.
 That is all. The skill and both hooks are installed and wired; there is nothing
 to copy and no settings file to edit.
 
-### Codex, or files in your repository
+### Codex — one command
+
+```console
+gh skill install concordloom/cerberus-skill cerberus --agent codex
+```
+
+Nothing special is needed for this: the repository is laid out the way the
+ecosystem expects, `gh skill` finds the skill on its own — *"found 1 skill using
+the plugins/ convention"* — and pins the install to the latest release tag.
+Inside Codex, `$skill-installer` takes the same thing as a URL:
+
+```console
+$skill-installer install https://github.com/concordloom/cerberus-skill/tree/main/plugins/cerberus/skills/cerberus
+```
+
+Both land in `.agents/skills`, which Codex shares with Copilot, Cursor, Gemini
+CLI and a dozen others, so the same install serves them too.
+
+They install the skill and nothing else, which on Codex is the whole story: it
+has no hook mechanism, so the gate is advisory there — followed when invoked
+rather than enforced on every turn. On Claude Code the Stop hook makes it
+mechanical.
+
+### Or commit the files to your repository
+
+When you would rather have the thing in the project — the skill, the hooks and a
+`cerberus.json` to edit — the installer does that, and wires the hooks into
+settings where they exist:
 
 ```console
 curl -fsSL https://raw.githubusercontent.com/concordloom/cerberus-skill/main/install.sh | sh
 ```
 
 There is nothing to clone: piped through `sh`, the script fetches what it needs.
-Append `-s -- --codex` to force the Codex layout, or read it first and run it
-from a clone — `git clone …` then `sh ../cerberus-skill/install.sh` — which does
-exactly the same thing.
-
 It detects whether the project uses `.claude/` or `.agents/`, installs into the
-right place, wires the hooks where they exist, and is safe to re-run.
-
-Codex has no hook mechanism, so there the gate is advisory: the skill is
-followed when invoked rather than enforced on every turn. On Claude Code the
-Stop hook makes it mechanical.
+right place, and is safe to re-run.
 
 Nothing needs configuring to start. Every key has a working default, because a
 gate that stays inert until someone configures it is indistinguishable from no

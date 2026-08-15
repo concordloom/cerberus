@@ -1,10 +1,16 @@
 #!/bin/sh
 # Install the cerberus skill into a project.
 #
-# Claude Code users do not need this: `/plugin marketplace add
-# concordloom/cerberus-skill` followed by `/plugin install cerberus@concordloom`
-# does everything, hooks included. This script exists for Codex, for other
-# agents, and for anyone who would rather have the files in the repository.
+# Most people do not need this script.
+#
+#   Claude Code: `/plugin marketplace add concordloom/cerberus-skill` then
+#                `/plugin install cerberus@concordloom` — hooks included.
+#   Codex, and everything else reading .agents/skills:
+#                `gh skill install concordloom/cerberus-skill cerberus --agent codex`
+#                or `$skill-installer install <this repo>/tree/main/plugins/cerberus/skills/cerberus`
+#
+# What those do not do is put the files in your repository, wire the hooks into
+# settings, or leave you a cerberus.json to edit. That is what this is for.
 #
 # Nothing has to be cloned first. From inside your project:
 #
