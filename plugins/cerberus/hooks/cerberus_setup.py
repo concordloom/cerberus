@@ -99,7 +99,7 @@ STAGE2_HINT_BY_KIND = {
 }
 
 
-def run(cmd: str, cwd: pathlib.Path, timeout: int = 60) -> tuple[int, str]:
+def run(cmd: str, cwd: pathlib.Path, timeout: int = 120) -> tuple[int, str]:
     """Run one candidate check.
 
     stdin is closed rather than inherited: under `curl … | sh` the parent's
@@ -128,7 +128,13 @@ def run(cmd: str, cwd: pathlib.Path, timeout: int = 60) -> tuple[int, str]:
             os.killpg(os.getpgid(proc.pid), 9)
         except Exception:
             proc.kill()
-        proc.communicate()
+        # With its own timeout: a grandchild that left the process group keeps
+        # the pipe open, and an unbounded wait here turns the budget into
+        # forever — the exact hang the timeout exists to prevent.
+        try:
+            proc.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
         return 124, "timed out"
 
 
@@ -197,9 +203,10 @@ def write_config(
     this script must never write are also keys it must never remove.
     """
     path = root / ".claude" / "cerberus.json"
-    body = dict(existing or {})
+    body = dict(existing) if isinstance(existing, dict) else {}
     body["//"] = "Every command in stage1 was run once, in this project, before being written here."
-    verification = dict(body.get("verification") or {})
+    prior = body.get("verification")
+    verification = dict(prior) if isinstance(prior, dict) else {}
     verification["artifact_kind"] = kind
     verification["stage1"] = checks
     # Left empty on purpose: a comment line in a list of commands exits 0
@@ -285,65 +292,74 @@ def demonstrate(root: pathlib.Path) -> tuple[bool, str]:
             marker.unlink()
 
 
+def _hooked(data: dict, event: str, script: str, root: pathlib.Path) -> bool:
+    """Does this settings document actually run `script` on `event`?
+
+    Parsed, never searched. A substring check certified a file whose only
+    mention of the scripts was a TODO comment, and certified entries filed
+    under an event name that never fires.
+    """
+    for entry in (data.get("hooks") or {}).get(event) or []:
+        if not isinstance(entry, dict):
+            continue
+        for hook in entry.get("hooks") or []:
+            cmd = hook.get("command") if isinstance(hook, dict) else None
+            if not isinstance(cmd, str) or script not in cmd:
+                continue
+            # The command must point at a file that is there. An entry aimed at
+            # a path that does not exist runs nothing.
+            # Quotes are removed rather than replaced by spaces: the shipped
+            # wiring is `python3 "$CLAUDE_PROJECT_DIR"/.claude/hooks/…`, and
+            # splitting on the quote leaves an absolute `/.claude/hooks/…`
+            # that exists nowhere — which read as "not wired" on the one path
+            # the installer itself produces.
+            bare = cmd.replace('"', "").replace("'", "")
+            bare = bare.replace("${CLAUDE_PROJECT_DIR}", str(root))
+            bare = bare.replace("$CLAUDE_PROJECT_DIR", str(root))
+            token = next((w for w in bare.split() if script in w), "")
+            candidate = token
+            path = pathlib.Path(candidate)
+            if not path.is_absolute():
+                path = root / candidate
+            if path.exists():
+                return True
+    return False
+
+
 def wiring(root: pathlib.Path) -> tuple[bool, str]:
-    """Is anything actually going to call these scripts?
+    """Is anything actually going to call these scripts *for this project*?
 
     ``demonstrate`` runs them directly, which proves they work and nothing
-    else. Two ways they get called for real, and both must be recognised or the
-    answer is wrong in one direction or the other:
+    else. This asks the target project, and only the target project. An earlier
+    version asked the directory the script happened to be sitting in, so
+    running it from a clone with ``--dir`` — which is what ``install.sh`` does —
+    certified a project that had no hooks at all.
 
-    - **A plugin install.** Hooks come from the plugin's own ``hooks.json`` and
-      the project's settings never mention them. An earlier version of this
-      grepped settings and therefore told correctly-installed users that
-      nothing was calling it.
-    - **A copied install.** ``install.sh`` merges entries into the project's
-      ``settings.json``.
-
-    The settings are parsed rather than searched for a filename. A substring
-    check passed a file whose only mention of the scripts was a TODO comment,
-    and passed hooks pointing at paths that do not exist.
+    A plugin install is the one case where a correctly wired project says
+    nothing in its own settings, because the hooks come from the plugin. That
+    cannot be observed from here, so it is named as the one benign explanation
+    rather than assumed.
     """
-    plugin_hooks = HERE / "hooks.json"
-    if plugin_hooks.exists():
+    found = []
+    for name in ("settings.json", "settings.local.json"):
+        path = root / ".claude" / name
         try:
-            declared = json.loads(plugin_hooks.read_text(encoding="utf-8")).get("hooks", {})
-            names = json.dumps(declared)
-            if "cerberus_mark.py" in names and "cerberus_gate.py" in names:
-                return True, "the plugin declares them, so they run wherever it is installed"
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            continue
         except Exception:
-            pass
+            return False, f"the .claude/{name} here is not valid JSON"
+        if not isinstance(data, dict):
+            continue
+        found.append(name)
+        if _hooked(data, "PostToolUse", "cerberus_mark.py", root) and _hooked(
+            data, "Stop", "cerberus_gate.py", root
+        ):
+            return True, f".claude/{name} runs both of them"
 
-    settings = root / ".claude" / "settings.json"
-    try:
-        data = json.loads(settings.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        return False, "there is no .claude/settings.json"
-    except Exception:
-        return False, "the .claude/settings.json here is not valid JSON"
-
-    def commands_for(event: str) -> list[str]:
-        out = []
-        for entry in (data.get("hooks") or {}).get(event) or []:
-            for h in entry.get("hooks") or []:
-                cmd = h.get("command")
-                if isinstance(cmd, str):
-                    out.append(cmd)
-        return out
-
-    for event, script in (("PostToolUse", "cerberus_mark.py"), ("Stop", "cerberus_gate.py")):
-        wired = False
-        for cmd in commands_for(event):
-            if script not in cmd:
-                continue
-            # A command naming a file that is not there is not wiring.
-            tail = cmd.split(script)[0].split()[-1] if cmd.split(script)[0].split() else ""
-            candidate = (tail + script).replace('"', "").replace("$CLAUDE_PROJECT_DIR", str(root))
-            if pathlib.Path(candidate).exists() or (root / ".claude" / "hooks" / script).exists():
-                wired = True
-                break
-        if not wired:
-            return False, f"nothing under {event} in the settings runs {script}"
-    return True, "the settings run both of them"
+    if not found:
+        return False, "this project has no .claude/settings.json"
+    return False, f"nothing in .claude/{found[0]} runs both of them"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -379,10 +395,23 @@ def main(argv: list[str] | None = None) -> int:
         # rewriting the file would delete it. The earlier guard keyed off
         # stage1 alone, so a config that only tuned the gate — the documented
         # use of the other keys — was silently replaced, custom marker and all.
-        theirs = [k for k in existing if k not in ("//", "verification")]
-        stage1 = existing.get("verification", {}).get("stage1", [])
+        # `//`-prefixed keys are comments — cerberus.example.json ships seven of
+        # them. Counting those as somebody's hand-tuning made a freshly
+        # installed example look configured, so the documented one-liner left
+        # the echo placeholders in place and reported success. That is this
+        # issue's own title, reproduced by the fix for it.
+        if not isinstance(existing, dict):
+            print(f"{config} is valid JSON but not an object. Fix or delete it, then run this again.")
+            return 2
+        theirs = [k for k in existing if not k.startswith("//") and k != "verification"]
+        verification = existing.get("verification")
+        if verification is not None and not isinstance(verification, dict):
+            print(f"{config} has a 'verification' that is not an object. Fix it, then run this again.")
+            return 2
+        verification = verification or {}
+        stage1 = verification.get("stage1", [])
         placeholder = all(str(c).startswith("echo ") for c in stage1) if stage1 else True
-        stage2 = existing.get("verification", {}).get("stage2", [])
+        stage2 = verification.get("stage2", [])
         if theirs or not placeholder or (stage2 and not all(str(c).lstrip().startswith(("#", "echo ")) for c in stage2)):
             print("This project is already set up by hand. Nothing was changed.")
             if theirs:
@@ -438,10 +467,22 @@ def main(argv: list[str] | None = None) -> int:
 
     connected, why = wiring(root)
     if not connected:
+        # Two very different situations, and guessing either way is wrong.
+        # Scripts sitting in this project mean somebody copied them here and
+        # the wiring is genuinely missing. No scripts here means they come from
+        # somewhere else — a plugin — which cannot be seen from inside the
+        # project, so it is named rather than assumed or denied.
+        copied_here = (root / ".claude" / "hooks" / "cerberus_mark.py").exists()
         print()
-        print(f"But nothing is calling it yet: {why}.")
-        print("Re-run the installer, or paste the snippet it prints, then try again.")
-        return 1
+        if copied_here:
+            print(f"But nothing here is calling it: {why}.")
+            print("The files are in this project and nothing runs them. Re-run the")
+            print("installer, or paste the snippet it prints, and try again.")
+            return 1
+        print(f"I cannot see this project calling it: {why}.")
+        print("If you installed it as a plugin, that is expected — the plugin runs it")
+        print("everywhere and this cannot be seen from inside a project. If you did")
+        print("not, run the installer here.")
 
     print()
     print("From now on, when the work is claimed to be done and code has changed,")

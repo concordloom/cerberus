@@ -39,14 +39,31 @@ JARGON = [
     "oracle", "delivery boundary", "stage 0", "stage 1", "stage 2",
     "counterexample", "counter example", "blast radius", "artifact kind",
     "adversary", "marker", "cartesian", "sentinel", "predicate", "idempotent",
-    "topology", "semantics", "verdict",
+    "topology", "semantics", "verdict", "cerberus_", "falsifier", "adjudicate",
+    "persisted", "vector", "contract",
 ]
 
 
 def jargon_in(text: str) -> list[str]:
+    """Words from the list, with hyphens folded and plurals stemmed.
+
+    Honest about what this is: a smoke check, not a proof. A denylist of
+    surface forms cannot carry "write like a person" — the first version was
+    defeated by a hyphen, the second by an `s`, and a third evasion certainly
+    exists. It catches the drift that happens by accident, which is the drift
+    that actually happens. The requirement is carried by the line count, the
+    three closing statements, and by somebody reading it.
+    """
     flat = re.sub(r"[-_/]+", " ", text.lower())
     flat = re.sub(r"\s+", " ", flat)
-    return [w for w in JARGON if re.search(r"\b" + re.escape(w) + r"\b", flat)]
+    words = [re.sub(r"(ies|es|s)$", "", w) for w in flat.split()]
+    flat = " ".join(words)
+    found = []
+    for term in JARGON:
+        stem = " ".join(re.sub(r"(ies|es|s)$", "", w) for w in term.split())
+        if re.search(r"\b" + re.escape(stem) + r"\b", flat):
+            found.append(term)
+    return found
 
 # The four keys that REPLACE the built-in lists. A machine must never write
 # them: a short guess makes the gate quietly narrower than advertised.
@@ -141,23 +158,43 @@ def test_a_settings_file_that_only_mentions_the_names_is_not_wiring():
     )
     rc, out = run_setup(root)
     assert rc == 1, out
-    assert "nothing is calling it" in out, out
+    assert "nothing here is calling it" in out, out
 
 
-def test_a_plugin_install_is_recognised_as_wired():
-    # Hooks come from the plugin's own hooks.json and the project's settings
-    # never name them. The grep version told correctly-installed users that
-    # nothing was calling it, and exited 1 — on the install path the README
-    # puts first.
+def test_a_plugin_install_is_not_called_broken():
+    # No scripts in the project and no wiring in its settings is what a plugin
+    # install looks like from inside, and it cannot be told apart from here.
+    # Earlier attempts got this wrong in both directions: first denying it
+    # (exit 1 on the install the README puts first), then asserting it from a
+    # hooks.json next to the *script*, which certified projects with no hooks
+    # at all whenever setup was run from a clone with --dir.
+    #
+    # So it is neither denied nor asserted: it is named, and the run does not
+    # fail on it.
+    # The scripts live outside the project, exactly as a plugin install has
+    # them, so this runs the repository's own copy against the project.
     root = project(PY_PROJECT, wired=False)
-    hooks_json = HOOKS / "hooks.json"
-    if not hooks_json.exists():
-        return
-    (root / ".claude" / "hooks" / "hooks.json").write_text(
-        hooks_json.read_text(encoding="utf-8"), encoding="utf-8"
+    for stray in (root / ".claude" / "hooks").glob("*.py"):
+        stray.unlink()
+    proc = subprocess.run(
+        [sys.executable, str(SETUP), "--dir", str(root)],
+        cwd=str(root),
+        capture_output=True,
+        text=True,
+        env={k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"},
     )
+    rc, out = proc.returncode, proc.stdout + proc.stderr
+    assert rc == 0, out
+    assert "as a plugin" in out, out
+
+
+def test_scripts_copied_here_but_unwired_is_a_failure():
+    # The other half: the files are in this project and nothing runs them.
+    # That is not the plugin case and must not be excused as one.
+    root = project(PY_PROJECT, wired=False)
     rc, out = run_setup(root)
-    assert rc == 0, "a plugin install was told it is not wired:\n" + out
+    assert rc == 1, out
+    assert "nothing here is calling it" in out, out
 
 
 def test_says_so_when_nothing_is_calling_it():
@@ -166,7 +203,7 @@ def test_says_so_when_nothing_is_calling_it():
     root = project(PY_PROJECT, wired=False)
     rc, out = run_setup(root)
     assert rc == 1, out
-    assert "nothing is calling it" in out, out
+    assert "nothing here is calling it" in out, out
 
 
 def test_leaves_a_hand_written_configuration_alone():
@@ -250,10 +287,13 @@ def test_stage2_never_holds_something_that_was_not_run():
 
 
 def test_replaces_the_example_placeholders():
-    # The population #13 exists for: a file is present, and it is the example.
-    root = project({**PY_PROJECT, ".claude/cerberus.json": json.dumps(
-        {"verification": {"artifact_kind": "service", "stage1": ["echo 'replace me'"]}}
-    )})
+    # The population #13 exists for. Loads the *shipped* example rather than a
+    # stand-in: a synthetic `{"verification": {...}}` missed that the real file
+    # carries seven `//` reference keys, and a guard counting those as
+    # hand-tuning made the documented one-liner leave the placeholders in place
+    # and report success — this issue's own title, caused by its own fix.
+    example = (ROOT / "cerberus.example.json").read_text(encoding="utf-8")
+    root = project({**PY_PROJECT, ".claude/cerberus.json": example})
     rc, out = run_setup(root)
     assert rc == 0, out
     config = json.loads((root / ".claude" / "cerberus.json").read_text(encoding="utf-8"))
@@ -305,6 +345,42 @@ def test_a_missing_mark_hook_is_not_reported_as_working():
     (root / ".claude" / "hooks" / "cerberus_mark.py").unlink()
     rc, out = run_setup(root)
     assert rc != 0, "a missing hook was reported as working:\n" + out
+
+
+def test_the_demonstration_requires_the_block_to_name_the_file():
+    # M3's evidence row. A gate that refuses but cannot say what for is broken,
+    # and a mutant dropping this check was invisible to the whole suite.
+    # The fixture has to behave correctly in every other respect, or it fails
+    # for the wrong reason: quiet when nothing is outstanding, blocking when
+    # something is — and blocking with a reason that names nothing. A first
+    # version blocked unconditionally and so was caught by the other test
+    # instead, which made this one pass against a mutant that removed the
+    # check it is named after.
+    root = project(PY_PROJECT)
+    (root / ".claude" / "hooks" / "cerberus_gate.py").write_text(
+        "import json, os, pathlib, sys\n"
+        "data = json.loads(sys.stdin.read() or '{}')\n"
+        "root = pathlib.Path(os.environ.get('CLAUDE_PROJECT_DIR') or data.get('cwd') or '.')\n"
+        "if (root / '.claude' / '.cerberus-pending').exists():\n"
+        "    print(json.dumps({'decision': 'block', 'reason': 'something is unverified'}))\n",
+        encoding="utf-8",
+    )
+    rc, out = run_setup(root)
+    assert rc != 0, "a gate that cannot name what it blocked was reported as working:\n" + out
+
+
+def test_the_demonstration_leaves_the_project_as_it_found_it():
+    # M3's cleanup row. Setup runs while somebody is working: their pending
+    # list must survive, and the probe must not be left behind.
+    root = project(PY_PROJECT)
+    marker = root / ".claude" / ".cerberus-pending"
+    marker.write_text("src/payments.py\nsrc/ledger.py\n", encoding="utf-8")
+    run_setup(root)
+    assert marker.read_text(encoding="utf-8") == "src/payments.py\nsrc/ledger.py\n", (
+        "the user's pending work was replaced by the probe"
+    )
+    leftovers = [p.name for p in (root / ".claude").glob("*probe*")]
+    assert not leftovers, leftovers
 
 
 # ------------------------------------------------------- what the user reads

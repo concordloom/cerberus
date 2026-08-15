@@ -228,7 +228,8 @@ if [ "$WANT_CLAUDE" -eq 1 ]; then
       :
     else
       echo
-      echo "Setup did not finish — see above. Nothing else was changed."
+      echo "Setup did not finish — see above. The files are installed; what is"
+      echo "missing is the part setup reports."
       exit 1
     fi
   else
