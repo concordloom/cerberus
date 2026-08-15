@@ -71,6 +71,49 @@ def test_does_not_mark_tests_docs_or_agent_config():
             assert not (tmp / ".claude" / ".cerberus-pending").exists(), path
 
 
+def test_does_not_mark_files_outside_the_project():
+    # Reproduced 2026-08-15: a real marker held six paths and four were outside
+    # the repository — two scratch files and two from the assistant's own memory
+    # directory. Writing a note somewhere else armed this project's gate.
+    #
+    # Every assertion here runs against a marker that already has an entry, and
+    # the in-project write is re-checked afterwards. Without that pairing a hook
+    # that marks nothing at all would pass this test.
+    with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as elsewhere:
+        tmp = pathlib.Path(d)
+        marker = tmp / ".claude" / ".cerberus-pending"
+
+        run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/service.py"}})
+        assert marker.exists(), "sentinel: an in-project edit must still mark"
+        before = marker.read_text(encoding="utf-8")
+
+        for path in (
+            str(pathlib.Path(elsewhere) / "note.py"),
+            str(pathlib.Path(elsewhere) / "memory" / "MEMORY.md"),
+            "../escaped.py",
+            "../../also_escaped.py",
+        ):
+            run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": path}})
+            assert marker.read_text(encoding="utf-8") == before, path
+
+        # And the hook is still alive at the end, rather than having been
+        # switched off by the change under test.
+        run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/other.py"}})
+        assert "app/other.py" in marker.read_text(encoding="utf-8")
+
+
+def test_marks_an_absolute_path_inside_the_project():
+    # The harness sends absolute paths. Rejecting anything absolute would be an
+    # easy way to pass the test above while disabling the gate entirely.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = pathlib.Path(d)
+        inside = tmp / "app" / "service.py"
+        run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": str(inside)}})
+        marker = tmp / ".claude" / ".cerberus-pending"
+        assert marker.exists(), "an absolute path inside the project must mark"
+        assert str(inside) in marker.read_text(encoding="utf-8")
+
+
 def test_marker_accumulates_without_duplicating():
     with tempfile.TemporaryDirectory() as d:
         tmp = pathlib.Path(d)

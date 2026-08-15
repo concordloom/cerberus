@@ -113,10 +113,40 @@ class Config:
     def marker_path(self) -> pathlib.Path:
         return self.root / self.marker
 
+    def _under_root(self, fp: str) -> bool:
+        """Is this file part of the project the gate is guarding?
+
+        An edit outside the project cannot change what this project ships, and
+        marking it arms the gate during ordinary work: a note written to a
+        scratch directory, or to the assistant's own memory, would go on to
+        block the next readiness claim about unrelated code. Reproduced
+        2026-08-15 — four of the six paths in a real marker were outside the
+        repository.
+
+        Paths are compared after resolution rather than lexically. A project
+        reached through a symlink is still the project, and a lexical check
+        would classify all of it as foreign.
+        """
+        try:
+            root = self.root.resolve()
+            if pathlib.PurePosixPath(fp).is_absolute():
+                target = pathlib.Path(fp).resolve()
+            else:
+                # Relative paths arrive relative to the project root, which is
+                # also how "../../elsewhere.py" escapes it.
+                target = (root / fp).resolve()
+        except (OSError, ValueError):
+            # Unresolvable is not provably inside, and the gate must not be
+            # armed by a path nobody can place.
+            return False
+        return target == root or root in target.parents
+
     def is_source_file(self, file_path: str) -> bool:
         """Does editing this file put runtime behaviour at risk?"""
         fp = self._norm(file_path)
         if not fp:
+            return False
+        if not self._under_root(fp):
             return False
         # Compare against a leading-slash form so that "/tests/" also matches a
         # path that begins with "tests/".
