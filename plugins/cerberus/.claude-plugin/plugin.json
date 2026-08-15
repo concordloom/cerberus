@@ -16,7 +16,5 @@
     "testing",
     "adversarial",
     "hooks"
-  ],
-  "skills": "./skills",
-  "hooks": "./hooks/hooks.json"
+  ]
 }
