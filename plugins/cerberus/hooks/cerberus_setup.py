@@ -194,8 +194,29 @@ def build_checks(runners: list[dict], root: pathlib.Path) -> list[tuple[str, int
     return results
 
 
+def is_placeholder(commands: list) -> bool:
+    """Is this the example's stub rather than somebody's step?
+
+    `echo 'running the suite' && pytest -q --maxfail=1` starts with `echo ` and
+    is a real step; treating it as the stub replaced hand-written commands
+    silently.
+    """
+    if not commands:
+        return True
+    for cmd in commands:
+        text = str(cmd)
+        if not text.startswith("echo ") or any(sep in text for sep in ("&&", ";", "|", "`", "$(")):
+            return False
+    return True
+
+
 def write_config(
-    root: pathlib.Path, kind: str, checks: list[str], dry: bool, existing: dict | None = None
+    root: pathlib.Path,
+    kind: str,
+    checks: list[str],
+    dry: bool,
+    existing: dict | None = None,
+    untouched: bool = True,
 ) -> pathlib.Path:
     """Merge into whatever is there rather than replacing it.
 
@@ -211,13 +232,23 @@ def write_config(
     # too, and did not: a deliberate `migration` — a kind detect() can never
     # produce — was downgraded to a guess, and notes naming production accounts
     # were destroyed without a word.
-    verification.setdefault("artifact_kind", kind)
+    # `untouched` means the file is still the installer's copy of the example,
+    # whose artifact_kind is "service" and whose notes describe the field. Those
+    # are the installer's values, not anybody's decision, and preserving them
+    # shipped a Python library labelled a service with self-describing notes —
+    # while the closing paragraph of the same run gave the library advice.
+    if untouched:
+        verification["artifact_kind"] = kind
+    else:
+        verification.setdefault("artifact_kind", kind)
     verification["stage1"] = checks
     # Left empty on purpose: a comment line in a list of commands exits 0
     # unconditionally, which is the placeholder this script exists to remove.
     verification["stage2"] = []
     prior_notes = str(verification.get("notes") or "")
-    if not prior_notes or prior_notes.startswith(("stage2 is still empty", "Replace the stage2")):
+    if untouched or not prior_notes or prior_notes.startswith(
+        ("stage2 is still empty", "Replace the stage2", "Free text the agent should know")
+    ):
         verification["notes"] = (
             "stage2 is still empty. Put here what proves it works where it really runs: "
             + STAGE2_HINT_BY_KIND.get(
@@ -316,12 +347,19 @@ def _hooked(data: dict, event: str, script: str, root: pathlib.Path) -> bool:
         # recorded and the gate has nothing to hold.
         if event == "PostToolUse":
             matcher = entry.get("matcher")
-            if matcher is not None and not (
-                "Write" in str(matcher) or "Edit" in str(matcher) or str(matcher) in ("", "*")
-            ):
-                continue
+            if matcher is not None:
+                # Whole alternatives, not substrings: `MultiEdit` and
+                # `NotebookEdit` contain "Edit" and never fire on an ordinary
+                # Write or Edit, so the entry records nothing.
+                parts = {a.strip() for a in str(matcher).split("|")}
+                if not (parts & {"Write", "Edit", "*", ""}):
+                    continue
         for hook in entry.get("hooks") or []:
-            cmd = hook.get("command") if isinstance(hook, dict) else None
+            if not isinstance(hook, dict):
+                continue
+            if hook.get("type") not in (None, "command"):
+                continue  # a prompt hook runs no command at all
+            cmd = hook.get("command")
             if not isinstance(cmd, str) or script not in cmd:
                 continue
             # The command must point at a file that is there. An entry aimed at
@@ -334,20 +372,25 @@ def _hooked(data: dict, event: str, script: str, root: pathlib.Path) -> bool:
             bare = cmd.replace('"', "").replace("'", "")
             bare = bare.replace("${CLAUDE_PROJECT_DIR}", str(root))
             bare = bare.replace("$CLAUDE_PROJECT_DIR", str(root))
-            # Splitting on whitespace breaks any project path with a space in
-            # it — Documents, iCloud, most of Windows — and the check then said
-            # the installer's own wiring was not wiring. Anchor on the project
-            # path when it is there, and fall back to the token otherwise.
+            # No single extraction rule survives every shape this takes:
+            # splitting on whitespace loses paths containing a space, and
+            # anchoring on the project path latches onto the argument of a
+            # `cd <root> && …` prefix. Both were shipped, one per round. So
+            # both readings are tried, and the entry counts as wiring if either
+            # resolves to a file that is there.
             end = bare.index(script) + len(script)
+            candidates = []
             if str(root) in bare[:end]:
-                candidate = bare[bare.index(str(root)):end]
-            else:
-                candidate = next((w for w in bare[:end].split() if script in w), script)
-            path = pathlib.Path(candidate)
-            if not path.is_absolute():
-                path = root / candidate
-            if path.exists():
-                return True
+                candidates.append(bare[bare.rindex(str(root), 0, end):end])
+            token = next((w for w in bare[:end].split() if script in w), "")
+            if token:
+                candidates.append(token)
+            for candidate in candidates:
+                path = pathlib.Path(candidate)
+                if not path.is_absolute():
+                    path = root / candidate
+                if path.exists():
+                    return True
     return False
 
 
@@ -455,13 +498,6 @@ def main(argv: list[str] | None = None) -> int:
     config = root / ".claude" / "cerberus.json"
 
     runners, kind = detect(root)
-    if not runners or kind is None:
-        print("I could not tell what kind of project this is.")
-        print("Nothing was changed. Tell me two things and I can finish:")
-        print("  1. the command that runs your tests")
-        print("  2. how someone else gets this — a running service, an installed")
-        print("     package, a command they type")
-        return 2
 
     existing = None
     if config.exists():
@@ -493,7 +529,7 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         verification = verification or {}
         stage1 = verification.get("stage1", [])
-        placeholder = all(str(c).startswith("echo ") for c in stage1) if stage1 else True
+        placeholder = is_placeholder(stage1)
         stage2 = verification.get("stage2", [])
         if theirs or not placeholder or (stage2 and not all(str(c).lstrip().startswith(("#", "echo ")) for c in stage2)):
             # Nothing is written — but "is it actually on?" is the question this
@@ -503,8 +539,35 @@ def main(argv: list[str] | None = None) -> int:
             print("This project is configured already, so nothing was changed.")
             if theirs:
                 print("It keeps settings this cannot write for you:", ", ".join(sorted(theirs)))
+            # And its checks are run, not assumed. Certifying that the gate
+            # fires while the checks it points at cannot pass is the split this
+            # whole issue is about, and the re-run had it.
             print()
-            return report_state(root, verification.get("artifact_kind") or kind)
+            print("Checks this project already lists:")
+            still_failing = False
+            for cmd in stage1:
+                code, _ = run(str(cmd), root)
+                if code == 0:
+                    print(f"  ok       {cmd}")
+                elif code == 127:
+                    print(f"  absent   {cmd} — not installed here")
+                    still_failing = True
+                else:
+                    print(f"  FAILING  {cmd}")
+                    still_failing = True
+            print()
+            return report_state(root, verification.get("artifact_kind") or kind, still_failing)
+
+    # Only now, because a project this cannot recognise may already be
+    # configured by hand — and those are exactly the projects that most need
+    # the "is it on?" answer, since detection is why they are hand-configured.
+    if not runners or kind is None:
+        print("I could not tell what kind of project this is.")
+        print("Nothing was changed. Tell me two things and I can finish:")
+        print("  1. the command that runs your tests")
+        print("  2. how someone else gets this — a running service, an installed")
+        print("     package, a command they type")
+        return 2
 
     results = build_checks(runners, root)
     passing = [cmd for cmd, code, _ in results if code == 0]
@@ -522,7 +585,7 @@ def main(argv: list[str] | None = None) -> int:
         print("Nothing was changed. Fix one of those, or tell me the right command.")
         return 2
 
-    write_config(root, kind, passing, args.check, existing)
+    write_config(root, kind, passing, args.check, existing, untouched=True)
 
     if len(runners) > 1:
         others = ", ".join(r["name"] for r in runners[1:])

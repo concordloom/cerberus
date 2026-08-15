@@ -107,10 +107,36 @@ PY_PROJECT = {
 
 # A mutant got through every round by being wrong only for projects the tests
 # never built. The "never" rules are checked against these too.
-NODE_PROJECT = {"package.json": json.dumps({"name": "d", "scripts": {"test": "exit 0"}})}
-GO_PROJECT = {"go.mod": "module example.com/d\n\ngo 1.21\n"}
 MAKE_PROJECT = {"Makefile": "test:\n\t@true\n"}
-OTHER_PROJECTS = {"Node": NODE_PROJECT, "Go": GO_PROJECT}
+DOCKER_PROJECT = {"Dockerfile": "FROM scratch\n"}
+
+
+def _every_runner() -> dict:
+    """One fixture per entry in RUNNERS, built from RUNNERS itself.
+
+    A hand-listed subset is why the fourth mutant died and the fifth did not:
+    the list said Node and Go, the code also supports Rust, and the mutant was
+    wrong only there. Deriving the fixtures from the code means adding a runner
+    cannot leave a hole.
+    """
+    sys.path.insert(0, str(HOOKS))
+    import cerberus_setup
+
+    seeds = {
+        "pyproject.toml": '[project]\nname = "d"\nversion = "1"\n',
+        "package.json": json.dumps({"name": "d", "scripts": {"test": "exit 0"}}),
+        "Cargo.toml": '[package]\nname = "d"\nversion = "0.1.0"\nedition = "2021"\n',
+        "go.mod": "module example.com/d\n\ngo 1.21\n",
+    }
+    out = {}
+    for runner in cerberus_setup.RUNNERS:
+        marker = next((f for f in runner["files"] if f in seeds), None)
+        assert marker, f"no fixture seed for runner {runner['name']} — add one"
+        out[runner["name"]] = {marker: seeds[marker]}
+    return out
+
+
+OTHER_PROJECTS = {k: v for k, v in _every_runner().items() if k != "Python"}
 
 
 # --------------------------------------------------------------- behaviour
@@ -152,6 +178,31 @@ def test_never_writes_the_keys_that_replace_defaults():
             assert key not in raw, f"{key} written for a {name} project"
 
 
+def test_write_config_never_emits_the_replacing_keys_for_any_kind():
+    """The rule at the function, not through a project.
+
+    Going through a project skips whenever the toolchain is absent — cargo and
+    go are not installed on the CI runner — and "skipped" is exactly where a
+    mutant hides. This calls the writer directly for every kind it can produce.
+    """
+    sys.path.insert(0, str(HOOKS))
+    import cerberus_setup
+
+    for kind in sorted(set(cerberus_setup.STAGE2_HINT_BY_KIND) | {"library", "service"}):
+        for seed in ({}, {"//": "note"}, {"verification": {"stage1": ["echo x"]}}):
+            with tempfile.TemporaryDirectory() as d:
+                root = pathlib.Path(d)
+                (root / "Cargo.toml").write_text("[package]\nname='d'\n", encoding="utf-8")
+                (root / "go.mod").write_text("module d\n", encoding="utf-8")
+                (root / "package.json").write_text("{}", encoding="utf-8")
+                cerberus_setup.write_config(root, kind, ["true"], False, dict(seed), True)
+                written = json.loads(
+                    (root / ".claude" / "cerberus.json").read_text(encoding="utf-8")
+                )
+                for key in REPLACING_KEYS:
+                    assert key not in written, f"{key} written for kind {kind}"
+
+
 def test_never_writes_a_check_it_did_not_run_in_any_language():
     for name, files in OTHER_PROJECTS.items():
         root = project(files)
@@ -164,12 +215,47 @@ def test_never_writes_a_check_it_did_not_run_in_any_language():
             assert code == 0, f"{name}: wrote a check that does not pass here: {cmd}"
 
 
-def test_refuses_a_makefile_only_project_rather_than_guessing():
-    # A Makefile is a build system, not evidence of what the project ships.
-    root = project(MAKE_PROJECT)
+def test_refuses_every_unsupported_build_system_rather_than_guessing():
+    # A Makefile is a build system and a Dockerfile is a delivery detail;
+    # neither says what the checks are. The Makefile half had a test and the
+    # Dockerfile half did not, which is where the fifth mutant lived.
+    for name, files in (("Makefile", MAKE_PROJECT), ("Dockerfile", DOCKER_PROJECT)):
+        root = project(files)
+        rc, out = run_setup(root)
+        assert rc == 2, f"{name}: {out}"
+        assert "could not tell" in out, out
+
+
+def test_a_configured_project_reachable_only_by_hand_still_gets_an_answer():
+    # Detection does not support Gradle, which is exactly why such a project is
+    # configured by hand — and it was the population most needing "is it on?"
+    # and the one refused before the question was asked.
+    root = project({"build.gradle": "plugins { id 'java' }\n",
+                    ".claude/cerberus.json": json.dumps(
+                        {"verification": {"artifact_kind": "service", "stage1": ["true"]}})})
     rc, out = run_setup(root)
-    assert rc == 2, out
-    assert "could not tell" in out, out
+    assert rc == 0, out
+    assert "Tried it:" in out, "it never demonstrated:\n" + out
+
+
+def test_a_configured_project_runs_its_own_checks():
+    # Certifying that the gate fires while the check it points at cannot pass
+    # is this issue's split, living in the re-run path.
+    root = project({**PY_PROJECT,
+                    "tests/test_demo.py": "def test_bad():\n    assert False\n",
+                    ".claude/cerberus.json": json.dumps(
+                        {"verification": {"artifact_kind": "library", "stage1": ["pytest -q"]}})})
+    rc, out = run_setup(root)
+    assert "FAILING" in out or "absent" in out, out
+
+
+def test_a_hand_written_step_is_not_mistaken_for_the_placeholder():
+    root = project({**PY_PROJECT, ".claude/cerberus.json": json.dumps(
+        {"verification": {"artifact_kind": "library",
+                          "stage1": ["echo 'running the suite' && pytest -q --maxfail=1"]}})})
+    run_setup(root)
+    after = json.loads((root / ".claude" / "cerberus.json").read_text(encoding="utf-8"))
+    assert "--maxfail=1" in after["verification"]["stage1"][0], after
 
 
 def test_refuses_a_project_it_cannot_recognise():
@@ -230,6 +316,54 @@ def test_scripts_copied_here_but_unwired_is_a_failure():
     rc, out = run_setup(root)
     assert rc == 1, out
     assert "nothing here is calling it" in out, out
+
+
+def test_a_prompt_hook_is_not_wiring():
+    root = project(PY_PROJECT, wired=False)
+    (root / ".claude" / "settings.json").write_text(json.dumps({"hooks": {
+        "PostToolUse": [{"matcher": "Write|Edit", "hooks": [{"type": "prompt",
+            "command": 'python3 "$CLAUDE_PROJECT_DIR"/.claude/hooks/cerberus_mark.py'}]}],
+        "Stop": [{"hooks": [{"type": "command",
+            "command": 'python3 "$CLAUDE_PROJECT_DIR"/.claude/hooks/cerberus_gate.py'}]}],
+    }}), encoding="utf-8")
+    rc, out = run_setup(root)
+    assert rc == 1, out
+
+
+def test_a_cd_prefixed_command_is_still_wiring():
+    root = project(PY_PROJECT, wired=False)
+    (root / ".claude" / "settings.json").write_text(json.dumps({"hooks": {
+        "PostToolUse": [{"matcher": "Write|Edit", "hooks": [{"type": "command",
+            "command": f"cd {root} && python3 .claude/hooks/cerberus_mark.py"}]}],
+        "Stop": [{"hooks": [{"type": "command",
+            "command": f"cd {root} && python3 .claude/hooks/cerberus_gate.py"}]}],
+    }}), encoding="utf-8")
+    rc, out = run_setup(root)
+    assert rc == 0, "a cd-prefixed wiring read as unwired:\n" + out
+
+
+def test_an_edit_lookalike_matcher_is_not_wiring():
+    # MultiEdit and NotebookEdit contain "Edit" and never fire on an ordinary
+    # Write or Edit.
+    for matcher in ("MultiEdit", "NotebookEdit"):
+        root = project(PY_PROJECT, wired=False)
+        (root / ".claude" / "settings.json").write_text(json.dumps({"hooks": {
+            "PostToolUse": [{"matcher": matcher, "hooks": [{"type": "command",
+                "command": 'python3 "$CLAUDE_PROJECT_DIR"/.claude/hooks/cerberus_mark.py'}]}],
+            "Stop": [{"hooks": [{"type": "command",
+                "command": 'python3 "$CLAUDE_PROJECT_DIR"/.claude/hooks/cerberus_gate.py'}]}],
+        }}), encoding="utf-8")
+        rc, out = run_setup(root)
+        assert rc == 1, f"{matcher}: {out}"
+
+
+def test_settings_local_json_is_read():
+    root = project(PY_PROJECT, wired=False)
+    (root / ".claude" / "settings.local.json").write_text(
+        (ROOT / "examples" / "settings.json").read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    rc, out = run_setup(root)
+    assert rc == 0, "wiring in settings.local.json was ignored:\n" + out
 
 
 def test_an_entry_under_the_wrong_matcher_is_not_wiring():
@@ -451,6 +585,51 @@ def test_the_demonstration_leaves_the_project_as_it_found_it():
     )
     leftovers = [p.name for p in (root / ".claude").glob("*probe*")]
     assert not leftovers, leftovers
+
+
+def test_the_documented_one_liner_leaves_a_complete_configuration():
+    """Run install.sh --claude --setup and assert the WHOLE resulting file.
+
+    Three rounds of blockers shipped because each fix was checked against a
+    fixture narrower than the artifact: a synthetic config instead of the
+    shipped example, a path without a space, a test asserting only stage1. Each
+    one would have failed here on the first run.
+    """
+    with tempfile.TemporaryDirectory() as d:
+        root = pathlib.Path(d) / "a project with a space"
+        (root / "tests").mkdir(parents=True)
+        (root / "pyproject.toml").write_text(
+            '[project]\nname = "d"\nversion = "1"\n', encoding="utf-8"
+        )
+        (root / "tests" / "test_demo.py").write_text(
+            "def test_ok():\n    assert True\n", encoding="utf-8"
+        )
+        proc = subprocess.run(
+            ["sh", str(ROOT / "install.sh"), "--claude", "--setup"],
+            cwd=str(root), capture_output=True, text=True,
+            env={k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"},
+        )
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        config = json.loads((root / ".claude" / "cerberus.json").read_text(encoding="utf-8"))
+        v = config["verification"]
+
+        assert v["stage1"], "no checks were written"
+        assert not is_placeholder_text(v["stage1"]), v["stage1"]
+        assert v["stage2"] == [], v["stage2"]
+        assert v["artifact_kind"] == "library", (
+            "the example ships artifact_kind 'service'; a Python library is not one"
+        )
+        assert not str(v["notes"]).startswith("Free text"), (
+            "the example's own notes survived: " + str(v["notes"])
+        )
+        for key in REPLACING_KEYS:
+            assert key not in config, key
+        # and the closing advice must match the label in the file it points at
+        assert "import it from there" in proc.stdout, proc.stdout
+
+
+def is_placeholder_text(commands) -> bool:
+    return all(str(c).startswith("echo ") for c in commands)
 
 
 # ------------------------------------------------------- what the user reads
