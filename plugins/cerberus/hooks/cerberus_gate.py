@@ -55,8 +55,8 @@ REASON = (
     "UI through a browser, API through real calls, and a counterexample per "
     "mechanism whose failure oracle can actually return BROKEN.\n"
     "\n"
-    "The marker is cleared only by a READY verdict. Until then, do not say it "
-    "works.\n"
+    "Clear the marker only on a READY verdict. Nothing here prevents you "
+    "deleting it early — that is on you.\n"
     "\n"
     "Unverified files:\n"
 )

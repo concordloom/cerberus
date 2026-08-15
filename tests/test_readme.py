@@ -12,6 +12,7 @@ Run with: python3 tests/test_readme.py
 
 from __future__ import annotations
 
+import json
 import os
 import pathlib
 import re
@@ -156,6 +157,13 @@ def test_three_heads_means_one_thing():
         text = path.read_text(encoding="utf-8")
         found = re.findall(pattern, text, re.M)
         assert len(found) == 1, f"{path.name}: {found}"
+        # and the section must define them as the stages. Counting the heading
+        # let a mutant keep one heading and redefine the heads as the skills
+        # inside it.
+        body = section(text, found[0].replace("## ", "## "))
+        for skill in ("critic", "setup"):
+            assert f"**{skill}**" not in body, f"{path.name}: the heads section names {skill}"
+        assert re.search(r"[Ss]tage|[Сс]тади", body), f"{path.name}: heads are not the stages"
 
 
 def test_the_skills_do_not_claim_to_be_heads():
@@ -186,16 +194,43 @@ def test_the_page_does_not_read_as_a_list_of_lists():
             )
 
 
-def test_the_boundary_table_matches_the_documented_kinds():
-    # The README listed four of the seven artifact kinds the example config
-    # documents, so a reader shipping a migration or a prompt concluded the tool
-    # was not for them.
+def test_the_boundary_table_covers_every_documented_kind():
+    """Every artifact_kind the example config documents has a row.
+
+    The version this replaces parsed the enum and then never compared it to
+    anything — it counted rows whose first cell began "| a ", so seven invented
+    rows satisfied it, and it never opened the Russian file at all.
+    """
     example = (ROOT / "cerberus.example.json").read_text(encoding="utf-8")
     kinds = re.search(r"artifact_kind: ([^\"]+)", example).group(1)
-    documented = {k.strip().rstrip(".") for k in kinds.split("|")}
-    rows = section(README.read_text(encoding="utf-8"), "## The one thing to configure")
-    listed = re.findall(r"^\| a[n]? ([^|]+?) *\|", rows, re.M)
-    assert len(listed) >= len(documented) - 1, f"{len(listed)} rows for {len(documented)} kinds: {listed}"
+    documented = [k.strip().rstrip(".") for k in kinds.split("|")]
+
+    for path, heading in ((README, "## The one thing to configure"),
+                          (README_RU, "## Единственное, что надо настроить")):
+        body = section(path.read_text(encoding="utf-8"), heading)
+        rows = [r for r in body.splitlines() if r.startswith("|") and "---" not in r]
+        assert len(rows) >= len(documented), f"{path.name}: {len(rows)} rows for {documented}"
+        # and the enum values themselves must be on the page, so a reader can
+        # get from their row to the value the file wants
+        for kind in documented:
+            assert kind in body, f"{path.name}: no way to reach artifact_kind {kind!r}"
+
+
+def test_every_kind_on_the_page_has_advice_in_the_code():
+    """A row the code cannot advise on sends the reader the wrong answer.
+
+    `STAGE2_HINT_BY_KIND` falls back to the library hint for anything it does
+    not know, so two rows added to match the documented enum were quietly
+    getting library advice.
+    """
+    sys.path.insert(0, str(ROOT / "plugins" / "cerberus" / "hooks"))
+    import cerberus_setup
+
+    example = (ROOT / "cerberus.example.json").read_text(encoding="utf-8")
+    kinds = {k.strip().rstrip(".") for k in
+             re.search(r"artifact_kind: ([^\"]+)", example).group(1).split("|")}
+    missing = sorted(kinds - set(cerberus_setup.STAGE2_HINT_BY_KIND))
+    assert not missing, f"documented kinds with no advice: {missing}"
 
 
 def test_the_page_says_how_to_switch_it_off():
@@ -208,6 +243,48 @@ def test_the_page_says_how_to_switch_it_off():
     ):
         text = path.read_text(encoding="utf-8").lower()
         assert any(p in text for p in phrases), path.name
+
+
+def test_the_quoted_refusal_is_what_the_hook_really_prints():
+    """Every line the page shows must appear in the real message.
+
+    The page showed a four-line refusal with five lines silently cut out and no
+    ellipsis — and the cut portion was the one contradicting the paragraph
+    directly beneath it. A reader comparing the page to their terminal would
+    have found a message the hook never prints.
+    """
+    hooks = ROOT / "plugins" / "cerberus" / "hooks"
+    with tempfile.TemporaryDirectory() as d:
+        root = pathlib.Path(d)
+        (root / ".claude").mkdir()
+        env = {**os.environ, "CLAUDE_PROJECT_DIR": str(root)}
+        subprocess.run(
+            [sys.executable, str(hooks / "cerberus_mark.py")],
+            input=json.dumps({"cwd": str(root), "tool_input": {"file_path": "app/service.py"}}),
+            capture_output=True, text=True, env=env,
+        )
+        transcript = root / "t.jsonl"
+        transcript.write_text(
+            json.dumps({"role": "assistant", "message": {"content": "done, it works"}}) + "\n",
+            encoding="utf-8",
+        )
+        out = subprocess.run(
+            [sys.executable, str(hooks / "cerberus_gate.py")],
+            input=json.dumps({"cwd": str(root), "transcript_path": str(transcript)}),
+            capture_output=True, text=True, env=env,
+        ).stdout
+    real = json.loads(out)["reason"]
+    flat = " ".join(real.split())
+
+    for path in (README, README_RU):
+        quoted = [b for lang, b in fenced(path.read_text(encoding="utf-8"))
+                  if lang == "text" and "Cerberus gate" in b]
+        assert quoted, f"{path.name}: the refusal is not shown at all"
+        for line in quoted[0].splitlines():
+            line = line.strip().rstrip("…").strip()
+            if not line or line.endswith(":"):
+                continue
+            assert " ".join(line.split()) in flat, f"{path.name}: not in the real message: {line!r}"
 
 
 def test_the_page_does_not_claim_a_mechanism_that_does_not_exist():
@@ -225,11 +302,20 @@ def test_the_page_does_not_claim_a_mechanism_that_does_not_exist():
 
 
 def test_both_languages_have_the_same_sections():
-    # check_parity.py compares the skills, not the READMEs, so these two can
-    # drift with nothing noticing — which is how one language gets a fix.
-    en = re.findall(r"^## ", README.read_text(encoding="utf-8"), re.M)
-    ru = re.findall(r"^## ", README_RU.read_text(encoding="utf-8"), re.M)
+    # Comparing counts alone let a mutant give the Russian page nine sections
+    # with different titles and none of the content. The order and the shape of
+    # each section have to line up too: same number of tables, same number of
+    # fenced blocks, section by section.
+    en_text, ru_text = README.read_text(encoding="utf-8"), README_RU.read_text(encoding="utf-8")
+    en = re.split(r"^## ", en_text, flags=re.M)[1:]
+    ru = re.split(r"^## ", ru_text, flags=re.M)[1:]
     assert len(en) == len(ru), f"{len(en)} sections in English, {len(ru)} in Russian"
+    for a, b in zip(en, ru):
+        title_a, title_b = a.splitlines()[0], b.splitlines()[0]
+        tables_a = len(re.findall(r"^\|", a, re.M))
+        tables_b = len(re.findall(r"^\|", b, re.M))
+        assert (tables_a > 0) == (tables_b > 0), f"'{title_a}' vs '{title_b}': tables disagree"
+        assert len(fenced(a)) == len(fenced(b)), f"'{title_a}' vs '{title_b}': blocks disagree"
 
 
 def test_the_russian_text_has_no_stray_scripts():

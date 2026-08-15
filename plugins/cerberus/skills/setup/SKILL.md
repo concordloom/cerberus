@@ -10,10 +10,6 @@ The gate checks work, the critic checks claims, and this puts both in place —
 then makes the gate refuse a claim in front of you, because "installed" and
 "working" are different words and only one of them is worth saying.
 
-(The three heads are the three stages, not the three skills. This one is an
-install step, and calling it a head put two meanings of the word in the same
-repository.)
-
 ## Why this exists
 
 The installer copies an example configuration whose checks are `echo`

@@ -69,13 +69,21 @@ refuses:
 Cerberus gate: this message claims the work is ready, but source code was
 edited and has not been verified.
 
+Run the cerberus skill and complete both stages:
+  Stage 1 — try to break the code locally: …
+  Stage 2 — try to break it on a live environment: …
+
+Clear the marker only on a READY verdict. Nothing here prevents you
+deleting it early — that is on you.
+
 Unverified files:
   - app/service.py
 ```
 
-**3.** The note stays until the agent has run the two stages below and cleared
-it. Nothing stops it from deleting the file instead — this is a speed bump
-against drift, not a guard against an adversary.
+**3.** The note comes off on a `READY` verdict, and only that: both stages run
+and no blocker left. `NOT READY` leaves it exactly where it was. Nothing
+prevents the agent deleting the file instead — this is a speed bump against
+drift, not a guard against an adversary, and the message says so.
 
 Ordinary work is untouched: *"deployed to dev, running the check now"* ends a
 turn fine. Only readiness claims are refused, and only while something is
@@ -115,6 +123,9 @@ you, so it is the one field `.claude/cerberus.json` leaves to you:
 | a prompt or parser | a real model call through the production entry point |
 | a plugin or codegen | a real downstream project built with it |
 
+The value goes in `artifact_kind` — `service`, `library`, `cli`, `chart`,
+`migration`, `model-boundary`, `plugin` — one row each, in that order.
+
 If you have nothing to deploy, Stage 2 narrows to consuming the artifact you
 built in a clean environment, and everything past that is declared `Not proven`
 rather than assumed.
@@ -125,7 +136,10 @@ It will. The gate is a regular expression over your agent's last message, and
 the default list includes `\bdone\b` — a word people use for things that are
 not readiness claims.
 
-Everything is in `.claude/cerberus.json`:
+This section is about the Claude Code install, where the hooks actually run.
+Two of the three answers live in `.claude/cerberus.json`, which the installer
+puts in your project — a plugin install keeps its files under the plugin
+instead:
 
 - **it fired when it shouldn't** — narrow `claim_patterns`. Careful: that key
   **replaces** the default list rather than adding to it, so a short list makes
@@ -134,18 +148,29 @@ Everything is in `.claude/cerberus.json`:
 - **it is holding a note you have dealt with** — the file is
   `.claude/.cerberus-pending`, one path per line, and it survives across
   sessions;
-- **you want it off** — remove the two hooks from `.claude/settings.json`, or
-  uninstall the plugin. It is a hook, not a daemon.
+- **you want it off** — depends how you installed it. Plugin:
+  `/plugin uninstall cerberus@concordloom`, and nothing is left in your
+  project. Installer: delete the two entries from `.claude/settings.json`. On
+  Codex there is nothing to switch off, because there is nothing running — the
+  skill is advisory there. It is a hook, not a daemon.
 
 ## The critic, which is not the gate
 
-The same install carries a second skill. The gate asks whether the thing does
+Installing the plugin brings three skills — the gate, the critic and setup; on
+Codex you install each one you want. The gate asks whether the thing does
 what you say it does. The critic asks whether what you *said* is true — a
 diagnosis, a mechanism, a claim about the codebase — by spawning an adversary
 whose mandate is to refute it.
 
 Neither covers the other: work can be right while its explanation is wrong, and
 a right explanation proves nothing ever ran.
+
+The third, `setup`, is the install step from the quick start — it works out
+what your checks are by running them, writes them down, and shows you the gate
+refusing something. Run it again any time with
+`python3 .claude/hooks/cerberus_setup.py`, or ask the agent for it by name.
+Everything it cannot verify has a working default: a gate that stays inert
+until someone configures it is indistinguishable from no gate at all.
 
 ## Why
 

@@ -108,6 +108,8 @@ STAGE2_HINT_BY_KIND = {
     "cli": "install the built command somewhere clean and run it with real arguments",
     "chart": "apply it to a real cluster or account and watch it settle",
     "plugin": "install it into a clean environment and load it there",
+    "migration": "run it against a copy of real shape and scale",
+    "model-boundary": "make a real model call through the production entry point",
 }
 
 
