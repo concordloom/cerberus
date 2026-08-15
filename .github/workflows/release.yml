@@ -1,0 +1,57 @@
+# semantic-release: the version, the changelog, the tag and the GitHub Release
+# are all derived from the commit messages on main.
+#
+# What this does *not* do is deliver the update. For a marketplace plugin the
+# delivery mechanism is the `version` string in the marketplace entry —
+# installations update when that changes and not otherwise. Which is why the
+# release must write it into both manifests and commit them back; a release that
+# only tags reaches nobody.
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Releasing a plugin that does not load would be the whole point missed,
+      # so the same checks CI runs are run here before anything is published.
+      - name: Verify before releasing
+        run: |
+          test -d plugins/cerberus/hooks
+          python3 -m compileall -q plugins/cerberus/hooks scripts tests
+          python3 tests/test_hooks.py
+          python3 scripts/check_parity.py
+          sh -n install.sh
+
+      - name: Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npx --yes \
+            -p semantic-release@24 \
+            -p @semantic-release/changelog@6 \
+            -p @semantic-release/exec@6 \
+            -p @semantic-release/git@10 \
+            semantic-release

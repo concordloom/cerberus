@@ -84,6 +84,53 @@ The last one is not cosmetic at this length: the skill text runs to several
 hundred lines, and a stranded preposition on every third line reads as
 carelessness in a document whose whole subject is care.
 
+## Language
+
+The project is English. Code, comments, documentation, CI, issues and **commit
+messages** are written in English.
+
+The one exception is the translated skill: `SKILL.ru.md` and `README.ru.md`
+exist so the method is usable by people who work in Russian, and they are the
+only Russian prose here. Russian also appears as *data* — the claim patterns the
+gate matches, and the fixtures that test them — which is not the same thing.
+
+Commit messages are not a matter of taste in this repository: the changelog and
+the release notes are **generated from them**, so a Russian commit would put
+Russian into an English changelog.
+
+Commits before the policy was set are in Russian. History is not being rewritten
+for it — a force-push over published commits costs more than the inconsistency.
+
+## Releasing
+
+Releases are automatic. [semantic-release](https://semantic-release.gitbook.io)
+runs on every push to `main`, works out the next version from the commit
+messages, writes the changelog, tags, and publishes a GitHub Release.
+
+Which means the commit type decides the version:
+
+| Commit | Version |
+|---|---|
+| `fix: …` | patch |
+| `feat: …` | minor |
+| `feat!: …` or a `BREAKING CHANGE:` footer | major |
+| `docs:`, `chore:`, `test:`, `ci:`, `refactor:` | no release |
+
+What deserves which, for this project:
+
+- **major** — the verdict contract changes, or an installation stops working
+  without manual steps.
+- **minor** — the skill gains a requirement, a stage or an axis; the hooks gain
+  behaviour.
+- **patch** — wording, typography, packaging and defect fixes that leave what the
+  gate demands unchanged.
+
+The release writes the new version into **both** manifests
+(`scripts/set_version.py`) and commits them back. That is not bookkeeping: a
+marketplace plugin is pinned to the `version` in its entry, so an existing
+installation receives an update **only when that string changes**. A release that
+merely tagged would reach nobody, silently.
+
 ## Changing the skill text
 
 Both language versions must change together. `scripts/check_parity.py` compares
