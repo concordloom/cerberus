@@ -2,7 +2,7 @@
 description: Work an issue through the full cycle — matrix, work, critic, gate, verdict.
 argument-hint: <issue number>
 arguments: [issue]
-allowed-tools: Bash(gh issue view:*), Bash(gh issue comment:*), Bash(gh issue close:*), Bash(gh pr create:*)
+allowed-tools: Bash(gh issue view:*), Bash(gh issue comment:*), Bash(gh issue close:*), Bash(gh pr create:*), Read, Agent
 ---
 
 Take issue **$issue** through the cycle in `plugins/cerberus/skills/cerberus/SKILL.md`.
@@ -33,12 +33,12 @@ replacement for it.
    published tag through `gh skill install`, neither of which a working tree can
    stand in for.
 
-6. **Post the verdict to the issue** with the evidence: what was run, what came
+6. **Post the verdict to the issue** — `gh issue comment` — with the evidence: what was run, what came
    back, and what a broken version would have produced instead. `NOT READY`
    leaves it open with the reproductions attached. `READY` does **not** close it
    here — the pull request below closes it at merge, so the tracker and `main`
    never disagree. Close it directly only when the work ships without a pull
-   request, because then nothing else will.
+   request, because then nothing else will — `gh issue close --reason completed`.
 
 7. **If a `BLOCKER` was fixed, the verdict is void.** Start a fresh round on the
    new revision, as a new comment, and carry the findings-dynamics line so the
@@ -46,7 +46,7 @@ replacement for it.
    also means **do not merge on a verdict the last fix superseded** — the
    merge, not the verdict, is now what closes the issue.
 
-Then open the pull request, `Closes #$issue`, with the verdict linked rather
+Then open the pull request with `gh pr create`, `Closes #$issue`, with the verdict linked rather
 than restated. Two things that wording depends on: the keyword only closes when
 the pull request targets the default branch, and closing the issue before the
 pull request exists voids the state change the keyword would have made — the
