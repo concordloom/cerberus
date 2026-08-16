@@ -263,6 +263,9 @@ def write_config(
     # Reached only for an absent config or the installer's own copy, so these
     # are never anybody's choice.
     verification["artifact_kind"] = kind
+    # Setup exists to end by showing a refusal, and there is nothing to show
+    # while enforcement is off. Running it *is* the asking.
+    body["enforce"] = True
     verification["stage1"] = checks
     # Left empty on purpose: a comment line in a list of commands exits 0
     # unconditionally, which is the placeholder this script exists to remove.
@@ -486,6 +489,21 @@ def report_state(root: pathlib.Path, kind: str = "library", failing: bool = Fals
     it on a re-run answered "is it on?" without looking.
     """
     config = root / ".claude" / "cerberus.json"
+
+    # Nothing to show on a project that has not asked for enforcement, and
+    # switching it on for them would be exactly the thing this default exists
+    # to stop.
+    sys.path.insert(0, str(HERE))
+    from cerberus_config import Config
+
+    if not Config.load(root).enforce:
+        print("Refusals are switched off here, so there is nothing to show.")
+        print("The skills are yours to invoke by name. To have a readiness")
+        print("claim refused while an edited file is unverified, set")
+        print('  "enforce": true')
+        print(f"in {config.name}.")
+        return 0
+
     worked, detail = demonstrate(root)
     print("Tried it:", detail)
     if not worked:
@@ -518,7 +536,8 @@ def report_state(root: pathlib.Path, kind: str = "library", failing: bool = Fals
 
     print()
     print("From now on, when the work is claimed to be done and code has changed,")
-    print("that claim is refused until the checks above have been run.")
+    print("that claim is refused until the checks above have been run. Running")
+    print("this is what switched that on; \"enforce\": false turns it back off.")
     if failing:
         print("Your own tests are failing right now — that is worth a look first.")
     try:

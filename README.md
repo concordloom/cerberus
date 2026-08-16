@@ -113,6 +113,10 @@ Unverified files:
   - app/service.py
 ```
 
+This is what happens once refusals are switched on — see
+[the one thing to configure](#the-one-thing-to-configure). Until then the hooks
+are installed and quiet.
+
 **3.** The note comes off on a `READY` verdict, and only that: both stages run
 and no blocker left. `NOT READY` leaves it exactly where it was. Nothing
 prevents the agent deleting the file instead — this is a speed bump against
@@ -219,8 +223,14 @@ The third, `setup`, is the install step from the quick start — it works out
 what your checks are by running them, writes them down, and shows you the gate
 refusing something. Run it again any time with
 `python3 .claude/hooks/cerberus_setup.py`, or ask the agent for it by name.
-Everything it cannot verify has a working default: a gate that stays inert
-until someone configures it is indistinguishable from no gate at all.
+Everything it cannot verify has a working default — including refusals,
+which are **off** until you ask. Installing changes nothing about your
+sessions; the skills are there to invoke by name. `setup` switches
+enforcement on, or add `"enforce": true` yourself.
+
+That is a deliberate reversal. Against it: a gate nobody switches on
+protects nothing. For it: a gate refusing on ordinary words does not get
+tuned, it gets uninstalled — and then it protects even less.
 
 ## Why
 

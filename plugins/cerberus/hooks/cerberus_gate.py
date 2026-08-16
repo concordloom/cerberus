@@ -139,6 +139,8 @@ def main() -> int:
         os.environ.get("CLAUDE_PROJECT_DIR") or data.get("cwd") or os.getcwd()
     )
     cfg = Config.load(root)
+    if not cfg.enforce:
+        return 0  # nobody switched this on
 
     marker = cfg.marker_path()
     if not marker.exists():
@@ -171,6 +173,11 @@ def main() -> int:
             pointer = CONFIG_LINE.format(path=relative)
             break
     reason = REASON + pointer + FILES_HEADER + listed
+    if cfg.unreadable:
+        reason += (
+            "\n\nThis project asked for enforcement, and its cerberus.json "
+            "cannot be parsed. Fix it — the gate is running on defaults.\n"
+        )
 
     # A blocked Stop does not always end the turn: on some agents the reason is
     # fed back as a new prompt and the turn continues, with no documented cap.

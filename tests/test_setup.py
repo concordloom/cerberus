@@ -232,7 +232,8 @@ def test_a_configured_project_reachable_only_by_hand_still_gets_an_answer():
     # and the one refused before the question was asked.
     root = project({"build.gradle": "plugins { id 'java' }\n",
                     ".claude/cerberus.json": json.dumps(
-                        {"verification": {"artifact_kind": "service", "stage1": ["true"]}})})
+                        {"enforce": True,
+                         "verification": {"artifact_kind": "service", "stage1": ["true"]}})})
     rc, out = run_setup(root)
     assert rc == 0, out
     assert "Tried it:" in out, "it never demonstrated:\n" + out
@@ -801,6 +802,9 @@ def test_the_codex_hooks_actually_fire_in_the_layout_the_installer_writes():
         (root / "app" / "x.py").write_text("x = 1\n", encoding="utf-8")
         subprocess.run(["sh", str(ROOT / "install.sh"), "--codex"],
                        cwd=str(root), capture_output=True, text=True)
+        # A real project switches this on; the installer ships it off.
+        config = root / ".codex" / "cerberus.json"
+        config.write_text(json.dumps({"enforce": True}), encoding="utf-8")
         hooks = root / ".codex" / "hooks"
         env = {k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"}
         subprocess.run(

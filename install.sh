@@ -160,7 +160,7 @@ PY
     if [ -s "$TARGET/.gitignore" ] && [ -n "$(tail -c 1 "$TARGET/.gitignore")" ]; then
       printf '\n' >> "$TARGET/.gitignore"
     fi
-    printf '%s\n' "$MARKER" >> "$TARGET/.gitignore"
+    printf '%s\n%s\n' "$MARKER" "$MARKER.refusals" >> "$TARGET/.gitignore"
     say ".gitignore  (+ $MARKER)"
   else
     say ".gitignore  (kept — $MARKER already ignored)"
@@ -245,7 +245,7 @@ if [ "$WANT_CODEX" -eq 1 ]; then
     if [ -s "$TARGET/.gitignore" ] && [ -n "$(tail -c 1 "$TARGET/.gitignore")" ]; then
       printf '\n' >> "$TARGET/.gitignore"
     fi
-    printf '%s\n' ".codex/.cerberus-pending" >> "$TARGET/.gitignore"
+    printf '%s\n%s\n' ".codex/.cerberus-pending" ".codex/.cerberus-pending.refusals" >> "$TARGET/.gitignore"
     say ".gitignore  (+ .codex/.cerberus-pending)"
   fi
 
