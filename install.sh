@@ -5,8 +5,8 @@
 #
 #   Claude Code: `/plugin marketplace add concordloom/cerberus` then
 #                `/plugin install cerberus@concordloom`
-#   Codex, and everything else reading .agents/skills:
-#                `$skill-installer install <this repo>/tree/main/plugins/cerberus/skills/cerberus`
+#   Codex:       `codex plugin marketplace add concordloom/cerberus` then
+#                `codex plugin add cerberus@concordloom`
 #
 # What those do not do is put the files in your repository, or leave you a
 # cerberus.json to edit and commit. That is what this is for.
