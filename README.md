@@ -137,8 +137,9 @@ The value goes in `artifact_kind` — `service`, `library`, `cli`, `chart`,
 
 If your deploy runs in CI, Stage 2 is push, wait for the pipeline, and then
 prove the instance answering you is *this* commit — waiting is not verifying.
-`python3 <setup> --draft-stage2` reads your `helm/`, manifests, compose file or
-deploy job and prints those commands, with the traps in them named.
+Ask the agent to run `setup` with `--draft-stage2`: it reads your `helm/`,
+manifests, compose file or deploy job and prints those commands, with the traps
+in them named.
 
 If there is genuinely nowhere to deploy, do not leave `stage2` empty: write
 `stage2_unreachable` with the reason. Every verdict then narrows to
