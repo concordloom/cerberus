@@ -1,5 +1,64 @@
 # Changelog
 
+# [3.0.0](https://github.com/concordloom/cerberus/compare/v2.3.1...v3.0.0) (2026-08-16)
+
+
+* fix!: the skills were called setup and critic, which are everyone's names ([#70](https://github.com/concordloom/cerberus/issues/70)) ([618abe9](https://github.com/concordloom/cerberus/commit/618abe9715439310d891efdd5f92d6dc6051ca68)), closes [#69](https://github.com/concordloom/cerberus/issues/69)
+
+
+### BREAKING CHANGES
+
+* the skills `setup` and `critic` are now `cerberus-setup` and
+`cerberus-critic`. Ask for them by the new names. The plugin routes replace the
+old directories on update; the installer route leaves `critic/` and `setup/`
+behind, and the README says so.
+
+Skill names are one flat namespace across everything a person has installed, and
+a collision is silent. Reproduced rather than argued: a directory named `setup`
+was put in a Codex home, this plugin installed beside it, and afterwards two
+skills answered to `setup` with different descriptions. Nothing errored, nothing
+warned. The owner's machine already carries five unrelated skills in that same
+list.
+
+Silence is what makes it bad. A loud collision costs a minute. This one costs
+someone who says "run setup" and gets a database configured, or asks for
+`critic` — the obvious name for anyone's review skill — and gets a reviewer
+instead of an adversary told to refute a claim.
+
+`cerberus` keeps its name. It is the product and it is distinctive;
+`cerberus-cerberus` helps nobody, and a test fails if the rename is applied to
+it for symmetry.
+
+The guard is about the next skill, not these two: a name list a new skill would
+trip over, plus the requirement that a name says whose it is, plus that both
+language files declare the same one — a rename touching only SKILL.md is a skill
+with two names.
+* the skills `setup` and `critic` are now `cerberus-setup` and
+`cerberus-critic`. Ask for them by the new names. The plugin routes replace the
+old directories on update; the installer route leaves `critic/` and `setup/`
+behind, and both READMEs say so.
+
+Skill names are one flat namespace across everything a person has installed, and
+a collision is silent. Reproduced rather than argued: a directory named `setup`
+was put in a Codex home, this plugin installed beside it, and afterwards two
+skills answered to `setup` with different descriptions. Nothing errored, nothing
+warned. The owner's machine already carries five unrelated skills in that list.
+
+Silence is what makes it bad. A loud collision costs a minute. This one costs
+someone who says "run setup" and gets a database configured, or asks for
+`critic` — the obvious name for anyone's review skill — and gets a reviewer
+instead of an adversary told to refute a claim.
+
+`cerberus` keeps its name: it is the product and it is distinctive.
+`cerberus-cerberus` helps nobody, and a test fails if the rename is applied to
+it for symmetry.
+
+The guard is about the next skill rather than these two — a list of names a new
+skill would trip over, the requirement that a name says whose it is, and that
+both language files declare the same one. That last check earned itself
+immediately: the Russian uninstall line had kept the old directory names through
+the bulk rename, because its line break fell elsewhere.
+
 ## [2.3.1](https://github.com/concordloom/cerberus/compare/v2.3.0...v2.3.1) (2026-08-16)
 
 
