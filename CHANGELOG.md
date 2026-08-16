@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.1](https://github.com/concordloom/cerberus/compare/v2.0.0...v2.0.1) (2026-08-16)
+
+
+### Bug Fixes
+
+* stop shipping this machine's byte cache into other people's repositories ([#38](https://github.com/concordloom/cerberus/issues/38)) ([f93f22e](https://github.com/concordloom/cerberus/commit/f93f22ee6e4ada6f3c2aaa8e2c7963208bf879f2))
+
 # [2.0.0](https://github.com/concordloom/cerberus/compare/v1.7.0...v2.0.0) (2026-08-16)
 
 
