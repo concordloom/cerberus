@@ -1,5 +1,12 @@
 # Changelog
 
+# [1.6.0](https://github.com/concordloom/cerberus/compare/v1.5.0...v1.6.0) (2026-08-16)
+
+
+### Features
+
+* **codex:** real hook support, and the bypass the first attempt introduced ([#30](https://github.com/concordloom/cerberus/issues/30)) ([33ae5fb](https://github.com/concordloom/cerberus/commit/33ae5fbcb62a775b03094ae3e7af37189401884e)), closes [#27](https://github.com/concordloom/cerberus/issues/27)
+
 # [1.5.0](https://github.com/concordloom/cerberus/compare/v1.4.1...v1.5.0) (2026-08-16)
 
 
