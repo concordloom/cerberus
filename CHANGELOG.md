@@ -1,5 +1,23 @@
 # Changelog
 
+# [2.0.0](https://github.com/concordloom/cerberus/compare/v1.7.0...v2.0.0) (2026-08-16)
+
+
+* feat!: ship skills, not automation ([#34](https://github.com/concordloom/cerberus/issues/34)) ([b178539](https://github.com/concordloom/cerberus/commit/b178539908f678483a11a1477796ce12fc5ffa43)), closes [#31](https://github.com/concordloom/cerberus/issues/31) [#33](https://github.com/concordloom/cerberus/issues/33)
+
+
+### BREAKING CHANGES
+
+* the PostToolUse and Stop hooks are removed, along with the
+wiring the installer used to merge into .claude/settings.json and
+.codex/hooks.json, and the six cerberus.json keys that only they read. Projects
+upgrading from 1.7 or earlier must delete those entries by hand; the README says
+how, and does not do it for them, because editing a file the user owns is the
+thing this version stopped doing.
+
+Deciding when a change deserves verification was never ours to decide. The hooks
+could tell that code had changed and never whether the change mattered, and
+
 # [1.7.0](https://github.com/concordloom/cerberus/compare/v1.6.0...v1.7.0) (2026-08-16)
 
 
