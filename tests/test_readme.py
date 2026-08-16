@@ -686,6 +686,15 @@ def test_someone_who_deploys_from_ci_can_find_the_draft():
             assert needle.lower() in text, f"{path.name}: {needle!r}"
 
 
+def test_someone_who_deploys_from_ci_can_find_the_draft():
+    """#58, point 4. The most useful thing here was invisible from the front page."""
+    for path, needles in ((README, ("--draft-stage2", "waiting is not verifying")),
+                          (README_RU, ("--draft-stage2", "ожидание проверкой не является"))):
+        text = path.read_text(encoding="utf-8").lower()
+        for needle in needles:
+            assert needle.lower() in text, f"{path.name}: {needle!r}"
+
+
 def test_the_fix_did_not_grow_the_page():
     """A correction made by appending is a different failure with the same name.
 
@@ -695,7 +704,8 @@ def test_the_fix_did_not_grow_the_page():
     """
     for path, lines in ((README, 160), (README_RU, 162)):
         text = path.read_text(encoding="utf-8")
-        assert len(re.findall(r"^## ", text, re.M)) <= 10, f"{path.name}: a section was added"
+        assert len(re.findall(r"^## ", text, re.M)) <= MAX_SECTIONS, (
+            f"{path.name}: a section was added")
         body = [l for l in text.splitlines() if l.strip()]
         assert len(body) <= lines, f"{path.name}: {len(body)} lines, bound {lines}"
 
@@ -773,16 +783,49 @@ def test_the_quick_start_holds_no_install_commands():
                 f"{path.name}: installing crept back into the quick start:\n{body}")
 
 
-def test_the_page_did_not_grow_by_being_restructured():
-    """#62, point 6, and the reason #58's bound exists.
+#: Sections the page may hold, and how long it may be. Raised once, on #64,
+#: when the owner asked for Uninstall as its own block — an addition that was
+#: requested rather than one that crept in, which is the distinction the bound
+#: exists to draw. Two bounds had accumulated by then, from #58 and #62,
+#: checking the same thing with different numbers; this is the one.
+MAX_SECTIONS = 11
+MAX_LINES = {"README.md": 150, "README.ru.md": 152}
 
-    A restructure that adds is the same failure as a fix that appends.
+
+def test_the_page_does_not_grow_on_its_own():
+    """#58 and #62: a fix made by appending is a different failure with the same name.
+
+    Every section here competes with the ones that work, so growth has to be a
+    decision someone took, not a side effect of answering a question.
     """
-    for path, lines in ((README, 145), (README_RU, 147)):
+    for path, lines in ((README, MAX_LINES["README.md"]),
+                        (README_RU, MAX_LINES["README.ru.md"])):
         text = path.read_text(encoding="utf-8")
-        assert len(re.findall(r"^## ", text, re.M)) <= 10, f"{path.name}: a section was added"
+        assert len(re.findall(r"^## ", text, re.M)) <= MAX_SECTIONS, (
+            f"{path.name}: a section was added")
         body = [l for l in text.splitlines() if l.strip()]
         assert len(body) <= lines, f"{path.name}: {len(body)} lines, bound {lines}"
+
+
+def test_uninstalling_is_a_section_and_removing_is_not_mentioned_anywhere_else():
+    """#64. Two orphan sentences about removal, one per install route.
+
+    They sat in the install section explaining how to undo the thing the reader
+    had not done yet, which is the register the whole restructure removed.
+    """
+    for path, heading, commands in (
+        (README, "## Uninstall", ("/plugin uninstall", "codex plugin remove")),
+        (README_RU, "## Удаление", ("/plugin uninstall", "codex plugin remove")),
+    ):
+        text = path.read_text(encoding="utf-8")
+        assert heading in text, f"{path.name}: no {heading}"
+        where = section(text, heading)
+        for command in commands:
+            assert command in where, f"{path.name}: {command!r} is not in {heading}"
+        installing = install_section(text).lower()
+        for word in ("uninstall", "remove", "удал"):
+            assert word not in installing, (
+                f"{path.name}: the install section still talks about {word!r}")
 
 
 def _main() -> int:

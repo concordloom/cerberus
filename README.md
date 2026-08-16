@@ -36,16 +36,31 @@ codex plugin marketplace add concordloom/cerberus
 codex plugin add cerberus@concordloom
 ```
 
-Upgrade and remove with the same commands, by name.
-
 ### Into the repository
 
 Copies the skills into the project, so the whole team and CI get them from git,
-committed. Removing means deleting the files it wrote.
+committed.
 
 ```console
 curl -fsSL https://raw.githubusercontent.com/concordloom/cerberus/main/install.sh | sh -s -- --setup
 ```
+
+## Uninstall
+
+**Claude Code**
+
+```
+/plugin uninstall cerberus@concordloom
+```
+
+**Codex**
+
+```
+codex plugin remove cerberus@concordloom
+```
+
+**Installed into the repository** — delete `.claude/skills/cerberus`, `critic`
+and `setup`, and `cerberus.json` if you no longer want it.
 
 ## Quick start
 

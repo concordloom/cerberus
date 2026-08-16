@@ -37,16 +37,31 @@ codex plugin marketplace add concordloom/cerberus
 codex plugin add cerberus@concordloom
 ```
 
-Обновляют и удаляют теми же командами, по имени.
-
 ### В репозиторий
 
 Копирует навыки в проект, чтобы они пришли из гита всей команде и сборке,
-закоммиченными. Удалить — значит удалить записанные файлы.
+закоммиченными.
 
 ```console
 curl -fsSL https://raw.githubusercontent.com/concordloom/cerberus/main/install.sh | sh -s -- --setup
 ```
+
+## Удаление
+
+**Claude Code**
+
+```
+/plugin uninstall cerberus@concordloom
+```
+
+**Codex**
+
+```
+codex plugin remove cerberus@concordloom
+```
+
+**Если ставили в репозиторий** — удалите `.claude/skills/cerberus`, `critic` и
+`setup`, а также `cerberus.json`, если он больше не нужен.
 
 ## Быстрый старт
 
