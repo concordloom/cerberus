@@ -949,6 +949,67 @@ def test_the_skill_requires_reading_the_commands_back_before_writing_them():
         assert needle in path.read_text(encoding="utf-8").lower(), path.name
 
 
+# ------------------------------------- Not proven has to carry an attempt (#49)
+
+
+def test_the_skill_requires_an_attempt_behind_every_not_proven():
+    """#49. The clause written for honesty was the quietest way to skip work.
+
+    Three verdicts in this repository declared a boundary unreachable while the
+    tool to reach it was installed. Prose alone did not hold it, so the rule is
+    pinned here and named in the self-check.
+    """
+    for path, needles in (
+        (SKILLS / "cerberus" / "SKILL.md",
+         ("not proven needs an attempt", "command -v", "carries the attempt")),
+        (SKILLS / "cerberus" / "SKILL.ru.md",
+         ("требует попытки", "command -v", "несёт попытку")),
+    ):
+        text = path.read_text(encoding="utf-8").lower()
+        for needle in needles:
+            assert needle in text, f"{path.name}: {needle!r}"
+
+
+def test_the_rule_names_the_case_that_produced_it():
+    """A general rule already covered this and did not stop it.
+
+    "It depends on what an agent does" reads as a property of the world rather
+    than as a command anyone could type, so the case is named outright.
+    """
+    for path, needle in ((SKILLS / "cerberus" / "SKILL.md", "claude -p"),
+                         (SKILLS / "cerberus" / "SKILL.ru.md", "claude -p")):
+        assert needle in path.read_text(encoding="utf-8"), path.name
+
+
+def test_the_self_check_asks_for_it_at_verdict_time():
+    """A rule nobody reads at the moment of writing a verdict is decoration."""
+    for path, needle in ((SKILLS / "cerberus" / "SKILL.md", "does every `not proven` carry"),
+                         (SKILLS / "cerberus" / "SKILL.ru.md", "каждое `not proven` несёт")):
+        text = path.read_text(encoding="utf-8").lower()
+        assert needle in text, path.name
+        checklist = [l for l in text.splitlines() if l.startswith("- [ ]")]
+        assert any(needle in l for l in checklist), f"{path.name}: it is prose, not a check"
+
+
+def test_this_repository_verifies_it_with_a_live_session():
+    """#49, point 4. The only part that is mechanical rather than well-meant.
+
+    Every earlier fix here was text asking an agent to behave. This one is a
+    command in our own stage2, so the claim cannot be waved through again
+    without someone deleting a line.
+    """
+    body = json.loads((ROOT / "cerberus.json").read_text(encoding="utf-8"))
+    stage2 = body["verification"]["stage2"]
+    live = [c for c in stage2 if "claude -p" in c]
+    assert live, f"stage2 has no live agent session:\n" + "\n".join(stage2)
+    assert any("--continue" in c for c in live), (
+        "a single prompt cannot show a conversation happening; the readback and "
+        "the follow-up questions are the part #49 is about")
+    for command in live:
+        assert "jq -e" in command or "grep -q" in command, (
+            f"this cannot fail, so it proves nothing: {command}")
+
+
 # ------------------------------------------------- what installing does NOT do
 
 

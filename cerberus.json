@@ -10,17 +10,18 @@
       "python3 scripts/check_parity.py",
       "sh -n install.sh"
     ],
-    "//stage2": "The boundary here is the plugin loader and the installer, not a server. Nothing in stage 1 can see either: static checks of the manifests validate one reading of the documentation, while the loader has its own.",
+    "//stage2": "The boundary here is the plugin loader, the installer, and — since #49 — a real agent session. Whether the setup skill's conversation actually happens is a property of an agent, and an agent CLI on this machine is how you find out. Three verdicts called that unreachable while `claude` was installed.",
     "stage2": [
       "export CLAUDE_CONFIG_DIR=$(mktemp -d)",
       "claude plugin marketplace add concordloom/cerberus",
       "claude plugin install cerberus@concordloom",
-      "claude plugin list          # must read: Status ✔ enabled",
       "claude plugin details cerberus   # must list Skills (3)",
-      "# and the installer path, which is a second, independent boundary:",
       "git clone https://github.com/concordloom/cerberus /tmp/src && cd /tmp/proj && sh /tmp/src/install.sh --claude",
-      "# then check that no file the project owns was written or merged into"
+      "# then check that no file the project owns was written or merged into",
+      "# and the one that stops #49 recurring: a live agent session, not an intention.",
+      "cd /tmp/scratch && sh /tmp/src/install.sh --claude && claude -p 'Set this project up for cerberus.' --permission-mode bypassPermissions --output-format json | jq -e '.result | test(\"how does this|Stage 2\"; \"i\")'",
+      "claude -p --continue 'Deployed by CI on merge to main, helm into prod, logs in Loki, /version returns the sha.' --permission-mode bypassPermissions --output-format json | jq -e '.result | test(\"access|credential|revision\"; \"i\")'"
     ],
-    "notes": "Use an isolated CLAUDE_CONFIG_DIR: installing into the real one changes the operator's own session. Verify against the pushed commit, not the working tree - the marketplace installs from GitHub, so an unpushed fix proves nothing. `claude plugin marketplace update` before reinstalling, or the cached copy is what gets tested."
+    "notes": "Use an isolated CLAUDE_CONFIG_DIR: installing into the real one changes the operator's own session. Verify against the pushed commit, not the working tree - the marketplace installs from GitHub, so an unpushed fix proves nothing. `claude plugin marketplace update` before reinstalling, or the cached copy is what gets tested. A live `claude -p` session is part of stage2 on purpose: the rule that Not proven needs an attempt cannot be held by prose, and this repository broke it three times in one day."
   }
 }
