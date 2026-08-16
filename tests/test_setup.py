@@ -474,8 +474,14 @@ def test_installing_leaves_a_config_and_setup_completes_it():
         body = config_of(root)
         assert body["verification"]["stage1"], out
         assert not any("replace with" in c for c in body["verification"]["stage1"]), body
+        # An allowlist, because the named list missed `//verification` — a
+        # comment key carried over from the example — and CI caught what this
+        # test did not. Comment keys are allowed; DEAD_KEYS are named too, so a
+        # failure says which one came back rather than only that one did.
         for key in DEAD_KEYS:
             assert key not in body, f"install left a dead key: {key}"
+        extra = {k for k in body if k != "verification" and not k.startswith("//")}
+        assert not extra, f"install left keys nothing reads: {extra}"
 
 
 def test_an_existing_config_from_an_earlier_version_is_not_duplicated():

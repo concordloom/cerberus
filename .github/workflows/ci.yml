@@ -228,8 +228,10 @@ jobs:
               assert got.returncode == 0, f"wrote a check that fails here: {cmd}"
           # An allowlist rather than a denylist: a key nobody reads is a lie
           # with a schema, and naming the ones we happen to remember would not
-          # catch the next one.
-          extra = set(body) - {"//", "verification"}
+          # catch the next one. Keys starting with // are this project's comment
+          # convention and carry no behaviour; their *content* is checked by
+          # tests/test_setup.py, which reads the file as text.
+          extra = {k for k in body if k != "verification" and not k.startswith("//")}
           assert not extra, f"install left keys nothing reads: {extra}"
           print("setup wrote only checks that pass, and nothing dead")
           PY
