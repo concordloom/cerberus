@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.3](https://github.com/concordloom/cerberus/compare/v2.0.2...v2.0.3) (2026-08-16)
+
+
+### Bug Fixes
+
+* setup said six things in 139 words ([#42](https://github.com/concordloom/cerberus/issues/42)) ([0482dd3](https://github.com/concordloom/cerberus/commit/0482dd3763f37a7242b036ddec843bc13b5d35e7)), closes [#39](https://github.com/concordloom/cerberus/issues/39) [#39](https://github.com/concordloom/cerberus/issues/39) [#41](https://github.com/concordloom/cerberus/issues/41)
+
 ## [2.0.2](https://github.com/concordloom/cerberus/compare/v2.0.1...v2.0.2) (2026-08-16)
 
 
