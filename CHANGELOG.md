@@ -1,5 +1,12 @@
 # Changelog
 
+# [2.2.0](https://github.com/concordloom/cerberus/compare/v2.1.0...v2.2.0) (2026-08-16)
+
+
+### Features
+
+* stage 2 when the pipeline deploys, and the conversation that gets there ([#48](https://github.com/concordloom/cerberus/issues/48)) ([92b7399](https://github.com/concordloom/cerberus/commit/92b7399fdf0a684b0d890d66c5c11688f20c6ccf)), closes [#45](https://github.com/concordloom/cerberus/issues/45) [#47](https://github.com/concordloom/cerberus/issues/47)
+
 # [2.1.0](https://github.com/concordloom/cerberus/compare/v2.0.3...v2.1.0) (2026-08-16)
 
 
