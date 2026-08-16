@@ -87,10 +87,10 @@ Nothing, until you ask. There is no hook, no background process, and no file of
 yours that installing edits — the whole delivery is three skill directories and
 one config you own.
 
-That is a change from earlier versions, and a deliberate one. A gate that
-interrupts on its own guess about which turns matter gets switched off, and a
-gate that is off protects nothing. You know which change deserves an hour of
-adversarial verification; nothing shipped here can know that better than you.
+That is deliberate. A gate that interrupts on its own guess about which turns
+matter gets switched off, and a gate that is off protects nothing. You know
+which change deserves an hour of adversarial verification; nothing shipped here
+can know that better than you.
 
 No model is called and nothing goes over the network. The setup step runs your
 own checks locally, once, and writes down which ones passed.
@@ -160,24 +160,6 @@ The third, `setup`, is the install step above. It works out what your checks are
 by running them, writes them down, and stops. Run it again any time with
 `python3 .claude/skills/setup/cerberus_setup.py`, or ask the agent for it by
 name.
-
-## Upgrading from 1.7 or earlier
-
-Those versions installed two hooks and wired them into `.claude/settings.json`
-or `.codex/hooks.json`. This one installs neither, and does not touch those
-files — including to clean up after itself, because editing a file you own is
-the thing it stopped doing. Two entries are left pointing at scripts that no
-longer exist, and a command that cannot be found fails on every tool call, so
-delete them by hand:
-
-- **Claude Code** — remove the `PostToolUse` and `Stop` entries naming
-  `cerberus_mark.py` and `cerberus_gate.py` from `.claude/settings.json`;
-- **Codex** — delete `.codex/hooks.json`, or the two entries in it;
-- then delete the leftover `.claude/hooks/` or `.codex/hooks/` directory and the
-  `.cerberus-pending` file beside your config.
-
-Your `cerberus.json` is read exactly as before and needs no change. The keys
-that tuned the hooks are simply ignored.
 
 ## Why
 

@@ -316,39 +316,10 @@ def test_the_page_never_promises_an_automatic_refusal():
         re.compile(r"(?:гейт|хук|он)\s+(?:отказывает|блокирует|перебивает)\s+(?:сам|автоматически)", re.I),
     ]
     for path in (README, README_RU):
-        text = path.read_text(encoding="utf-8")
-        # The upgrade section describes what OLD versions did, in the past
-        # tense. Excluded by section, the same way tests/test_setup.py does it.
-        kept = []
-        upgrading = False
-        for line in text.splitlines():
-            if line.startswith("#"):
-                upgrading = bool(re.search(r"[Uu]pgrad|Обновление", line))
-            if not upgrading:
-                kept.append(line)
-        body = "\n".join(kept)
+        body = path.read_text(encoding="utf-8")
         for shape in banned:
             found = shape.search(body)
             assert not found, f"{path.name}: {found.group(0)!r}"
-
-
-def test_the_page_says_what_to_do_with_an_earlier_install():
-    """The one upgrade that fails in the reader's project rather than ours.
-
-    1.7 wired two hooks into a file this version no longer touches. Left there,
-    every tool call runs a command that does not exist. The page has to say so,
-    and has to name both agents' files, because the wiring lived in two places.
-    """
-    for path, needles in (
-        (README, ("settings.json", "hooks.json", "delete")),
-        (README_RU, ("settings.json", "hooks.json", "удалите")),
-    ):
-        text = path.read_text(encoding="utf-8")
-        upgrade = re.search(r"^## .*(?:Upgrad|Обновление).*?(?=^## |\Z)", text, re.M | re.S)
-        assert upgrade, f"{path.name}: no section about upgrading from an earlier install"
-        body = upgrade.group(0).lower()
-        for needle in needles:
-            assert needle.lower() in body, f"{path.name}: upgrade section never mentions {needle!r}"
 
 
 def test_the_quoted_output_is_what_setup_really_prints():
