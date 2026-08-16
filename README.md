@@ -44,10 +44,9 @@ Either way, ask your agent to set the project up. It works out what your checks
 are by running them, and writes down the ones that pass:
 
 ```text
-Set up for this Python project.
+Set up: Python library — change that if it is wrong.
 
-Checks I ran here, and that the skill will run before anyone says the
-work is done:
+Checks I ran here and wrote down:
   ok       pytest -q
 ```
 

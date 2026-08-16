@@ -240,7 +240,7 @@ def test_a_configured_project_reachable_only_by_hand_still_gets_an_answer():
         {"verification": {"artifact_kind": "cli", "stage1": ["true"], "stage2": ["true"]}})})
     code, out = run_setup(root)
     assert code == 0, out
-    assert "already has its own configuration" in out, out
+    assert "Already configured" in out, out
 
 
 def test_a_hand_written_step_is_not_mistaken_for_the_placeholder():
@@ -586,14 +586,14 @@ def test_a_second_run_still_reports_what_is_outstanding():
     replaced: the gap it exists to surface is the empty stage2.
     """
     _, second = _two_runs(PY_PROJECT)
-    assert "still missing" in second, second
+    assert "Still missing" in second, second
     assert "Checks it lists" in second, second
 
 
 def test_a_first_run_still_says_nothing_runs_by_itself():
     """#39, point 4. Fixing the re-run must not silence the install."""
     first, _ = _two_runs(PY_PROJECT)
-    assert "Nothing here runs by itself" in first, first
+    assert "Nothing runs by itself" in first, first
 
 
 def test_a_check_the_configuration_already_lists_is_not_offered_back():
@@ -613,7 +613,7 @@ def test_a_check_the_configuration_lacks_is_still_offered():
     hand = {"verification": {"artifact_kind": "library", "stage1": ["true"], "stage2": ["true"]}}
     root = project({**PY_PROJECT, "cerberus.json": json.dumps(hand)})
     _, out = run_setup(root)
-    assert "does not list" in out, out
+    assert "not in its list" in out, out
     assert "compileall" in out or "pytest" in out, out
 
 
@@ -638,17 +638,19 @@ def _project_with_a_failing_check() -> pathlib.Path:
         "skipping silently would report coverage this test does not have")
 
 
-def test_a_failing_check_is_reported_beside_the_list():
-    """#39, point 3. It was the fourth thing the reader reached."""
+def test_a_failing_check_is_named_once_and_not_explained_twice():
+    """#41. It used to be said twice: once as FAILING, once as a warning.
+
+    The second was the "worth a look first" line #39 moved next to the list.
+    Moving it was the right fix for where it sat; deleting it is the right fix
+    for it existing, and the list still carries the fact.
+    """
     root = _project_with_a_failing_check()
     _, out = run_setup(root)
-    lines = out.splitlines()
-    warning = next((i for i, l in enumerate(lines) if "failing right now" in l), None)
-    assert warning is not None, out
-    last_check = max(i for i, l in enumerate(lines)
-                     if l.startswith("  ok ") or l.startswith("  FAILING "))
-    assert warning == last_check + 1, (
-        f"the warning is {warning - last_check} lines below the list it belongs to:\n{out}")
+    assert "FAILING" in out, out
+    assert "worth a look" not in out, f"the same fact, twice:\n{out}"
+    named = [l for l in out.splitlines() if "failing" in l.lower()]
+    assert len(named) == 1, f"the failure is mentioned {len(named)} times:\n{out}"
 
 
 # ------------------------------------------------- what installing does NOT do
@@ -784,19 +786,62 @@ def test_the_output_uses_no_internal_vocabulary():
     assert not found, f"jargon reached the user: {found}\n{out}"
 
 
-def test_the_output_fits_one_screen():
-    root = project(PY_PROJECT)
+#: Non-empty lines the longest output may take — a first install with a check
+#: that ran and failed. Set AT the current output rather than above it: the
+#: previous bound was 24 against an actual 13, which no drift could ever reach,
+#: so it read as a limit while being decoration.
+MAX_LINES = 8
+
+
+def test_the_output_fits_in_a_glance():
+    """Measured on the longest case there is, not on the tidiest."""
+    root = _project_with_a_failing_check()
     _, out = run_setup(root)
     lines = [l for l in out.splitlines() if l.strip()]
-    assert len(lines) <= 24, f"{len(lines)} lines of output:\n{out}"
+    assert len(lines) <= MAX_LINES, f"{len(lines)} lines of output:\n{out}"
+
+
+def test_the_bound_is_one_the_output_could_actually_cross():
+    """A limit nothing can reach is not a limit.
+
+    This is the guard on the guard: raising MAX_LINES back out of reach is the
+    cheapest way to pass the test above, and it would leave the suite green
+    while the requirement was gone.
+    """
+    root = _project_with_a_failing_check()
+    _, out = run_setup(root)
+    lines = len([l for l in out.splitlines() if l.strip()])
+    assert MAX_LINES - lines <= 2, (
+        f"the bound is {MAX_LINES} and the output is {lines} — "
+        "slack that wide means nothing will ever fail this")
+
+
+def test_shortening_did_not_drop_any_of_the_facts():
+    """#41, point 1. The cheapest way to pass a length test is to say less.
+
+    Each of the six is asserted separately, against the longest output, so a
+    fact removed fails by name rather than by a count nobody reads.
+    """
+    root = _project_with_a_failing_check()
+    _, out = run_setup(root)
+    facts = {
+        "which toolchain": r"Python|Node|Rust|Go",
+        "which kind": r"\b(cli|library|service|chart|migration|model-boundary|plugin)\b",
+        "what was written": r"^  ok ",
+        "what failed": r"FAILING",
+        "nothing runs by itself": r"[Nn]othing runs by itself",
+        "what is still missing": r"[Ss]till missing",
+    }
+    absent = [name for name, shape in facts.items() if not re.search(shape, out, re.M)]
+    assert not absent, f"shortening dropped: {absent}\n{out}"
 
 
 def test_the_closing_message_says_what_it_owes_the_reader():
     root = project(PY_PROJECT)
     _, out = run_setup(root)
     low = out.lower()
-    assert "nothing here runs by itself" in low, out
-    assert "invoke" in low, out
+    assert "nothing runs by itself" in low, out
+    assert "cerberus skill" in low, out
     assert "cerberus.json" in low, out
 
 
