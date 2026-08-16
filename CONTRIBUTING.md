@@ -1,17 +1,17 @@
 # Contributing
 
-## This repository runs its own gate
+## This repository runs its own cycle
 
-Cerberus is enabled here, on itself. `.claude/settings.json` wires the hooks
-straight into `plugins/cerberus/hooks/` — there is one copy of each script, not a
-vendored duplicate that could drift from the published one.
+Cerberus is used here, on itself, and since #33 that means the same thing it
+means for everyone else: somebody invokes it. Nothing in this repository fires
+it automatically, and nothing checks that you did.
 
-That is not a gimmick. A verification tool nobody verifies is the thing it warns
-about, and the two worst defects this project has shipped so far were both
-readiness claims made without crossing the boundary.
+That is not a gimmick either way. A verification tool nobody verifies is the
+thing it warns about, and the two worst defects this project has shipped so far
+were both readiness claims made without crossing the boundary.
 
 Before saying a change works, run the skill and finish both stages. The commands
-for this repository are declared in [`.claude/cerberus.json`](.claude/cerberus.json).
+for this repository are declared in [`cerberus.json`](cerberus.json).
 
 ## From discussion to issue to work
 
@@ -42,17 +42,17 @@ Two things then happen in the open, on the issue itself:
 - **the verdict is posted after it**, with the evidence. An issue closed without
   one is a claim nobody checked.
 
-One caveat worth knowing, because it bit this repository. The hooks in
-`.claude/settings.json` are loaded from the project the session is working in.
-Editing this repository from a session rooted somewhere else means they never
-fire — the gate is not in the loop at all, and the dogfooding above is nominal.
-Work on this repository from this repository.
+One caveat worth knowing, because it bit this repository. Nothing will remind
+you: the discipline is the only mechanism there is now, which is exactly the
+trade #33 made. If that feels thin, read the verdict on that issue — it is the
+argument, with the counter-argument left in.
 
 ## Stage 1 — what the working tree can prove
 
 ```console
 python3 -m compileall -q plugins scripts tests
-python3 tests/test_hooks.py
+python3 tests/test_setup.py
+python3 tests/test_commands.py
 python3 scripts/check_parity.py
 sh -n install.sh
 ```
@@ -96,12 +96,14 @@ git clone https://github.com/concordloom/cerberus /tmp/src
 mkdir /tmp/proj && cd /tmp/proj && sh /tmp/src/install.sh
 ```
 
-…then drive the installed gate, both ways. Refusals ship off, so a fresh
-install must **stay silent**: mark a source edit, claim readiness, and confirm
-nothing comes back. Then set `"enforce": true` in `.claude/cerberus.json` and
-do it again — now the hook must answer `decision: block`. One direction on its
-own proves nothing: a gate that never fires and a gate that always fires both
-pass a single-sided check.
+…then check what is **not** there, which is now the load-bearing property: no
+`settings.json` written or merged into, no wiring file, no scripts outside the
+skill directories. An install that quietly took a decision for the user would
+pass every check that only looks at what it created.
+
+Then run the setup step and confirm the two things it owes: every command it
+wrote passes when run by hand, and the configuration carries nothing but the
+`verification` block.
 
 ## Russian text
 
@@ -158,8 +160,8 @@ What deserves which, for this project:
 
 - **major** — the verdict contract changes, or an installation stops working
   without manual steps.
-- **minor** — the skill gains a requirement, a stage or an axis; the hooks gain
-  behaviour.
+- **minor** — the skill gains a requirement, a stage or an axis; the setup step
+  gains behaviour.
 - **patch** — wording, typography, packaging and defect fixes that leave what the
   gate demands unchanged.
 

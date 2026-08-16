@@ -11,7 +11,7 @@
     {
       "name": "cerberus",
       "source": "./plugins/cerberus",
-      "description": "Adversarial verification gate: before an agent says a change works, it has to try to prove it is broken — and fail. Ships the skill and the two hooks that make it mechanical rather than a matter of memory once a project asks for them.",
+      "description": "Adversarial verification gate: before an agent says a change works, it has to try to prove it is broken — and fail. Three skills — the cycle, a critic that refutes claims, and a setup step that learns this project's checks by running them.",
       "version": "1.7.0",
       "author": {
         "name": "Concord Loom",
@@ -25,7 +25,7 @@
         "verification",
         "testing",
         "quality",
-        "hooks",
+        "skills",
         "adversarial",
         "code-review"
       ]

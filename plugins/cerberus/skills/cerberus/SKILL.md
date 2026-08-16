@@ -1,7 +1,7 @@
 ---
 name: cerberus
 description: Adversarial verification before claiming a change works. Use before saying "done", "it works", "deployed and working" or "all green" about anything that executes — backend, runtime, UI, data schema.
-when_to_use: Before any readiness claim about an executable change; when the .claude/.cerberus-pending marker is set; on explicit invocation.
+when_to_use: Before any readiness claim about an executable change; on explicit invocation. Nothing invokes this for you — deciding that a change has earned it is part of the work.
 ---
 
 # Cerberus — adversarial verification gate
@@ -254,7 +254,7 @@ dependency range, absent type definitions. It is the same shape as the failure
 that motivated this gate — everything green inside, and it does not work for the
 consumer, because nobody walked the consumption path from outside.
 
-Declare the boundary for your project in `.claude/cerberus.json` so this is a
+Declare the boundary for your project in `cerberus.json` so this is a
 fact rather than a guess each time:
 
 ```json
@@ -478,9 +478,9 @@ round, or honestly narrow the claim and list what is `Not proven`.
 
 One of two, with evidence for every item of both stages:
 
-- **NOT READY** — blockers exist. List them with reproductions. The marker stays.
+- **NOT READY** — blockers exist. List them with reproductions.
 - **READY** — both stages passed, zero `BLOCKER`, evidence provided, and the
-  last round covers the current exact revision. Clear the marker.
+  last round covers the current exact revision.
 
 Only after `READY` may you tell the user it works.
 
@@ -528,4 +528,3 @@ verdict about one ticket must not be presented as readiness of a whole stage.
       stated, and no local finding widened beyond what was enumerated?
 - [ ] After each `BLOCKER` fix, was a new round run on the new revision, and does
       the report carry the findings-dynamics line?
-- [ ] Was the marker cleared only on `READY`?

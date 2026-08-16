@@ -64,18 +64,28 @@ def console_blocks(text: str) -> list[str]:
     return [body for lang, body in fenced(text) if lang in ("console", "sh")]
 
 
-def test_the_installer_command_runs():
-    """The one command on this page a shell can run, extracted and executed.
-
-    It fetches over the network by design: that is what the reader will do, and
-    the difference between the script beside the page and the script the page
-    points at is exactly where an install breaks.
-    """
+def documented_install() -> tuple[str, str]:
+    """The page's install command, split into the URL it fetches and its flags."""
     blocks = console_blocks(section(README.read_text(encoding="utf-8"), "## Quick start"))
     assert len(blocks) == 1, f"expected one runnable command, found {len(blocks)}"
     command = blocks[0]
     assert command.count("\n") == 0, "it must be one line to copy: " + command
+    url = re.search(r"https://\S+", command).group(0)
+    flags = command.split("-s --", 1)[1].strip() if "-s --" in command else ""
+    return url, flags
 
+
+def test_the_installer_command_runs():
+    """The page's command, run against **this** revision rather than main.
+
+    It used to be executed verbatim, fetching over the network. That check was
+    honest while a branch and main installed the same way and dishonest the
+    moment they did not: on a branch it ran main's installer and reported on
+    main. So the URL is checked separately for being alive, and the flags the
+    page documents are run against the script in this tree — which is the thing
+    the change under review can actually break.
+    """
+    _, flags = documented_install()
     with tempfile.TemporaryDirectory() as d:
         root = pathlib.Path(d)
         (root / "tests").mkdir()
@@ -86,12 +96,23 @@ def test_the_installer_command_runs():
             "def test_ok():\n    assert True\n", encoding="utf-8"
         )
         proc = subprocess.run(
-            command, shell=True, cwd=str(root), capture_output=True, text=True, timeout=600,
+            f'sh "{ROOT / "install.sh"}" {flags}',
+            shell=True, cwd=str(root), capture_output=True, text=True, timeout=600,
             env={k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"},
         )
-        assert proc.returncode == 0, command + "\n" + proc.stdout + proc.stderr
-        assert (root / ".claude" / "cerberus.json").exists(), proc.stdout
-        assert "was refused" in proc.stdout, proc.stdout
+        assert proc.returncode == 0, flags + "\n" + proc.stdout + proc.stderr
+        assert (root / "cerberus.json").exists(), proc.stdout
+        assert "Nothing here runs by itself" in proc.stdout, proc.stdout
+
+
+def test_the_url_the_installer_command_fetches_is_alive():
+    """The half of the one-liner the test above no longer executes."""
+    import urllib.request
+
+    url, _ = documented_install()
+    with urllib.request.urlopen(url, timeout=30) as response:
+        assert response.status == 200, url
+        assert b"cerberus" in response.read(2000), url
 
 
 def test_the_agent_commands_are_the_documented_ones():
@@ -138,7 +159,7 @@ def test_the_url_the_codex_command_is_given_resolves():
 def test_the_quick_start_shows_what_success_looks_like():
     body = section(README.read_text(encoding="utf-8"), "## Quick start")
     assert "```text" in body, "the reader is told to run something with no idea what it prints"
-    assert "refused" in body, body
+    assert "Checks I ran here" in body, body
 
 
 def test_the_quick_start_fits_above_the_fold():
@@ -256,7 +277,7 @@ def test_every_kind_on_the_page_has_advice_in_the_code():
     not know, so two rows added to match the documented enum were quietly
     getting library advice.
     """
-    sys.path.insert(0, str(ROOT / "plugins" / "cerberus" / "hooks"))
+    sys.path.insert(0, str(ROOT / "plugins" / "cerberus" / "skills" / "setup"))
     import cerberus_setup
 
     example = (ROOT / "cerberus.example.json").read_text(encoding="utf-8")
@@ -266,88 +287,112 @@ def test_every_kind_on_the_page_has_advice_in_the_code():
     assert not missing, f"documented kinds with no advice: {missing}"
 
 
-def test_the_page_says_refusals_are_off_until_asked():
-    # The default changed and two sentences shipped that day became false. This
-    # fails if the page ever goes back to promising a refusal out of the box.
-    for path, phrases in ((README, ("off", "enforce")), (README_RU, ("выключен", "enforce"))):
+def test_the_page_says_nothing_runs_by_itself():
+    """The load-bearing sentence since #33, on both pages.
+
+    Someone deciding whether to install this needs to know, before installing,
+    whether it will interrupt them. The answer is now "no, ever" — and a page
+    that leaves that implicit is read as the old behaviour by anyone who saw an
+    earlier version.
+    """
+    for path, phrases in (
+        (README, ("nothing happens on its own", "nothing, until you ask")),
+        (README_RU, ("само по себе не происходит ничего", "ничего, пока вы не попросите")),
+    ):
         text = path.read_text(encoding="utf-8").lower()
         for phrase in phrases:
             assert phrase in text, f"{path.name}: {phrase!r}"
-    for path, dead in (
-        (README, "indistinguishable from no gate"),
-        (README_RU, "неотличим от"),
-    ):
-        assert dead not in path.read_text(encoding="utf-8"), path.name
 
 
-def test_the_page_says_how_to_switch_it_off():
-    # tests/test_setup.py already demands this of the setup output. The front
-    # door — where someone decides whether to install a thing that intercepts
-    # every turn — did not say it at all.
-    for path, phrases in (
-        (README, ("switch it off", "turn it off", "uninstall")),
-        (README_RU, ("выключить", "удалите")),
-    ):
-        text = path.read_text(encoding="utf-8").lower()
-        assert any(p in text for p in phrases), path.name
+def test_the_page_never_promises_an_automatic_refusal():
+    """The previous seven versions did promise one, and people read those.
 
-
-def test_the_quoted_refusal_is_what_the_hook_really_prints():
-    """Every line the page shows must appear in the real message.
-
-    The page showed a four-line refusal with five lines silently cut out and no
-    ellipsis — and the cut portion was the one contradicting the paragraph
-    directly beneath it. A reader comparing the page to their terminal would
-    have found a message the hook never prints.
+    A shape rather than a word list: what must not come back is any sentence
+    saying this thing acts on its own.
     """
-    hooks = ROOT / "plugins" / "cerberus" / "hooks"
+    banned = [
+        re.compile(r"(?:hook|gate|it)\s+(?:refuses|blocks|interrupts|fires)\s+(?:every|automatically|on its own)", re.I),
+        re.compile(r"(?:refusals?|enforcement)\s+(?:are|is)\s+(?:on|switched on)", re.I),
+        re.compile(r"(?:гейт|хук|он)\s+(?:отказывает|блокирует|перебивает)\s+(?:сам|автоматически)", re.I),
+    ]
+    for path in (README, README_RU):
+        text = path.read_text(encoding="utf-8")
+        # The upgrade section describes what OLD versions did, in the past
+        # tense. Excluded by section, the same way tests/test_setup.py does it.
+        kept = []
+        upgrading = False
+        for line in text.splitlines():
+            if line.startswith("#"):
+                upgrading = bool(re.search(r"[Uu]pgrad|Обновление", line))
+            if not upgrading:
+                kept.append(line)
+        body = "\n".join(kept)
+        for shape in banned:
+            found = shape.search(body)
+            assert not found, f"{path.name}: {found.group(0)!r}"
+
+
+def test_the_page_says_what_to_do_with_an_earlier_install():
+    """The one upgrade that fails in the reader's project rather than ours.
+
+    1.7 wired two hooks into a file this version no longer touches. Left there,
+    every tool call runs a command that does not exist. The page has to say so,
+    and has to name both agents' files, because the wiring lived in two places.
+    """
+    for path, needles in (
+        (README, ("settings.json", "hooks.json", "delete")),
+        (README_RU, ("settings.json", "hooks.json", "удалите")),
+    ):
+        text = path.read_text(encoding="utf-8")
+        upgrade = re.search(r"^## .*(?:Upgrad|Обновление).*?(?=^## |\Z)", text, re.M | re.S)
+        assert upgrade, f"{path.name}: no section about upgrading from an earlier install"
+        body = upgrade.group(0).lower()
+        for needle in needles:
+            assert needle.lower() in body, f"{path.name}: upgrade section never mentions {needle!r}"
+
+
+def test_the_quoted_output_is_what_setup_really_prints():
+    """Every line the page shows must appear in what the script really says.
+
+    The page once showed a four-line refusal with five lines silently cut out
+    and no ellipsis, and the cut portion contradicted the paragraph beneath it.
+    The same rule now applies to the setup output the quick start quotes.
+    """
+    setup = ROOT / "plugins" / "cerberus" / "skills" / "setup" / "cerberus_setup.py"
     with tempfile.TemporaryDirectory() as d:
         root = pathlib.Path(d)
-        (root / ".claude").mkdir()
-        # The project has to ask: refusals are off by default now.
-        (root / ".claude" / "cerberus.json").write_text('{"enforce": true}', encoding="utf-8")
-        env = {**os.environ, "CLAUDE_PROJECT_DIR": str(root)}
-        subprocess.run(
-            [sys.executable, str(hooks / "cerberus_mark.py")],
-            input=json.dumps({"cwd": str(root), "tool_input": {"file_path": "app/service.py"}}),
-            capture_output=True, text=True, env=env,
-        )
-        transcript = root / "t.jsonl"
-        transcript.write_text(
-            json.dumps({"role": "assistant", "message": {"content": "done, it works"}}) + "\n",
-            encoding="utf-8",
-        )
-        out = subprocess.run(
-            [sys.executable, str(hooks / "cerberus_gate.py")],
-            input=json.dumps({"cwd": str(root), "transcript_path": str(transcript)}),
-            capture_output=True, text=True, env=env,
+        (root / "tests").mkdir()
+        (root / "pyproject.toml").write_text(
+            '[project]\nname = "d"\nversion = "1"\n', encoding="utf-8")
+        (root / "tests" / "test_demo.py").write_text(
+            "def test_ok():\n    assert True\n", encoding="utf-8")
+        real = subprocess.run(
+            [sys.executable, str(setup)], cwd=str(root),
+            capture_output=True, text=True,
+            env={k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"},
         ).stdout
-    real = json.loads(out)["reason"]
     flat = " ".join(real.split())
 
     for path in (README, README_RU):
         quoted = [b for lang, b in fenced(path.read_text(encoding="utf-8"))
-                  if lang == "text" and "Cerberus gate" in b]
-        assert quoted, f"{path.name}: the refusal is not shown at all"
+                  if lang == "text" and "Checks I ran here" in b]
+        assert quoted, f"{path.name}: the setup output is not shown at all"
+        saw_a_check = False
         for line in quoted[0].splitlines():
-            line = line.strip().rstrip("…").strip()
-            if not line or line.endswith(":"):
+            stripped = line.strip()
+            if not stripped:
                 continue
-            assert " ".join(line.split()) in flat, f"{path.name}: not in the real message: {line!r}"
-
-
-def test_the_page_does_not_claim_a_mechanism_that_does_not_exist():
-    # It said the record is "cleared by one thing: a READY verdict". Nothing in
-    # the hooks clears it — the agent deletes the file. Claiming a mechanism
-    # this project does not have, on the page that argues against exactly that,
-    # was the worst sentence here.
-    hooks = (ROOT / "plugins" / "cerberus" / "hooks")
-    clears = [h.name for h in hooks.glob("cerberus_*.py")
-              if h.name != "cerberus_setup.py" and "unlink" in h.read_text(encoding="utf-8")]
-    assert not clears, f"a hook clears the marker now — the README may say so: {clears}"
-    for path in (README, README_RU):
-        text = path.read_text(encoding="utf-8").lower()
-        assert "cleared by one thing" not in text, path.name
+            # Which command passes depends on what is installed on this
+            # machine, so the example command is not pinned — only that the
+            # page shows the shape the script really prints, and that the
+            # script really printed one.
+            if stripped.startswith("ok "):
+                saw_a_check = True
+                continue
+            assert " ".join(stripped.split()) in flat, (
+                f"{path.name}: not in the real output: {stripped!r}")
+        assert saw_a_check, f"{path.name}: the example shows no check at all"
+        assert re.search(r"^  ok ", real, re.M), "setup printed no passing check to compare against"
 
 
 def test_both_languages_have_the_same_sections():
