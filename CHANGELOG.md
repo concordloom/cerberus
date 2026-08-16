@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.1](https://github.com/concordloom/cerberus/compare/v2.2.0...v2.2.1) (2026-08-16)
+
+
+### Bug Fixes
+
+* Not proven has to carry the attempt that failed ([#50](https://github.com/concordloom/cerberus/issues/50)) ([da902d1](https://github.com/concordloom/cerberus/commit/da902d1692d4f390e3aa99cc3efe2a4629042909)), closes [#49](https://github.com/concordloom/cerberus/issues/49)
+
 # [2.2.0](https://github.com/concordloom/cerberus/compare/v2.1.0...v2.2.0) (2026-08-16)
 
 
