@@ -33,8 +33,10 @@ $skill-installer install https://github.com/concordloom/cerberus/tree/main/plugi
 
 Swap `cerberus` at the end for `critic` or `setup` to add the other two.
 
-**Or put the files in your own repository** — the three skills and a
-`cerberus.json` you can commit. Nothing to clone, and safe to re-run:
+**Or put the files in your own repository** — when the skills should belong to
+the whole team and to CI, not only to you: the two routes above install them for
+you, this one puts them in the project where they can be committed. Nothing to
+clone, and safe to re-run:
 
 ```console
 curl -fsSL https://raw.githubusercontent.com/concordloom/cerberus/main/install.sh | sh -s -- --setup

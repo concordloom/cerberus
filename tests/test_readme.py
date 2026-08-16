@@ -523,6 +523,66 @@ def test_no_link_points_at_the_old_repository_name():
         assert "cerberus-skill" not in text, path.name
 
 
+#: Words that are English spelled in Cyrillic. A test for "does this read like
+#: Russian" cannot be written; a test for "did this specific calque come back"
+#: can, and the calque is what actually returns.
+CALQUES = ["адверсариальн", "гейт", "артефакт", "оракул", "контрпример"]
+
+
+def test_the_russian_page_uses_no_transliterated_english():
+    """#54. The page opened with three of them in a row, on line one.
+
+    "Адверсариальный гейт проверки" is `adversarial verification gate` written
+    in Cyrillic letters: it sounds technical and means nothing, at the moment
+    someone decides whether to keep reading.
+    """
+    text = README_RU.read_text(encoding="utf-8").lower()
+    found = [w for w in CALQUES if w in text]
+    assert not found, f"calques are back: {found}"
+
+
+def test_the_guard_leaves_the_english_page_alone():
+    """The mirror, and it is not decoration.
+
+    On README.md these are correct English terms. A guard that spread to it
+    would force the English page into worse English to satisfy a rule about
+    Russian — so the guard is checked for staying on its own side.
+    """
+    # The tagline specifically, not the word anywhere: "a gate of fire" lives in
+    # the hero image's alt text, and matching that made this pass while the
+    # sentence it protects had been rewritten away.
+    english = README.read_text(encoding="utf-8").lower()
+    assert "adversarial verification gate" in english, (
+        "README.md's tagline lost its terms — the Russian rule has leaked onto "
+        "the English page, where they are correct English")
+
+
+def test_each_install_route_says_who_it_is_for():
+    """#54, point 6. Three blocks, no word on how they differ, so people pick by length.
+
+    Two of them install for you; the third installs into the repository, where
+    it can be committed and the whole team gets it.
+    """
+    for path, needles in ((README, ("whole team", "committed")),
+                          (README_RU, ("всей команде", "закоммитить"))):
+        quick = section(path.read_text(encoding="utf-8"),
+                        "## Quick start" if path is README else "## Быстрый старт")
+        for needle in needles:
+            assert needle.lower() in quick.lower(), f"{path.name}: {needle!r}"
+
+
+def test_the_russian_page_explains_why_the_sample_output_is_english():
+    """#54, point 7. Left bare it reads as an unfinished translation.
+
+    The output stays English by the decision on #41 — an agent retells it in
+    the reader's language, which is why string tables were not worth it. That
+    reasoning has to reach the reader, not only the issue tracker.
+    """
+    text = README_RU.read_text(encoding="utf-8").lower()
+    assert "вывод английский" in text, "the English block sits there unexplained"
+    assert "пересказ" in text, "it never says the agent retells it"
+
+
 def _main() -> int:
     failures = 0
     for name, fn in sorted(globals().items()):
