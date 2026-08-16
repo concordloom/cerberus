@@ -488,6 +488,25 @@ When the verdict is narrower than the whole change, say so explicitly: state the
 `READY scope` — the cells actually verified — and list what is `Not proven`. A
 verdict about one ticket must not be presented as readiness of a whole stage.
 
+### When the project declares the boundary unreachable
+
+A project with no environment to deploy to can say so once, in `cerberus.json`,
+instead of deciding it again every run:
+
+```json
+"stage2": [],
+"stage2_unreachable": "no dev cluster; this is an internal script run by hand"
+```
+
+That is a narrowing, not an exemption, and the verdict has to carry it. Such a
+run ends as `READY scope: Stage 1`, with `Stage 2 — Not proven: <the reason,
+quoted from the file>`. A clean-reading `READY` on a project that never crossed
+its boundary is the failure this whole skill exists to prevent, arriving with
+permission.
+
+The key without a reason is not consent — it is an unfinished configuration.
+Treat it as a `BLOCKER` on the configuration and say what is missing.
+
 ## Self-check before the verdict
 
 - [ ] Cycle: does the issue state the observation that would settle it, and was
