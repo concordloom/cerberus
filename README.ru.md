@@ -26,13 +26,12 @@
 /plugin install cerberus@concordloom
 ```
 
-**Codex** — одна команда, прямо в сессии:
+**Codex** — те же две, из того же маркетплейса:
 
 ```
-$skill-installer install https://github.com/concordloom/cerberus/tree/main/plugins/cerberus/skills/cerberus
+codex plugin marketplace add concordloom/cerberus
+codex plugin add cerberus@concordloom
 ```
-
-Замените `cerberus` на конце на `critic` или `setup`, чтобы добавить два других.
 
 **Или положите файлы в свой репозиторий** — если навыки нужны всей команде и
 сборке, а не только вам: два способа выше ставят их лично вам, этот кладёт их в

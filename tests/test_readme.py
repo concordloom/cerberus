@@ -116,44 +116,80 @@ def test_the_url_the_installer_command_fetches_is_alive():
 
 
 def test_the_agent_commands_are_the_documented_ones():
-    """Neither of these can run here.
+    """Neither pair can run here — both need a session and credentials.
 
-    The plugin pair needs credentials and a session. `$skill-installer` exists
-    only inside Codex and is not a program on any machine that runs these
-    tests — it has never been executed by anything in this repository, and the
-    URL it is given is asserted to resolve rather than assumed to.
-
-    So their text is pinned, and the verdict says they are unverified rather
-    than letting a shape check read as coverage.
+    So their text is pinned. The Codex pair used to be a `$skill-installer`
+    line with a long URL; it installed one skill per invocation and had no
+    version to upgrade from. Codex reads the same marketplace, which was true
+    before anyone here checked.
     """
     blocks = shell_blocks(section(README.read_text(encoding="utf-8"), "## Quick start"))
-    assert len(blocks) == 2, f"expected the plugin pair and the Codex line, found {len(blocks)}"
+    assert len(blocks) == 2, f"expected two install pairs, found {len(blocks)}"
     plugin = [line.strip() for line in blocks[0].splitlines() if line.strip()]
     assert plugin == [
         "/plugin marketplace add concordloom/cerberus",
         "/plugin install cerberus@concordloom",
     ], plugin
-    codex = blocks[1].strip()
-    assert codex.startswith("$skill-installer install https://github.com/concordloom/cerberus/"), codex
+    codex = [line.strip() for line in blocks[1].splitlines() if line.strip()]
+    assert codex == [
+        "codex plugin marketplace add concordloom/cerberus",
+        "codex plugin add cerberus@concordloom",
+    ], codex
 
 
-def test_the_url_the_codex_command_is_given_resolves():
-    """The half of the Codex line that *can* be checked.
+def test_both_agents_install_the_same_way():
+    """The asymmetry was ours, not the tools'.
 
-    Whether `$skill-installer` accepts it is unknown here; whether the thing it
-    is pointed at exists is not, and a dead URL is the likelier of the two
-    failures — the repository was renamed today.
+    A reader comparing two different-looking routes cannot tell whether the
+    difference reflects the agents or our ignorance. It reflected ours.
     """
-    import urllib.request
+    for path in (README, README_RU):
+        quick = section(path.read_text(encoding="utf-8"),
+                        "## Quick start" if path is README else "## Быстрый старт")
+        blocks = shell_blocks(quick)
+        assert len(blocks) == 2, f"{path.name}: {len(blocks)} agent blocks"
+        for block in blocks:
+            lines = [l for l in block.splitlines() if l.strip()]
+            assert len(lines) == 2, f"{path.name}: an agent gets {len(lines)} commands"
+            assert "marketplace add concordloom/cerberus" in lines[0], lines
+            assert "cerberus@concordloom" in lines[1], lines
 
-    blocks = shell_blocks(section(README.read_text(encoding="utf-8"), "## Quick start"))
-    url = blocks[1].split()[-1]
-    raw = url.replace("https://github.com/", "https://raw.githubusercontent.com/").replace(
-        "/tree/", "/"
-    ) + "/SKILL.md"
-    with urllib.request.urlopen(raw, timeout=30) as response:
-        assert response.status == 200, raw
-        assert b"name: cerberus" in response.read(400), raw
+
+def test_no_page_asks_anyone_to_install_the_skills_one_at_a_time():
+    """One install brings all three, and saying otherwise costs the critic.
+
+    The old Codex route installed one skill per invocation, so the page told
+    the reader to run it twice more. Anyone who stopped after the first had the
+    gate and not the critic — half the cycle, and the half whose absence nobody
+    notices.
+    """
+    shapes = [
+        re.compile(r"swap .{0,20}`?cerberus`? .{0,20}for", re.I),
+        re.compile(r"замените `?cerberus`? .{0,30}на `?critic", re.I),
+        re.compile(r"to add the other two", re.I),
+        re.compile(r"чтобы добавить (?:два других|остальные)", re.I),
+    ]
+    for path in (README, README_RU):
+        text = path.read_text(encoding="utf-8")
+        for shape in shapes:
+            found = shape.search(text)
+            assert not found, f"{path.name}: {found.group(0)!r}"
+
+
+def test_nothing_still_sends_codex_somewhere_else():
+    """The previous claim lived in four files.
+
+    "Codex has no hooks" spread exactly this way and needed its own issue to
+    pull back out, so this looks at the tree rather than at the two pages.
+    """
+    offenders = []
+    for path in sorted(ROOT.rglob("*.md")) + sorted(ROOT.rglob("*.sh")):
+        if ".git" in path.parts or path.name in ("CHANGELOG.md", "test_readme.py"):
+            continue
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if "skill-installer" in line:
+                offenders.append(f"{path.relative_to(ROOT)}:{n}")
+    assert not offenders, "still routing Codex through skill-installer: " + ", ".join(offenders)
 
 
 def test_the_quick_start_shows_what_success_looks_like():
@@ -472,13 +508,13 @@ def test_installing_is_explained_in_exactly_one_place():
         installing = []
         for sec in sections:
             commands = "\n".join(body for _, body in fenced(sec))
-            if re.search(r"/plugin install |skill-installer install|install\.sh \|", commands):
+            if re.search(r"/plugin install |codex plugin add|install\.sh \|", commands):
                 installing.append(sec.splitlines()[0])
         assert len(installing) == 1, f"{path.name}: installing explained in {installing}"
         quick = section(text, "## Quick start") if "## Quick start" in text else section(
             text, "## Быстрый старт"
         )
-        assert "plugin install" in quick and "skill-installer" in quick, path.name
+        assert "plugin install" in quick and "codex plugin add" in quick, path.name
 
 
 def test_nothing_claims_an_agent_lacks_hooks():

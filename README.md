@@ -25,13 +25,12 @@ you a change works, it has to seriously try to prove it is broken — and fail.
 /plugin install cerberus@concordloom
 ```
 
-**Codex** — one command, in the session:
+**Codex** — the same two, from the same marketplace:
 
 ```
-$skill-installer install https://github.com/concordloom/cerberus/tree/main/plugins/cerberus/skills/cerberus
+codex plugin marketplace add concordloom/cerberus
+codex plugin add cerberus@concordloom
 ```
-
-Swap `cerberus` at the end for `critic` or `setup` to add the other two.
 
 **Or put the files in your own repository** — when the skills should belong to
 the whole team and to CI, not only to you: the two routes above install them for
