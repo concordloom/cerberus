@@ -58,7 +58,16 @@ REASON = (
     "Clear the marker only on a READY verdict. Nothing here prevents you "
     "deleting it early — that is on you.\n"
     "\n"
-    "Unverified files:\n"
+)
+
+FILES_HEADER = "\nUnverified files:\n"
+
+# Naming the file is the difference between an agent inventing its stages and
+# an agent running this project's. The pointer used to live at SKILL.md:257,
+# of 530 lines, and the refusal never mentioned it.
+CONFIG_LINE = (
+    "\nThe commands for both stages are in {path}, under `verification`.\n"
+    "That block is for you to run; the other keys change what this hook does.\n"
 )
 
 
@@ -122,7 +131,9 @@ def main() -> int:
     if len(pending) > 20:
         listed += f"\n  ... and {len(pending) - 20} more"
 
-    print(json.dumps({"decision": "block", "reason": REASON + listed}))
+    config = root / ".claude" / "cerberus.json"
+    pointer = CONFIG_LINE.format(path=".claude/cerberus.json") if config.exists() else ""
+    print(json.dumps({"decision": "block", "reason": REASON + pointer + FILES_HEADER + listed}))
     return 0
 
 

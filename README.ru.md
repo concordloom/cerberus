@@ -58,6 +58,37 @@ Tried it: saying the work was done was refused, and it named the edited file
 curl -fsSL https://raw.githubusercontent.com/concordloom/cerberus/main/install.sh | sh -s -- --setup
 ```
 
+## Дальше что?
+
+С вашей стороны — ничего. Три стадии это работа агента, а не ваша.
+
+День выглядит так. Вы просите изменение, как обычно. Агент его делает. Агент
+идёт сказать, что готово, — и не может. Поэтому идёт проверять
+и возвращается с вердиктом вместо заявления.
+
+Вот настоящий, из сессии, которую попросили дописать функцию
+**и доложить, что готово**:
+
+```text
+Stage 0 — matrix: type {int, float, bool, Decimal, complex} x ordering x
+  non-numeric x arity x consumption path. All meaningful cells verified live.
+Stage 1 — compileall green, pytest green.
+Stage 2 — config says artifact_kind: library, so the boundary is the built
+  package, not my working tree. Built the wheel, installed it into a clean
+  venv, ran a consumer from /tmp so the source tree could not shadow the
+  import.
+The oracle can return BROKEN. I mutated the installed file to `return b - a`
+  and re-ran: 3 failures, exit 1. Restored: exit 0.
+```
+
+Он прочитал `artifact_kind: library` из `cerberus.json` и сам вывел, что
+проверять надо собранное колесо, а не рабочее дерево. Ровно для этого файл
+и нужен.
+
+Цена настоящая: это заняло минуты, а не секунды, и случается каждый
+раз, когда за правкой кода следует заявление о готовности. Это и есть
+размен, а [когда он мешает](#когда-он-мешает) — двумя разделами ниже.
+
 ## Что он делает с вашей сессией
 
 Два хука и одно правило.
@@ -136,6 +167,22 @@ Unverified files:
 Если разворачивать нечего, стадия 2 сужается до потребления собранного
 артефакта в чистом окружении, а всё, что дальше, объявляется `Not proven`,
 а не подразумевается.
+
+## Что лежит в cerberus.json
+
+Две половины, и это разные по природе вещи.
+
+**`verification`** — `artifact_kind`, `stage1`, `stage2`, `notes`. Это
+не читает ни одна программа. Это записка, которую читает и исполняет
+агент: `stage1` — команды, которые он прогоняет локально, `stage2` — то,
+до чего он должен дотянуться за вашей границей поставки. Ошибка здесь
+стоит агенту напрасной работы.
+
+**Всё остальное** — `claim_patterns`, `ignore_patterns`, `source_extensions`,
+`watch_paths`, `marker`. Это хуки читают на каждом запуске, и в файле
+они лежат закомментированными, с `//` впереди. Ошибка здесь делает гейт
+тише и слабее, чем вы думаете. Из-за этой несимметричности настройка пишет
+первую половину и никогда вторую.
 
 ## Когда он мешает
 

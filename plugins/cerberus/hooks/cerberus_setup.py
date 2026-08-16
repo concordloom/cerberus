@@ -441,6 +441,22 @@ def wiring(root: pathlib.Path) -> tuple[bool, str]:
     cannot be observed from here, so it is named as the one benign explanation
     rather than assumed.
     """
+    # A plugin install is the one case a project cannot show from inside — its
+    # settings never name the hooks. But when this script is running out of the
+    # plugin, the harness says so, and the plugin's own hooks.json is right
+    # there: that is evidence rather than the guess an earlier version made
+    # from a file sitting next to the script.
+    plugin_root = os.environ.get("CLAUDE_PLUGIN_ROOT")
+    if plugin_root:
+        declared = pathlib.Path(plugin_root) / "hooks" / "hooks.json"
+        try:
+            events = json.loads(declared.read_text(encoding="utf-8")).get("hooks") or {}
+            wired = json.dumps(events)
+            if "cerberus_mark.py" in wired and "cerberus_gate.py" in wired:
+                return True, "the plugin declares both hooks, so they run in every project"
+        except Exception:
+            pass
+
     found = []
     for name in ("settings.json", "settings.local.json"):
         path = root / ".claude" / name
