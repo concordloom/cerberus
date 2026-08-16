@@ -387,6 +387,42 @@ def test_installing_is_explained_in_exactly_one_place():
         assert "plugin install" in quick and "skill-installer" in quick, path.name
 
 
+def test_nothing_claims_an_agent_lacks_hooks():
+    """A claim about the world that nobody compared to the world.
+
+    "Codex has no hook mechanism" lived here for months and spread to four
+    files, because it was prose. It is false: Codex documents the same two
+    events and the same block protocol. Anything asserting a provider cannot
+    enforce belongs in a capability the code declares, not in a sentence.
+    """
+    # Matched as a shape, not as five literal strings: the first version of
+    # this guard read only .md and .sh — so the original sentence could return
+    # verbatim in a .py comment — and missed "does not have a hook mechanism",
+    # "lacks any hook mechanism" and "there are no hooks in" while claiming to
+    # prevent exactly that.
+    # Anchored on an agent's name, because the claim being banned is about an
+    # agent's capabilities. Without the anchor this fired on a comment about a
+    # *project* that had no hooks installed, which is a different sentence and
+    # a true one.
+    agent = r"(?:codex|claude code|claude|the agent|агент\w*|codex\w*)"
+    denial = r"(?:has no|have no|lacks any|without any|there are no|no)\s+hooks?"
+    shapes = [
+        re.compile(agent + r"[^.\n]{0,60}" + denial, re.I),
+        re.compile(denial + r"[^.\n]{0,60}" + agent, re.I),
+        re.compile(r"(?:нет|не имеет)\s+(?:механизма\s+)?хуков", re.I),
+        re.compile(r"хуков\s+(?:там\s+)?нет", re.I),
+    ]
+    for path in sorted(ROOT.rglob("*.md")) + sorted(ROOT.rglob("*.sh")) + sorted(ROOT.rglob("*.py")):
+        if ".git" in path.parts or path.name == "CHANGELOG.md":
+            continue
+        if path.name == "test_readme.py":
+            continue  # it has to quote the sentence to say why it is banned
+        text = path.read_text(encoding="utf-8")
+        for shape in shapes:
+            found = shape.search(text)
+            assert not found, f"{path.relative_to(ROOT)}: {found.group(0)!r}"
+
+
 def test_no_link_points_at_the_old_repository_name():
     for path in (README, README_RU):
         text = path.read_text(encoding="utf-8")
@@ -403,6 +439,13 @@ def _main() -> int:
             except AssertionError as exc:
                 failures += 1
                 print(f"  FAIL {name}: {exc}")
+            except Exception as exc:
+                # Not just AssertionError: a test that raises anything else
+                # used to crash the whole run, so the remaining tests never
+                # executed and the report was a traceback rather than a list of
+                # failures. One broken test must not hide the others.
+                failures += 1
+                print(f"  ERROR {name}: {type(exc).__name__}: {exc}")
     print(f"\n{'FAILED' if failures else 'all tests passed'}")
     return 1 if failures else 0
 

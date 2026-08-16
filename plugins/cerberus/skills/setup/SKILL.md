@@ -32,8 +32,9 @@ running it writes the project's `cerberus.json`, which otherwise never exists
 and leaves every future run guessing the delivery boundary. `--check` runs the
 checks and writes nothing.
 
-On Codex neither exists: there are no hooks, so there is nothing to set up and
-the gate is advisory. Say that rather than sending someone hunting.
+Under Codex the same files live in `.codex/hooks/`, wired by
+`.codex/hooks.json`. Codex has the same two events and the same block protocol
+— what differs is where the wiring lives, not whether it can be enforced.
 
 It finds the toolchain, runs each candidate check **here** before writing it
 down, saves the ones that pass, and finishes by marking a scratch file,

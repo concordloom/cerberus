@@ -748,6 +748,82 @@ def test_a_timed_out_check_does_not_leave_the_tree_running():
     assert not stamp.exists(), "the process group outlived the timeout"
 
 
+def test_installing_for_codex_wires_the_hooks():
+    """Nothing tested this route, so a mutant deleting the whole wiring block —
+    and one emptying the wiring file — both passed the suite."""
+    with tempfile.TemporaryDirectory() as d:
+        root = pathlib.Path(d)
+        proc = subprocess.run(
+            ["sh", str(ROOT / "install.sh"), "--codex"],
+            cwd=str(root), capture_output=True, text=True,
+            env={k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"},
+        )
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+
+        wiring = json.loads((root / ".codex" / "hooks.json").read_text(encoding="utf-8"))
+        events = wiring["hooks"]
+        assert set(events) == {"PostToolUse", "Stop"}, events
+        commands = [h["command"] for e in events.values() for entry in e for h in entry["hooks"]]
+        assert any("cerberus_mark.py" in c for c in commands), commands
+        assert any("cerberus_gate.py" in c for c in commands), commands
+        # Codex may be started from a subdirectory, and a relative path fails
+        # there — which on a Stop hook means exit 2, which *is* the block
+        # signal, so the failure becomes a continuation loop whose prompt is a
+        # Python traceback.
+        for command in commands:
+            assert "git rev-parse" in command, f"relative hook path: {command}"
+
+        for name in ("cerberus_mark.py", "cerberus_gate.py", "cerberus_config.py"):
+            assert (root / ".codex" / "hooks" / name).exists(), name
+        assert (root / ".codex" / "cerberus.json").exists()
+        assert ".codex/.cerberus-pending" in (root / ".gitignore").read_text(encoding="utf-8")
+
+
+def test_the_codex_install_says_the_hooks_need_trusting():
+    # Codex skips a project's hooks until the user trusts them, and again after
+    # any change. An installer that prints "hooks wired" and stops has told the
+    # user something that is not yet true.
+    with tempfile.TemporaryDirectory() as d:
+        root = pathlib.Path(d)
+        proc = subprocess.run(
+            ["sh", str(ROOT / "install.sh"), "--codex"],
+            cwd=str(root), capture_output=True, text=True,
+        )
+        assert "/hooks" in proc.stdout, proc.stdout
+
+
+def test_the_codex_hooks_actually_fire_in_the_layout_the_installer_writes():
+    # The wiring file is JSON nobody here can make Codex read, so the closest
+    # available check is that the scripts work where the installer puts them.
+    with tempfile.TemporaryDirectory() as d:
+        root = pathlib.Path(d)
+        (root / "app").mkdir()
+        (root / "app" / "x.py").write_text("x = 1\n", encoding="utf-8")
+        subprocess.run(["sh", str(ROOT / "install.sh"), "--codex"],
+                       cwd=str(root), capture_output=True, text=True)
+        hooks = root / ".codex" / "hooks"
+        env = {k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"}
+        subprocess.run(
+            [sys.executable, str(hooks / "cerberus_mark.py")],
+            input=json.dumps({"cwd": str(root), "tool_name": "apply_patch",
+                              "tool_input": {"command": "*** Update File: app/x.py\n"}}),
+            capture_output=True, text=True, env=env,
+        )
+        assert (root / ".codex" / ".cerberus-pending").exists(), "the edit was not recorded"
+        out = subprocess.run(
+            [sys.executable, str(hooks / "cerberus_gate.py")],
+            input=json.dumps({"cwd": str(root), "hook_event_name": "Stop",
+                              "last_assistant_message": "done, it works"}),
+            capture_output=True, text=True, env=env,
+        ).stdout
+        assert out, "the claim was not refused"
+        payload = json.loads(out)
+        assert payload["decision"] == "block"
+        assert ".codex/cerberus.json" in payload["reason"], (
+            "the refusal named the wrong project's config: " + payload["reason"]
+        )
+
+
 # ------------------------------------------------------- what the user reads
 
 
@@ -802,6 +878,13 @@ def _main() -> int:
             except AssertionError as exc:
                 failures += 1
                 print(f"  FAIL {name}: {exc}")
+            except Exception as exc:
+                # Not just AssertionError: a test that raises anything else
+                # used to crash the whole run, so the remaining tests never
+                # executed and the report was a traceback rather than a list of
+                # failures. One broken test must not hide the others.
+                failures += 1
+                print(f"  ERROR {name}: {type(exc).__name__}: {exc}")
     print(f"\n{'FAILED' if failures else 'all tests passed'}")
     return 1 if failures else 0
 

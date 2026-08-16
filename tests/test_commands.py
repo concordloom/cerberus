@@ -224,6 +224,13 @@ def _main() -> int:
             except AssertionError as exc:
                 failures += 1
                 print(f"  FAIL {name}: {exc}")
+            except Exception as exc:
+                # Not just AssertionError: a test that raises anything else
+                # used to crash the whole run, so the remaining tests never
+                # executed and the report was a traceback rather than a list of
+                # failures. One broken test must not hide the others.
+                failures += 1
+                print(f"  ERROR {name}: {type(exc).__name__}: {exc}")
     print(f"\n{'FAILED' if failures else 'all tests passed'}")
     return 1 if failures else 0
 

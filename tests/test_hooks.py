@@ -201,6 +201,255 @@ def test_marker_accumulates_without_duplicating():
         assert sorted(lines) == ["app/a.py", "app/b.py"]
 
 
+# ------------------------------------------------------------- other agents
+
+
+def test_a_codex_edit_is_recorded():
+    # Codex routes edits through apply_patch and the payload shape is not
+    # documented, so the path is scraped and then corroborated against disk.
+    # Unverified against a real Codex session — see #27.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = pathlib.Path(d)
+        (tmp / "app").mkdir()
+        (tmp / "app" / "service.py").write_text("x = 1\n", encoding="utf-8")
+        run_hook("cerberus_mark.py", {
+            "cwd": str(tmp),
+            "hook_event_name": "PostToolUse",
+            "tool_name": "apply_patch",
+            "tool_input": {"input": "*** Update File: app/service.py\n@@\n-x = 1\n+x = 2\n"},
+        })
+        marker = tmp / ".claude" / ".cerberus-pending"
+        assert marker.exists() and "app/service.py" in marker.read_text(encoding="utf-8")
+
+
+def test_running_a_file_is_not_editing_it():
+    # The trap in scraping: `python3 app/service.py` in a Bash command names a
+    # source file that was RUN. Marking it would arm the gate for work nobody
+    # did, so extraction is gated on the tool name.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = pathlib.Path(d)
+        (tmp / "app").mkdir()
+        (tmp / "app" / "service.py").write_text("x = 1\n", encoding="utf-8")
+        run_hook("cerberus_mark.py", {
+            "cwd": str(tmp),
+            "tool_name": "exec_command",
+            "tool_input": {"command": "python3 app/service.py"},
+        })
+        assert not (tmp / ".claude" / ".cerberus-pending").exists()
+
+
+def test_a_path_that_is_only_prose_is_not_recorded():
+    with tempfile.TemporaryDirectory() as d:
+        tmp = pathlib.Path(d)
+        run_hook("cerberus_mark.py", {
+            "cwd": str(tmp),
+            "tool_name": "apply_patch",
+            "tool_input": {"command": "see also legacy/gone.py, removed last year"},
+        })
+        assert not (tmp / ".claude" / ".cerberus-pending").exists()
+
+
+def test_the_claim_can_come_from_the_payload():
+    # Codex hands the Stop hook `last_assistant_message`; Claude Code does not.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = pathlib.Path(d)
+        run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/x.py"}})
+        _, out = run_hook("cerberus_gate.py", {
+            "cwd": str(tmp),
+            "hook_event_name": "Stop",
+            "last_assistant_message": "done, it works",
+        })
+        # Asserted before parsing: an empty result is a gap, not a pass, and
+        # letting json.loads raise turned a clear failure into a traceback that
+        # took the rest of the run down with it.
+        assert out, "nothing was returned — the payload's message was not read"
+        assert json.loads(out)["decision"] == "block"
+
+
+def test_it_refuses_a_few_times_and_then_stops_asking():
+    # Neither of the two failure modes tried before: refusing forever is a loop
+    # on an agent that turns a block into a continuation, and going silent was
+    # a bypass — claim, refused, claim again, through. It refuses, and after a
+    # few attempts ends the turn instead of asking again.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = pathlib.Path(d)
+        run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/x.py"}})
+        seen = []
+        for _ in range(8):
+            _, out = run_hook("cerberus_gate.py", {
+                "cwd": str(tmp), "last_assistant_message": "done, it works"})
+            assert out, "it went quiet — the claim would have gone through"
+            payload = json.loads(out)
+            seen.append(payload)
+            if payload.get("continue") is False:
+                break
+        assert len(seen) > 1, "it stopped asking on the very first refusal"
+        assert seen[0]["decision"] == "block"
+        assert seen[-1].get("continue") is False, "it never stopped asking"
+
+
+def test_the_first_turn_blocks_even_though_the_flag_is_present():
+    # Both agents send stop_hook_active on every Stop. A guard testing for the
+    # field's *presence* rather than its value disables the gate completely on
+    # the very first turn, and a one-word mutation does exactly that while the
+    # rest of this file stays green.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = pathlib.Path(d)
+        run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/x.py"}})
+        _, out = run_hook("cerberus_gate.py", {
+            "cwd": str(tmp),
+            "hook_event_name": "Stop",
+            "last_assistant_message": "done, it works",
+            "stop_hook_active": False,
+        })
+        assert out, "the gate went silent on a first turn that carried the flag"
+        assert json.loads(out)["decision"] == "block"
+
+
+def test_a_patch_that_only_mentions_a_file_does_not_arm_the_gate():
+    # Scraping every line of a diff meant a README patch quoting a source path
+    # armed the gate for a file nobody touched — the same trap as marking a
+    # file that was merely run.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = pathlib.Path(d)
+        (tmp / "app").mkdir()
+        (tmp / "app" / "service.py").write_text("x = 1\n", encoding="utf-8")
+        run_hook("cerberus_mark.py", {
+            "cwd": str(tmp),
+            "tool_name": "apply_patch",
+            "tool_input": {"command": "*** Update File: README.md\n@@\n+See app/service.py for details\n"},
+        })
+        assert not (tmp / ".claude" / ".cerberus-pending").exists()
+
+
+def test_reading_a_file_does_not_arm_the_gate():
+    with tempfile.TemporaryDirectory() as d:
+        tmp = pathlib.Path(d)
+        run_hook("cerberus_mark.py", {
+            "cwd": str(tmp),
+            "tool_name": "mcp__filesystem__read_file",
+            "tool_input": {"path": "app/service.py"},
+        })
+        assert not (tmp / ".claude" / ".cerberus-pending").exists()
+
+
+def test_a_header_quoted_inside_a_patch_body_is_not_a_header():
+    # M1: without the ^ anchor, a patch whose body *quotes* a header records
+    # the path in the quote. Both earlier guard tests used prose bodies with no
+    # header text at all, so neither could see it.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = pathlib.Path(d)
+        body = (
+            "*** Add File: app/examples.py\n"
+            "+SAMPLE = \"\"\"\n"
+            "+*** Update File: app/service.py\n"
+            "+\"\"\"\n"
+        )
+        run_hook("cerberus_mark.py", {
+            "cwd": str(tmp), "tool_name": "apply_patch",
+            "tool_input": {"command": body},
+        })
+        recorded = (tmp / ".claude" / ".cerberus-pending").read_text(encoding="utf-8")
+        assert "app/examples.py" in recorded, recorded
+        assert "app/service.py" not in recorded, recorded
+
+
+def test_an_mcp_editor_sending_path_is_recorded():
+    # M2: dropping the `path` fallback disarmed the gate for every MCP editor
+    # and no test noticed, because the only `path` test asserted the negative.
+    for tool in ("mcp__filesystem__write_file", "mcp__jetbrains__replace_text_in_file"):
+        with tempfile.TemporaryDirectory() as d:
+            tmp = pathlib.Path(d)
+            run_hook("cerberus_mark.py", {
+                "cwd": str(tmp), "tool_name": tool,
+                "tool_input": {"path": "app/service.py"},
+            })
+            marker = tmp / ".claude" / ".cerberus-pending"
+            assert marker.exists(), tool
+            assert "app/service.py" in marker.read_text(encoding="utf-8"), tool
+
+
+def test_read_only_tools_are_excluded_by_more_than_two_names():
+    # M4: shrinking the exclusion list to the two names the tests happened to
+    # use passed the suite. These are real tools from the filesystem MCP server.
+    for tool in ("mcp__filesystem__get_file_info", "mcp__filesystem__head_file",
+                 "mcp__filesystem__list_directory", "local_shell", "container.exec",
+                 "mcp__repo__search_files", "view_image"):
+        with tempfile.TemporaryDirectory() as d:
+            tmp = pathlib.Path(d)
+            run_hook("cerberus_mark.py", {
+                "cwd": str(tmp), "tool_name": tool,
+                "tool_input": {"path": "app/service.py", "command": "python3 app/service.py"},
+            })
+            assert not (tmp / ".claude" / ".cerberus-pending").exists(), tool
+
+
+def test_the_final_refusal_still_names_the_files():
+    # M3: the hard stop kept refusing but stopped naming what was unverified,
+    # because the test asserted only a phrase from the constant preamble.
+    # Naming the file is the README's headline demonstration.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = pathlib.Path(d)
+        run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/payments.py"}})
+        payload = {}
+        for _ in range(6):
+            _, out = run_hook("cerberus_gate.py", {
+                "cwd": str(tmp), "last_assistant_message": "done, it works"})
+            assert out, "the gate went quiet instead of refusing or stopping"
+            payload = json.loads(out)
+            if payload.get("continue") is False:
+                break
+        assert payload.get("continue") is False, "it never stopped asking"
+        assert "app/payments.py" in payload["stopReason"], payload["stopReason"]
+        assert payload.get("systemMessage"), "the only user-visible signal was dropped"
+
+
+def test_another_hooks_continuation_does_not_end_our_first_refusal():
+    # stop_hook_active means *some* Stop hook already continued the turn, not
+    # this one. Reading it as ours turned cerberus's first refusal into a hard
+    # stop whenever anything else was active — so the agent never got the
+    # continuation it needs to go and verify.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = pathlib.Path(d)
+        run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/x.py"}})
+        _, out = run_hook("cerberus_gate.py", {
+            "cwd": str(tmp),
+            "last_assistant_message": "done, it works",
+            "stop_hook_active": True,
+        })
+        assert json.loads(out)["decision"] == "block", "somebody else's flag ended our first refusal"
+
+
+def test_a_delete_and_a_rename_are_both_recorded():
+    # A deleted file is gone from disk, which is exactly why corroborating
+    # scraped paths against disk lost it. A rename has two names and both
+    # matter: one stopped existing, the other did not exist before.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = pathlib.Path(d)
+        run_hook("cerberus_mark.py", {
+            "cwd": str(tmp), "tool_name": "apply_patch",
+            "tool_input": {"command": "*** Delete File: app/gone.py\n"},
+        })
+        run_hook("cerberus_mark.py", {
+            "cwd": str(tmp), "tool_name": "apply_patch",
+            "tool_input": {"command": "*** Update File: app/old.py\n*** Move to: app/new.py\n"},
+        })
+        recorded = (tmp / ".claude" / ".cerberus-pending").read_text(encoding="utf-8")
+        for path in ("app/gone.py", "app/old.py", "app/new.py"):
+            assert path in recorded, (path, recorded)
+
+
+def test_a_codex_project_keeps_its_state_in_codex():
+    # A Codex-only project should not have a .claude directory created for it.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = pathlib.Path(d)
+        (tmp / ".codex").mkdir()
+        (tmp / "app").mkdir()
+        run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/x.py"}})
+        assert (tmp / ".codex" / ".cerberus-pending").exists(), "state went somewhere else"
+        assert not (tmp / ".claude").exists(), "a .claude directory was invented"
+
+
 # ------------------------------------------------------------------ gate
 
 
@@ -341,6 +590,13 @@ def _main() -> int:
             except AssertionError as exc:
                 failures += 1
                 print(f"  FAIL {name}: {exc}")
+            except Exception as exc:
+                # Not just AssertionError: a test that raises anything else
+                # used to crash the whole run, so the remaining tests never
+                # executed and the report was a traceback rather than a list of
+                # failures. One broken test must not hide the others.
+                failures += 1
+                print(f"  ERROR {name}: {type(exc).__name__}: {exc}")
     print(f"\n{'FAILED' if failures else 'all tests passed'}")
     return 1 if failures else 0
 

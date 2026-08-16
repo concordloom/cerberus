@@ -20,7 +20,7 @@
 #
 #   sh install.sh              # detect what the project uses, install for it
 #   sh install.sh --claude     # .claude/skills + hooks + settings wiring
-#   sh install.sh --codex      # .agents/skills (no hooks: Codex has no equivalent)
+#   sh install.sh --codex      # .agents/skills + hooks + .codex/hooks.json
 #   sh install.sh --setup      # and run the setup step immediately afterwards
 #   sh install.sh --dir PATH   # install into PATH instead of the current directory
 #
@@ -213,10 +213,51 @@ PY
 fi
 
 if [ "$WANT_CODEX" -eq 1 ]; then
-  mkdir -p "$TARGET/.agents/skills"
+  mkdir -p "$TARGET/.agents/skills" "$TARGET/.codex/hooks"
   copy_skills "$TARGET/.agents/skills"
-  say "note: Codex has no hook mechanism, so the gate is advisory there —"
-  say "      the skill is followed when invoked, not enforced on every turn."
+  cp "$HOOKS_SRC"/*.py "$TARGET/.codex/hooks/"
+  say ".codex/hooks/cerberus_{mark,gate,config,setup}.py"
+
+  # Codex reads .codex/hooks.json. Same events as Claude Code and the same
+  # block protocol, so the hooks themselves are unchanged — only the wiring
+  # lives somewhere else. Written whole rather than merged: unlike
+  # settings.json this file is ours by convention, and clobbering somebody
+  # else's hooks would be worse than refusing.
+  if [ -f "$TARGET/.codex/hooks.json" ]; then
+    say ".codex/hooks.json  (kept — already present; merge this yourself:)"
+    echo
+    sed 's/^/      /' "$SRC/examples/codex-hooks.json"
+    echo
+  else
+    cp "$SRC/examples/codex-hooks.json" "$TARGET/.codex/hooks.json"
+    say ".codex/hooks.json  (hooks declared — see below)"
+  fi
+
+  if [ ! -f "$TARGET/.claude/cerberus.json" ] && [ ! -f "$TARGET/.codex/cerberus.json" ]; then
+    mkdir -p "$TARGET/.codex"
+    sed 's|Copy to .claude/cerberus.json|Copy to .codex/cerberus.json|; s|".claude/.cerberus-pending"|".codex/.cerberus-pending"|' \
+      "$SRC/cerberus.example.json" > "$TARGET/.codex/cerberus.json"
+    say ".codex/cerberus.json  (edit the verification block to describe this project)"
+  fi
+
+  # The marker is session state on this agent too.
+  if [ ! -f "$TARGET/.gitignore" ] || ! grep -qxF ".codex/.cerberus-pending" "$TARGET/.gitignore"; then
+    if [ -s "$TARGET/.gitignore" ] && [ -n "$(tail -c 1 "$TARGET/.gitignore")" ]; then
+      printf '\n' >> "$TARGET/.gitignore"
+    fi
+    printf '%s\n' ".codex/.cerberus-pending" >> "$TARGET/.gitignore"
+    say ".gitignore  (+ .codex/.cerberus-pending)"
+  fi
+
+  echo
+  echo "One more step, and it is not optional: Codex does not run a project's"
+  echo "hooks until you trust them. Run /hooks in Codex and approve these two."
+  echo "It asks again whenever they change."
+  if [ "$RUN_SETUP" -eq 1 ]; then
+    echo
+    echo "Then set the checks up — --setup does not run for Codex yet:"
+    echo "    python3 .codex/hooks/cerberus_setup.py"
+  fi
 fi
 
 echo

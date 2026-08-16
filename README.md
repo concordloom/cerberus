@@ -43,9 +43,12 @@ Checks I ran here, and will run before anyone says the work is done:
 Tried it: saying the work was done was refused, and it named the edited file
 ```
 
-Codex has no hook mechanism, so the gate is advisory there: followed when the
-skill is invoked, not enforced on every turn. On Claude Code the Stop hook
-makes it mechanical.
+Both enforce it: the same two events, and the same shape of refusal. The
+details differ — Codex will not run a project's hooks until you trust them with
+`/hooks`, and a refused turn there is fed back as a new prompt rather than
+simply ending — so the installer writes a different file and prints a different
+next step. Installing the skill *without* the hooks, on either agent, leaves
+the gate advisory: followed when invoked, not enforced on every turn.
 
 **Or put the files in your own repository** — the skill, the hooks and a
 `cerberus.json` you can commit. Nothing to clone; it detects whether the
