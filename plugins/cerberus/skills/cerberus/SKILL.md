@@ -334,6 +334,38 @@ representation is admissible only when the claim is about that projection, or
 when it has separately been shown not to filter the value in question. A
 truncated allow-list does not prove data is missing upstream.
 
+### Not proven needs an attempt (blocking)
+
+`Not proven` is the honest sentence for a limit you actually hit. It is not a
+place to put things you did not try.
+
+**Every `Not proven` carries the attempt**: the command that was run and what it
+returned. "There is no environment", "the agent has no credentials", "this is a
+property of the model and not of a file" are conclusions. Written without a
+command behind them they are assumptions wearing the clothes of rigour, and the
+reader cannot tell which they are holding.
+
+Before writing one, establish the limit rather than inferring it:
+
+- is the tool actually absent? `command -v` it;
+- is access actually refused? call it and show the refusal;
+- does the environment actually not exist? query for it and show the empty
+  result;
+- **is verification really impossible, or merely unfamiliar?**
+
+That last one is where this rule came from. When verifying means running an
+agent, an agent CLI on the machine **is** the boundary. `claude -p` and its
+equivalents run a real multi-turn session non-interactively; "this depends on
+what an agent does, so it cannot be tested here" is false wherever one is
+installed, and it was written into three verdicts of this repository in a single
+day while `claude` sat on the same machine.
+
+The asymmetry is why this blocks. A `BLOCKER` gets reproduced, argued, and
+either fixed or defended. A `Not proven` gets read once and believed, because it
+looks like the tool being careful. An unearned one is therefore the quietest way
+this whole method fails, and it fails through the clause written to keep it
+honest.
+
 ### Past the boundary
 
 The items below are written for a deployed service because that is the richest
@@ -514,6 +546,8 @@ Treat it as a `BLOCKER` on the configuration and say what is missing.
 - [ ] Cycle: if the work asserts a diagnosis, a mechanism or a property of the
       codebase, did an independent critic try to refute that claim — separately
       from this gate, which examines the work?
+- [ ] Does every `Not proven` carry the command that was run and what it
+      returned, rather than a conclusion about why it could not be?
 - [ ] Stage 0: matrix built (axes × cells), mixed cells enumerated, coverage
       marked per cell (✅/⏳/🧊/❌)?
 - [ ] Stage 0: did *I* generate the cells, rather than the user supplying them?
