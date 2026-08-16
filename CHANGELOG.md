@@ -1,5 +1,12 @@
 # Changelog
 
+# [1.7.0](https://github.com/concordloom/cerberus/compare/v1.6.0...v1.7.0) (2026-08-16)
+
+
+### Features
+
+* refusals are off until a project asks for them ([#32](https://github.com/concordloom/cerberus/issues/32)) ([7f6e8db](https://github.com/concordloom/cerberus/commit/7f6e8db69ddb979c6ffc7d9dc94d674edf6869fe)), closes [#31](https://github.com/concordloom/cerberus/issues/31)
+
 # [1.6.0](https://github.com/concordloom/cerberus/compare/v1.5.0...v1.6.0) (2026-08-16)
 
 
