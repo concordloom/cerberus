@@ -16,33 +16,42 @@ you a change works, it has to seriously try to prove it is broken — and fail.
 
 [Русская версия](README.ru.md) · [The skill itself](plugins/cerberus/skills/cerberus/SKILL.md) ([ru](plugins/cerberus/skills/cerberus/SKILL.ru.md))
 
-## Quick start
+## Install
 
-**Claude Code** — two commands:
+### For yourself
+
+Installs for you, in every project you open. Nothing is written to the repository.
+
+**Claude Code**
 
 ```
 /plugin marketplace add concordloom/cerberus
 /plugin install cerberus@concordloom
 ```
 
-**Codex** — the same two, from the same marketplace:
+**Codex**
 
 ```
 codex plugin marketplace add concordloom/cerberus
 codex plugin add cerberus@concordloom
 ```
 
-**Or put the files in your own repository** — when the skills should belong to
-the whole team and to CI, not only to you: the two routes above install them for
-you, this one puts them in the project where they can be committed. Nothing to
-clone, and safe to re-run:
+Upgrade and remove with the same commands, by name.
+
+### Into the repository
+
+Copies the skills into the project, so the whole team and CI get them from git,
+committed. Removing means deleting the files it wrote.
 
 ```console
 curl -fsSL https://raw.githubusercontent.com/concordloom/cerberus/main/install.sh | sh -s -- --setup
 ```
 
-Either way, ask your agent to set the project up. It works out what your checks
-are by running them, and writes down the ones that pass:
+## Quick start
+
+**1. Ask your agent to set the project up.** It finds your checks, runs them and
+writes down the ones that pass. The output is English — the agent reads it and
+tells you in yours.
 
 ```text
 Set up: Python library — change that if it is wrong.
@@ -51,39 +60,11 @@ Checks I ran here and wrote down:
   ok       pytest -q
 ```
 
-## Now what?
-
-Ask for the cerberus skill when a change deserves it — before a release, after
-a fix you are not sure of, whenever "it works" is about to be said out loud.
-The agent then runs the three stages against your project's own checks and
-comes back with a verdict instead of a claim.
-
-Your agent may also reach for it unasked. The skill's description names the
-words "done" and "it works" as the moment it is for, and an agent that has read
-that will sometimes act on it — Codex did, on a request that mentioned neither
-verification nor cerberus. That is the agent exercising judgement about your
-work, not something this project switched on, and you can tell it not to.
-
-Here is a real one, from a session asked to add a function *and report it done*:
-
-```text
-Stage 0 — matrix: type {int, float, bool, Decimal, complex} x ordering x
-  non-numeric x arity x consumption path. All meaningful cells verified live.
-Stage 1 — compileall green, pytest green.
-Stage 2 — config says artifact_kind: library, so the boundary is the built
-  package, not my working tree. Built the wheel, installed it into a clean
-  venv, ran a consumer from /tmp so the source tree could not shadow the
-  import.
-The oracle can return BROKEN. I mutated the installed file to `return b - a`
-  and re-ran: 3 failures, exit 1. Restored: exit 0.
-```
-
-It read `artifact_kind: library` out of `cerberus.json` and worked out for
-itself that the built wheel was the thing to test, not the working tree. That is
-what the file is for.
-
-The cost is real: that took minutes rather than seconds. Which is exactly why
-deciding *when* it is worth paying is left to you.
+**2. Ask for the cerberus skill before saying a change works.** It runs the three
+stages against those checks and comes back with a verdict instead of a claim,
+which takes minutes rather than seconds. Your agent may also reach for it
+unasked: the skill names "done" and "it works" as the moment it is for, and one
+that has read that sometimes acts on it.
 
 ## What it does to your session
 
