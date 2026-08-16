@@ -1,5 +1,12 @@
 # Changelog
 
+# [2.3.0](https://github.com/concordloom/cerberus/compare/v2.2.1...v2.3.0) (2026-08-16)
+
+
+### Features
+
+* a filled stage2 is not optional, and a pasted draft is not a filled stage2 ([#52](https://github.com/concordloom/cerberus/issues/52)) ([731685f](https://github.com/concordloom/cerberus/commit/731685f3adaa1fc411cb061f1955847d3487cd9c)), closes [#49](https://github.com/concordloom/cerberus/issues/49) [#45](https://github.com/concordloom/cerberus/issues/45) [#47](https://github.com/concordloom/cerberus/issues/47) [#51](https://github.com/concordloom/cerberus/issues/51)
+
 ## [2.2.1](https://github.com/concordloom/cerberus/compare/v2.2.0...v2.2.1) (2026-08-16)
 
 
