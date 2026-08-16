@@ -1,7 +1,7 @@
 ---
 name: cerberus
 description: Adversarial verification before claiming a change works. Use before saying "done", "it works", "deployed and working" or "all green" about anything that executes — backend, runtime, UI, data schema.
-when_to_use: Before any readiness claim about an executable change; on explicit invocation. Nothing invokes this for you — deciding that a change has earned it is part of the work.
+when_to_use: Before any readiness claim about an executable change, whether you were asked for it or reached for it yourself. Deciding a change has earned it is part of the work, and no hook will make that decision.
 ---
 
 # Cerberus — adversarial verification gate

@@ -590,10 +590,16 @@ def test_a_second_run_still_reports_what_is_outstanding():
     assert "Checks it lists" in second, second
 
 
-def test_a_first_run_still_says_nothing_runs_by_itself():
-    """#39, point 4. Fixing the re-run must not silence the install."""
+def test_a_first_run_still_says_what_was_and_was_not_installed():
+    """#39 point 4, reworded by #43.
+
+    It used to promise that nothing would happen, which was false: an agent
+    that reads the skill's description may reach for it unasked, and one did.
+    What is true, and what the reader needs, is that no hook was installed.
+    """
     first, _ = _two_runs(PY_PROJECT)
-    assert "Nothing runs by itself" in first, first
+    assert "No hook was installed" in first, first
+    assert "runs by itself" not in first, f"promising silence again:\n{first}"
 
 
 def test_a_check_the_configuration_already_lists_is_not_offered_back():
@@ -829,7 +835,7 @@ def test_shortening_did_not_drop_any_of_the_facts():
         "which kind": r"\b(cli|library|service|chart|migration|model-boundary|plugin)\b",
         "what was written": r"^  ok ",
         "what failed": r"FAILING",
-        "nothing runs by itself": r"[Nn]othing runs by itself",
+        "what was not installed": r"[Nn]o hook was installed",
         "what is still missing": r"[Ss]till missing",
     }
     absent = [name for name, shape in facts.items() if not re.search(shape, out, re.M)]
@@ -840,7 +846,7 @@ def test_the_closing_message_says_what_it_owes_the_reader():
     root = project(PY_PROJECT)
     _, out = run_setup(root)
     low = out.lower()
-    assert "nothing runs by itself" in low, out
+    assert "no hook was installed" in low, out
     assert "cerberus skill" in low, out
     assert "cerberus.json" in low, out
 
