@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.1](https://github.com/concordloom/cerberus/compare/v2.3.0...v2.3.1) (2026-08-16)
+
+
+### Bug Fixes
+
+* command headers declare what their steps run, and nothing else ([#53](https://github.com/concordloom/cerberus/issues/53)) ([609a0c1](https://github.com/concordloom/cerberus/commit/609a0c11255451a956eb63cc370f24525a430a10)), closes [#6](https://github.com/concordloom/cerberus/issues/6) [#6](https://github.com/concordloom/cerberus/issues/6)
+
 # [2.3.0](https://github.com/concordloom/cerberus/compare/v2.2.1...v2.3.0) (2026-08-16)
 
 
