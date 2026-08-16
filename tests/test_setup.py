@@ -593,6 +593,11 @@ def test_installing_brings_every_skill_and_the_script_beside_its_own():
             assert installed == expected, f"{flag}: installed {installed}, expected {expected}"
             script = root / where / "setup" / "cerberus_setup.py"
             assert script.exists(), f"{flag}: the setup skill describes a script that was not installed"
+            # `cp -R` of a source tree that has been run carries its byte cache,
+            # stamped with this machine's Python version, into the user's repo.
+            junk = [str(p.relative_to(root)) for p in root.rglob("__pycache__")]
+            junk += [str(p.relative_to(root)) for p in root.rglob("*.pyc")]
+            assert not junk, f"{flag}: installed this machine's leftovers: {junk}"
 
 
 def test_installing_leaves_a_config_and_setup_completes_it():

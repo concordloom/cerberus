@@ -56,6 +56,10 @@ copy_skills() {
     name=$(basename "$dir")
     mkdir -p "$1/$name"
     cp -R "$dir." "$1/$name/"
+    # cp -R takes everything, and a source tree that has been run has a
+    # __pycache__ in it. Shipping one puts this machine's byte code, stamped
+    # with its Python version, into somebody else's repository.
+    rm -rf "$1/$name/__pycache__"
     say "${1#"$TARGET/"}/$name/"
   done
 }
