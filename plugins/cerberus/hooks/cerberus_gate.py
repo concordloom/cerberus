@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Stop hook — refuse to end a turn that claims readiness without verification.
 
-Blocks only when BOTH hold:
+Blocks only when ALL of these hold:
 
   1. the marker exists, meaning source code was edited and no READY verdict has
      cleared it, AND
@@ -139,6 +139,8 @@ def main() -> int:
         os.environ.get("CLAUDE_PROJECT_DIR") or data.get("cwd") or os.getcwd()
     )
     cfg = Config.load(root)
+    if not cfg.enforce:
+        return 0  # nobody switched this on
 
     marker = cfg.marker_path()
     if not marker.exists():
@@ -171,6 +173,16 @@ def main() -> int:
             pointer = CONFIG_LINE.format(path=relative)
             break
     reason = REASON + pointer + FILES_HEADER + listed
+    if cfg.enforce_malformed:
+        reason += (
+            '\n\n"enforce" in this project\'s cerberus.json is not true or false. '
+            "It is being treated as asked-for; write a boolean to settle it.\n"
+        )
+    if cfg.unreadable:
+        reason += (
+            "\n\nThis project asked for enforcement, and its cerberus.json "
+            "cannot be parsed. Fix it — the gate is running on defaults.\n"
+        )
 
     # A blocked Stop does not always end the turn: on some agents the reason is
     # fed back as a new prompt and the turn continues, with no documented cap.

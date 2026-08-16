@@ -11,10 +11,10 @@ Run it from the project root:
     python3 .claude/hooks/cerberus_setup.py --check   # run the checks, write nothing
 
 Why it exists: ``install.sh`` copies an example config whose checks are
-``echo`` placeholders. The blocking half of the gate then works — a readiness
-claim is refused — while the checks it tells you to run pass unconditionally.
-Armed and verifying nothing is a worse state than not installed, because it
-looks finished.
+``echo`` placeholders and whose refusals are switched off. So a fresh install
+does nothing at all, and the step that makes it do something has to write real
+checks *and* switch enforcement on. Half of that — armed while verifying
+nothing — is a worse state than either, because it looks finished.
 
 Three rules this follows, in order of how much damage breaking them does:
 
@@ -35,6 +35,7 @@ import argparse
 import json
 import os
 import pathlib
+import re
 import subprocess
 import sys
 
@@ -98,7 +99,7 @@ KIND_SIGNALS = [
 # distinction each produced a defect.
 #
 # tests/test_setup.py asserts these still match the shipped example.
-EXAMPLE_MARKER_COMMENT = 'Copy to .claude/cerberus.json. Safe to use as-is: only the key that has no sensible default is set. Everything else keeps the built-in defaults, so copying this verbatim never narrows the gate by accident.'
+EXAMPLE_MARKER_COMMENT = 'Copy to .claude/cerberus.json. Safe to use as-is: enforce is off, and the only other key set is the one with no sensible default. Everything else keeps the built-in defaults, so copying this verbatim never narrows the gate by accident.'
 EXAMPLE_MARKER_STAGE1 = ["echo 'replace with this project: tests, lint, type check'"]
 
 
@@ -223,6 +224,21 @@ def sort_results(results: list) -> tuple[list, list, list, list]:
     return passing, missing, timed_out, broken
 
 
+def resolve_config(root: pathlib.Path) -> pathlib.Path:
+    """Where this project's configuration is, or should go.
+
+    Whichever exists wins, in the order the hooks search. Failing that, a
+    project that has only a Codex directory gets its config there rather than
+    having a `.claude` invented for it.
+    """
+    for relative in (".claude/cerberus.json", ".codex/cerberus.json"):
+        if (root / relative).exists():
+            return root / relative
+    if (root / ".codex").is_dir() and not (root / ".claude").is_dir():
+        return root / ".codex" / "cerberus.json"
+    return root / ".claude" / "cerberus.json"
+
+
 def is_the_installers_copy(existing: dict) -> bool:
     """Is this file still exactly what install.sh put there?
 
@@ -233,8 +249,13 @@ def is_the_installers_copy(existing: dict) -> bool:
     distinction is not recorded in the file, so only the exactly-known case is
     claimed and everything else is left untouched.
     """
+    # The installer rewrites the path inside that comment for a Codex install,
+    # so comparing it byte for byte stopped recognising the installer's own
+    # copy — and every `--codex` project was then treated as hand-configured
+    # and left with placeholder checks and no enforcement.
+    comment = str(existing.get("//") or "").replace(".codex/", ".claude/")
     return (
-        existing.get("//") == EXAMPLE_MARKER_COMMENT
+        comment == EXAMPLE_MARKER_COMMENT.replace(".codex/", ".claude/")
         and existing.get("verification", {}).get("stage1") == EXAMPLE_MARKER_STAGE1
     )
 
@@ -251,7 +272,7 @@ def write_config(
     Replacing the whole document is how a hand-tuned gate got deleted: the keys
     this script must never write are also keys it must never remove.
     """
-    path = root / ".claude" / "cerberus.json"
+    path = resolve_config(root)
     body = dict(existing) if isinstance(existing, dict) else {}
     body["//"] = "Every command in stage1 was run once, in this project, before being written here."
     prior = body.get("verification")
@@ -263,6 +284,9 @@ def write_config(
     # Reached only for an absent config or the installer's own copy, so these
     # are never anybody's choice.
     verification["artifact_kind"] = kind
+    # Setup exists to end by showing a refusal, and there is nothing to show
+    # while enforcement is off. Running it *is* the asking.
+    body["enforce"] = True
     verification["stage1"] = checks
     # Left empty on purpose: a comment line in a list of commands exits 0
     # unconditionally, which is the placeholder this script exists to remove.
@@ -294,7 +318,11 @@ def demonstrate(root: pathlib.Path) -> tuple[bool, str]:
         return False, "the two scripts are missing, so nothing could be shown"
 
     scratch = "cerberus_setup_probe.py"
-    transcript = root / ".claude" / "cerberus_setup_probe.jsonl"
+    # Beside whichever config this project has: a Codex project keeps its state
+    # in .codex, and looking for the marker under .claude made the
+    # demonstration report that an edit "did not register".
+    agent_dir = resolve_config(root).parent
+    transcript = agent_dir / "cerberus_setup_probe.jsonl"
     transcript.parent.mkdir(parents=True, exist_ok=True)
     transcript.write_text(
         json.dumps({"role": "assistant", "message": {"content": "all done, it works"}}) + "\n",
@@ -302,7 +330,7 @@ def demonstrate(root: pathlib.Path) -> tuple[bool, str]:
     )
 
     env = {**os.environ, "CLAUDE_PROJECT_DIR": str(root)}
-    marker = root / ".claude" / ".cerberus-pending"
+    marker = agent_dir / ".cerberus-pending"
     had_marker = marker.exists()
     # Read as bytes and inside the try: a path the mark hook recorded may not be
     # valid UTF-8, and decoding it out here escaped the cleanup entirely — a
@@ -350,6 +378,11 @@ def demonstrate(root: pathlib.Path) -> tuple[bool, str]:
             marker.unlink()
 
 
+#: `$(git rev-parse --show-toplevel …)` and friends: a subshell standing in for
+#: the project root, which is what the Codex wiring uses.
+PROJECT_ROOT_SUBSHELL = re.compile(r"\$\((?:[^()]|\([^()]*\))*\)")
+
+
 def _hooked(data: dict, event: str, script: str, root: pathlib.Path) -> bool:
     """Does this settings document actually run `script` on `event`?
 
@@ -391,6 +424,11 @@ def _hooked(data: dict, event: str, script: str, root: pathlib.Path) -> bool:
             bare = cmd.replace('"', "").replace("'", "")
             bare = bare.replace("${CLAUDE_PROJECT_DIR}", str(root))
             bare = bare.replace("$CLAUDE_PROJECT_DIR", str(root))
+            # The Codex wiring resolves the project root with a command
+            # substitution rather than a variable, and this check has to read
+            # it the same way or it reports the installer's own file as wiring
+            # nothing.
+            bare = PROJECT_ROOT_SUBSHELL.sub(str(root), bare)
             # No single extraction rule survives every shape this takes:
             # splitting on whitespace loses paths containing a space, and
             # anchoring on the project path latches onto the argument of a
@@ -458,25 +496,29 @@ def wiring(root: pathlib.Path) -> tuple[bool, str]:
             pass
 
     found = []
-    for name in ("settings.json", "settings.local.json"):
-        path = root / ".claude" / name
+    # `.codex/hooks.json` first, because a Codex project has no settings.json at
+    # all and reporting "this project has no .claude/settings.json" to one was
+    # both useless and wrong.
+    for relative in (".codex/hooks.json", ".claude/settings.json", ".claude/settings.local.json"):
+        name = relative
+        path = root / relative
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except FileNotFoundError:
             continue
         except Exception:
-            return False, f"the .claude/{name} here is not valid JSON"
+            return False, f"the {name} here is not valid JSON"
         if not isinstance(data, dict):
             continue
         found.append(name)
         if _hooked(data, "PostToolUse", "cerberus_mark.py", root) and _hooked(
             data, "Stop", "cerberus_gate.py", root
         ):
-            return True, f".claude/{name} runs both of them"
+            return True, f"{name} runs both of them"
 
     if not found:
-        return False, "this project has no .claude/settings.json"
-    return False, f"nothing in .claude/{found[0]} runs both of them"
+        return False, "this project names no hooks anywhere"
+    return False, f"nothing in {found[0]} runs both of them"
 
 
 def report_state(root: pathlib.Path, kind: str = "library", failing: bool = False) -> int:
@@ -485,7 +527,22 @@ def report_state(root: pathlib.Path, kind: str = "library", failing: bool = Fals
     Shared by the fresh path and the already-configured one, because skipping
     it on a re-run answered "is it on?" without looking.
     """
-    config = root / ".claude" / "cerberus.json"
+    config = resolve_config(root)
+
+    # Nothing to show on a project that has not asked for enforcement, and
+    # switching it on for them would be exactly the thing this default exists
+    # to stop.
+    sys.path.insert(0, str(HERE))
+    from cerberus_config import Config
+
+    if not Config.load(root).enforce:
+        print("Refusals are switched off here, so there is nothing to show.")
+        print("The skills are yours to invoke by name. To have a readiness")
+        print("claim refused while an edited file is unverified, set")
+        print('  "enforce": true')
+        print(f"in {config.name}.")
+        return 0
+
     worked, detail = demonstrate(root)
     print("Tried it:", detail)
     if not worked:
@@ -500,7 +557,9 @@ def report_state(root: pathlib.Path, kind: str = "library", failing: bool = Fals
         # the wiring is genuinely missing. No scripts here means they come from
         # somewhere else — a plugin — which cannot be seen from inside the
         # project, so it is named rather than assumed or denied.
-        copied_here = (root / ".claude" / "hooks" / "cerberus_mark.py").exists()
+        copied_here = any(
+            (root / d / "hooks" / "cerberus_mark.py").exists() for d in (".claude", ".codex")
+        )
         print()
         if copied_here:
             print(f"But nothing here is calling it: {why}.")
@@ -518,7 +577,8 @@ def report_state(root: pathlib.Path, kind: str = "library", failing: bool = Fals
 
     print()
     print("From now on, when the work is claimed to be done and code has changed,")
-    print("that claim is refused until the checks above have been run.")
+    print("that claim is refused until the checks above have been run. Running")
+    print("this is what switched that on; \"enforce\": false turns it back off.")
     if failing:
         print("Your own tests are failing right now — that is worth a look first.")
     try:
@@ -544,7 +604,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     root = pathlib.Path(args.dir).resolve()
-    config = root / ".claude" / "cerberus.json"
+    # Whichever the project has. Looking only at .claude meant a Codex project
+    # that had deliberately set `enforce: false` got a second config written
+    # beside it — and since .claude wins the search order, its opt-out, its
+    # narrowed claim_patterns and its own checks were all shadowed.
+    config = resolve_config(root)
 
     runners, kind = detect(root)
 

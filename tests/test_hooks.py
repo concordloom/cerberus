@@ -24,6 +24,18 @@ sys.path.insert(0, str(HOOKS))
 from cerberus_config import Config  # noqa: E402
 
 
+def enforcing(tmp: pathlib.Path) -> pathlib.Path:
+    """Switch enforcement on for a fixture.
+
+    Enforcement is off until a project asks. Every test that expects the gate
+    to do anything has to ask first, which is the point — and this helper is
+    what makes the default visible in the suite rather than assumed away.
+    """
+    (tmp / ".claude").mkdir(exist_ok=True)
+    (tmp / ".claude" / "cerberus.json").write_text('{"enforce": true}', encoding="utf-8")
+    return tmp
+
+
 def run_hook(script: str, payload: dict) -> tuple[int, str]:
     # CLAUDE_PROJECT_DIR is read by the hooks in preference to the payload's
     # cwd, so an inherited one makes every fixture below address the real
@@ -51,6 +63,7 @@ def test_an_inherited_project_dir_does_not_leak_into_a_fixture():
     # fixture, and must leave the other project untouched.
     with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as other:
         tmp, elsewhere = pathlib.Path(d), pathlib.Path(other)
+        enforcing(tmp)
         env = {**os.environ, "CLAUDE_PROJECT_DIR": str(elsewhere)}
         subprocess.run(
             [sys.executable, str(HOOKS / "cerberus_mark.py")],
@@ -80,6 +93,7 @@ def transcript(tmp: pathlib.Path, text: str) -> str:
 def test_marks_source_file():
     with tempfile.TemporaryDirectory() as d:
         tmp = pathlib.Path(d)
+        enforcing(tmp)
         rc, _ = run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/service.py"}})
         assert rc == 0
         marker = tmp / ".claude" / ".cerberus-pending"
@@ -99,6 +113,7 @@ def test_does_not_mark_tests_docs_or_agent_config():
     ):
         with tempfile.TemporaryDirectory() as d:
             tmp = pathlib.Path(d)
+            enforcing(tmp)
             run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": path}})
             assert not (tmp / ".claude" / ".cerberus-pending").exists(), path
 
@@ -118,6 +133,7 @@ def test_does_not_mark_files_outside_the_project():
     # all cannot pass this.
     with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as elsewhere:
         tmp = pathlib.Path(d)
+        enforcing(tmp)
         marker = tmp / ".claude" / ".cerberus-pending"
 
         run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/service.py"}})
@@ -160,6 +176,7 @@ def test_a_symlinked_package_inside_the_project_still_marks():
         (root / "packages" / "foo").symlink_to(shared)
 
         cfg = Config(root)
+        cfg.enforce = True
         assert cfg.is_source_file(str(root / "packages" / "foo" / "x.py"))
         assert cfg.is_source_file("packages/foo/x.py")
 
@@ -185,6 +202,7 @@ def test_marks_an_absolute_path_inside_the_project():
     # easy way to pass the test above while disabling the gate entirely.
     with tempfile.TemporaryDirectory() as d:
         tmp = pathlib.Path(d)
+        enforcing(tmp)
         inside = tmp / "app" / "service.py"
         run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": str(inside)}})
         marker = tmp / ".claude" / ".cerberus-pending"
@@ -195,10 +213,115 @@ def test_marks_an_absolute_path_inside_the_project():
 def test_marker_accumulates_without_duplicating():
     with tempfile.TemporaryDirectory() as d:
         tmp = pathlib.Path(d)
+        enforcing(tmp)
         for path in ("app/a.py", "app/b.py", "app/a.py"):
             run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": path}})
         lines = (tmp / ".claude" / ".cerberus-pending").read_text(encoding="utf-8").split()
         assert sorted(lines) == ["app/a.py", "app/b.py"]
+
+
+def test_nothing_happens_until_a_project_asks():
+    # The default. A tool nobody switched on records nothing and refuses
+    # nothing — no marker, no output, no trace in the project.
+    for config in (None, '{"verification": {"stage1": ["true"]}}', '{"enforce": false}'):
+        with tempfile.TemporaryDirectory() as d:
+            tmp = pathlib.Path(d)
+            (tmp / ".claude").mkdir()
+            if config:
+                (tmp / ".claude" / "cerberus.json").write_text(config, encoding="utf-8")
+            run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/x.py"}})
+            assert not (tmp / ".claude" / ".cerberus-pending").exists(), config
+            _, out = run_hook("cerberus_gate.py", {
+                "cwd": str(tmp), "last_assistant_message": "done, it works"})
+            assert out == "", config
+
+
+def test_switching_it_off_silences_a_marker_that_already_exists():
+    # The guard in the gate had no test at all: every "it stays silent" case
+    # also had no marker, so deleting the guard outright left 123 tests green.
+    # This is the state that distinguishes them — and it is the exact thing the
+    # opt-out exists for: it kept firing, so you turned it off.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = pathlib.Path(d)
+        enforcing(tmp)
+        run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/x.py"}})
+        assert (tmp / ".claude" / ".cerberus-pending").exists(), "setup for the test failed"
+
+        (tmp / ".claude" / "cerberus.json").write_text('{"enforce": false}', encoding="utf-8")
+        _, out = run_hook("cerberus_gate.py", {
+            "cwd": str(tmp), "last_assistant_message": "done, it works"})
+        assert out == "", "it kept refusing after being switched off:\n" + out
+
+
+def test_a_config_of_the_wrong_shape_keeps_enforcing():
+    # Every one of these is valid JSON and none is an object. The falsy ones
+    # were swallowed into defaults — which under an opt-in default means the
+    # gate switches off — and the truthy ones crashed both hooks and failed
+    # open.
+    for raw in ("null", "false", "0", "[]", '""', '[{"enforce": true}]', '"a string"', "1"):
+        with tempfile.TemporaryDirectory() as d:
+            tmp = pathlib.Path(d)
+            (tmp / ".claude").mkdir()
+            (tmp / ".claude" / "cerberus.json").write_text(raw, encoding="utf-8")
+            rc, _ = run_hook("cerberus_mark.py", {
+                "cwd": str(tmp), "tool_input": {"file_path": "app/x.py"}})
+            assert rc == 0, f"{raw}: the hook crashed"
+            assert (tmp / ".claude" / ".cerberus-pending").exists(), raw
+            rc, out = run_hook("cerberus_gate.py", {
+                "cwd": str(tmp), "last_assistant_message": "done, it works"})
+            assert rc == 0, f"{raw}: the gate crashed and failed open"
+            assert out, f"{raw}: a broken config switched the gate off"
+            assert json.loads(out)["decision"] == "block", raw
+
+
+def test_a_non_boolean_enforce_is_read_as_asking_and_says_so():
+    """`"true"`, `1` and `"yes"` are somebody asking, not somebody declining.
+
+    `bool()` made `"false"` read as on while `null` and `0` read as off — wrong
+    in both directions. Falling back to the default instead switched the gate
+    off on the commonest typo for a boolean key, which is the same defect as a
+    broken file one level down. Anything that is not a boolean is treated as
+    asked-for, and the refusal says why.
+    """
+    for raw in ('{"enforce": "true"}', '{"enforce": 1}', '{"enforce": "yes"}',
+                '{"enforce": "false"}', '{"enforce": null}'):
+        with tempfile.TemporaryDirectory() as d:
+            tmp = pathlib.Path(d)
+            (tmp / ".claude").mkdir()
+            (tmp / ".claude" / "cerberus.json").write_text(raw, encoding="utf-8")
+            run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/x.py"}})
+            _, out = run_hook("cerberus_gate.py", {
+                "cwd": str(tmp), "last_assistant_message": "done, it works"})
+            assert out, f"{raw}: a typo switched the gate off"
+            payload = json.loads(out)
+            assert payload["decision"] == "block", raw
+            assert "not true or false" in payload["reason"], raw
+
+    for raw, expected in (('{"enforce": true}', True), ('{"enforce": false}', False)):
+        with tempfile.TemporaryDirectory() as d:
+            tmp = pathlib.Path(d)
+            (tmp / ".claude").mkdir()
+            (tmp / ".claude" / "cerberus.json").write_text(raw, encoding="utf-8")
+            assert Config.load(tmp).enforce is expected, raw
+
+
+def test_a_broken_config_keeps_enforcing_rather_than_switching_off():
+    # The decisive cell. Under an opt-in default, "fall back to defaults" would
+    # mean silent — so a typo in the file would switch the gate off, which is
+    # the same defect the default exists to avoid, wearing opposite clothes. A
+    # file that exists means somebody configured something.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = pathlib.Path(d)
+        (tmp / ".claude").mkdir()
+        (tmp / ".claude" / "cerberus.json").write_text("{ broken", encoding="utf-8")
+        run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/x.py"}})
+        assert (tmp / ".claude" / ".cerberus-pending").exists()
+        _, out = run_hook("cerberus_gate.py", {
+            "cwd": str(tmp), "last_assistant_message": "done, it works"})
+        assert out, "a typo switched the gate off"
+        payload = json.loads(out)
+        assert payload["decision"] == "block"
+        assert "cannot be parsed" in payload["reason"], payload["reason"]
 
 
 # ------------------------------------------------------------- other agents
@@ -210,6 +333,7 @@ def test_a_codex_edit_is_recorded():
     # Unverified against a real Codex session — see #27.
     with tempfile.TemporaryDirectory() as d:
         tmp = pathlib.Path(d)
+        enforcing(tmp)
         (tmp / "app").mkdir()
         (tmp / "app" / "service.py").write_text("x = 1\n", encoding="utf-8")
         run_hook("cerberus_mark.py", {
@@ -228,6 +352,7 @@ def test_running_a_file_is_not_editing_it():
     # did, so extraction is gated on the tool name.
     with tempfile.TemporaryDirectory() as d:
         tmp = pathlib.Path(d)
+        enforcing(tmp)
         (tmp / "app").mkdir()
         (tmp / "app" / "service.py").write_text("x = 1\n", encoding="utf-8")
         run_hook("cerberus_mark.py", {
@@ -241,6 +366,7 @@ def test_running_a_file_is_not_editing_it():
 def test_a_path_that_is_only_prose_is_not_recorded():
     with tempfile.TemporaryDirectory() as d:
         tmp = pathlib.Path(d)
+        enforcing(tmp)
         run_hook("cerberus_mark.py", {
             "cwd": str(tmp),
             "tool_name": "apply_patch",
@@ -253,6 +379,7 @@ def test_the_claim_can_come_from_the_payload():
     # Codex hands the Stop hook `last_assistant_message`; Claude Code does not.
     with tempfile.TemporaryDirectory() as d:
         tmp = pathlib.Path(d)
+        enforcing(tmp)
         run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/x.py"}})
         _, out = run_hook("cerberus_gate.py", {
             "cwd": str(tmp),
@@ -273,6 +400,7 @@ def test_it_refuses_a_few_times_and_then_stops_asking():
     # few attempts ends the turn instead of asking again.
     with tempfile.TemporaryDirectory() as d:
         tmp = pathlib.Path(d)
+        enforcing(tmp)
         run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/x.py"}})
         seen = []
         for _ in range(8):
@@ -295,6 +423,7 @@ def test_the_first_turn_blocks_even_though_the_flag_is_present():
     # rest of this file stays green.
     with tempfile.TemporaryDirectory() as d:
         tmp = pathlib.Path(d)
+        enforcing(tmp)
         run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/x.py"}})
         _, out = run_hook("cerberus_gate.py", {
             "cwd": str(tmp),
@@ -312,6 +441,7 @@ def test_a_patch_that_only_mentions_a_file_does_not_arm_the_gate():
     # file that was merely run.
     with tempfile.TemporaryDirectory() as d:
         tmp = pathlib.Path(d)
+        enforcing(tmp)
         (tmp / "app").mkdir()
         (tmp / "app" / "service.py").write_text("x = 1\n", encoding="utf-8")
         run_hook("cerberus_mark.py", {
@@ -325,6 +455,7 @@ def test_a_patch_that_only_mentions_a_file_does_not_arm_the_gate():
 def test_reading_a_file_does_not_arm_the_gate():
     with tempfile.TemporaryDirectory() as d:
         tmp = pathlib.Path(d)
+        enforcing(tmp)
         run_hook("cerberus_mark.py", {
             "cwd": str(tmp),
             "tool_name": "mcp__filesystem__read_file",
@@ -339,6 +470,7 @@ def test_a_header_quoted_inside_a_patch_body_is_not_a_header():
     # header text at all, so neither could see it.
     with tempfile.TemporaryDirectory() as d:
         tmp = pathlib.Path(d)
+        enforcing(tmp)
         body = (
             "*** Add File: app/examples.py\n"
             "+SAMPLE = \"\"\"\n"
@@ -360,6 +492,7 @@ def test_an_mcp_editor_sending_path_is_recorded():
     for tool in ("mcp__filesystem__write_file", "mcp__jetbrains__replace_text_in_file"):
         with tempfile.TemporaryDirectory() as d:
             tmp = pathlib.Path(d)
+            enforcing(tmp)
             run_hook("cerberus_mark.py", {
                 "cwd": str(tmp), "tool_name": tool,
                 "tool_input": {"path": "app/service.py"},
@@ -377,6 +510,7 @@ def test_read_only_tools_are_excluded_by_more_than_two_names():
                  "mcp__repo__search_files", "view_image"):
         with tempfile.TemporaryDirectory() as d:
             tmp = pathlib.Path(d)
+            enforcing(tmp)
             run_hook("cerberus_mark.py", {
                 "cwd": str(tmp), "tool_name": tool,
                 "tool_input": {"path": "app/service.py", "command": "python3 app/service.py"},
@@ -390,6 +524,7 @@ def test_the_final_refusal_still_names_the_files():
     # Naming the file is the README's headline demonstration.
     with tempfile.TemporaryDirectory() as d:
         tmp = pathlib.Path(d)
+        enforcing(tmp)
         run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/payments.py"}})
         payload = {}
         for _ in range(6):
@@ -411,6 +546,7 @@ def test_another_hooks_continuation_does_not_end_our_first_refusal():
     # continuation it needs to go and verify.
     with tempfile.TemporaryDirectory() as d:
         tmp = pathlib.Path(d)
+        enforcing(tmp)
         run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/x.py"}})
         _, out = run_hook("cerberus_gate.py", {
             "cwd": str(tmp),
@@ -426,6 +562,7 @@ def test_a_delete_and_a_rename_are_both_recorded():
     # matter: one stopped existing, the other did not exist before.
     with tempfile.TemporaryDirectory() as d:
         tmp = pathlib.Path(d)
+        enforcing(tmp)
         run_hook("cerberus_mark.py", {
             "cwd": str(tmp), "tool_name": "apply_patch",
             "tool_input": {"command": "*** Delete File: app/gone.py\n"},
@@ -444,6 +581,7 @@ def test_a_codex_project_keeps_its_state_in_codex():
     with tempfile.TemporaryDirectory() as d:
         tmp = pathlib.Path(d)
         (tmp / ".codex").mkdir()
+        (tmp / ".codex" / "cerberus.json").write_text('{"enforce": true}', encoding="utf-8")
         (tmp / "app").mkdir()
         run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/x.py"}})
         assert (tmp / ".codex" / ".cerberus-pending").exists(), "state went somewhere else"
@@ -456,6 +594,7 @@ def test_a_codex_project_keeps_its_state_in_codex():
 def test_gate_is_silent_without_a_marker():
     with tempfile.TemporaryDirectory() as d:
         tmp = pathlib.Path(d)
+        enforcing(tmp)
         rc, out = run_hook(
             "cerberus_gate.py",
             {"cwd": str(tmp), "transcript_path": transcript(tmp, "it works, all green")},
@@ -468,6 +607,7 @@ def test_gate_does_not_block_ongoing_work():
     # gets switched off, and a gate that is off protects nothing.
     with tempfile.TemporaryDirectory() as d:
         tmp = pathlib.Path(d)
+        enforcing(tmp)
         run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/service.py"}})
         rc, out = run_hook(
             "cerberus_gate.py",
@@ -484,6 +624,7 @@ def test_gate_does_not_block_ongoing_work():
 def test_gate_blocks_a_readiness_claim():
     with tempfile.TemporaryDirectory() as d:
         tmp = pathlib.Path(d)
+        enforcing(tmp)
         run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/service.py"}})
         rc, out = run_hook(
             "cerberus_gate.py",
@@ -497,6 +638,7 @@ def test_gate_blocks_a_readiness_claim():
 def test_gate_blocks_the_russian_claim_too():
     with tempfile.TemporaryDirectory() as d:
         tmp = pathlib.Path(d)
+        enforcing(tmp)
         run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/service.py"}})
         _, out = run_hook(
             "cerberus_gate.py",
@@ -508,6 +650,7 @@ def test_gate_blocks_the_russian_claim_too():
 def test_clearing_the_marker_lets_the_claim_through():
     with tempfile.TemporaryDirectory() as d:
         tmp = pathlib.Path(d)
+        enforcing(tmp)
         run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/service.py"}})
         (tmp / ".claude" / ".cerberus-pending").unlink()
         rc, out = run_hook(

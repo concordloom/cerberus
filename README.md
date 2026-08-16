@@ -113,6 +113,10 @@ Unverified files:
   - app/service.py
 ```
 
+This is what happens once refusals are switched on — see
+[the one thing to configure](#the-one-thing-to-configure). Until then the hooks
+are installed and quiet.
+
 **3.** The note comes off on a `READY` verdict, and only that: both stages run
 and no blocker left. `NOT READY` leaves it exactly where it was. Nothing
 prevents the agent deleting the file instead — this is a speed bump against
@@ -174,8 +178,8 @@ reads this. It is a note your agent reads and acts on: `stage1` is the commands
 it runs locally, `stage2` is what it has to reach past your delivery boundary.
 Getting it wrong costs an agent some wasted work.
 
-**Everything else** — `claim_patterns`, `ignore_patterns`, `source_extensions`,
-`watch_paths`, `marker`. The hooks read these on every run, and they ship
+**Everything else** — `enforce`, `claim_patterns`, `ignore_patterns`,
+`source_extensions`, `watch_paths`, `marker`. The hooks read these on every run, and they ship
 commented out with a `//` in front. Getting one wrong makes the gate quietly
 weaker than you think it is. That asymmetry is why setup writes the first half
 and never the second.
@@ -198,7 +202,8 @@ instead:
 - **it is holding a note you have dealt with** — the file is
   `.claude/.cerberus-pending`, one path per line, and it survives across
   sessions;
-- **you want it off** — depends how you installed it. Plugin:
+- **you want it off** — `"enforce": false`, and it goes quiet without being
+  uninstalled. To remove it entirely, that depends how you installed it. Plugin:
   `/plugin uninstall cerberus@concordloom`, and nothing is left in your
   project. Installer: delete the two entries from `.claude/settings.json`. On
   Codex there is nothing to switch off, because there is nothing running — the
@@ -219,8 +224,14 @@ The third, `setup`, is the install step from the quick start — it works out
 what your checks are by running them, writes them down, and shows you the gate
 refusing something. Run it again any time with
 `python3 .claude/hooks/cerberus_setup.py`, or ask the agent for it by name.
-Everything it cannot verify has a working default: a gate that stays inert
-until someone configures it is indistinguishable from no gate at all.
+Everything it cannot verify has a working default — including refusals,
+which are **off** until you ask. Installing changes nothing about your
+sessions; the skills are there to invoke by name. `setup` switches
+enforcement on, or add `"enforce": true` yourself.
+
+That is a deliberate reversal. Against it: a gate nobody switches on
+protects nothing. For it: a gate refusing on ordinary words does not get
+tuned, it gets uninstalled — and then it protects even less.
 
 ## Why
 

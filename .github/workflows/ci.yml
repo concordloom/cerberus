@@ -208,7 +208,45 @@ jobs:
           print("installer is idempotent")
           PY
 
-          # And the installed gate must actually block an over-claim.
+          # Refusals ship off, so a fresh install must be silent...
+          echo '{"cwd":"/tmp/proj","tool_input":{"file_path":"app/x.py"}}' \
+            | python3 .claude/hooks/cerberus_mark.py
+          test ! -f /tmp/proj/.claude/.cerberus-pending
+          printf '%s\n' '{"role":"assistant","message":{"content":"done, it works"}}' > /tmp/t0.jsonl
+          test -z "$(echo '{"cwd":"/tmp/proj","transcript_path":"/tmp/t0.jsonl"}' \
+            | python3 .claude/hooks/cerberus_gate.py)"
+          echo "a fresh install does not interrupt anything"
+
+          # Both silent cases above are taken with enforcement OFF, which cannot
+          # tell a gate that never fires from one that always does. So the
+          # silent direction is taken again with it ON: a turn that claims
+          # nothing must end freely.
+          python3 - <<'PY'
+          import json, pathlib
+          p = pathlib.Path("/tmp/proj/.claude/cerberus.json")
+          d = json.loads(p.read_text(encoding="utf-8"))
+          d["enforce"] = True
+          p.write_text(json.dumps(d, indent=2) + "\n", encoding="utf-8")
+          PY
+          echo '{"cwd":"/tmp/proj","tool_input":{"file_path":"app/y.py"}}' \
+            | python3 .claude/hooks/cerberus_mark.py
+          printf '%s\n' '{"role":"assistant","message":{"content":"still working on it"}}' > /tmp/t1.jsonl
+          test -z "$(echo '{"cwd":"/tmp/proj","transcript_path":"/tmp/t1.jsonl"}' \
+            | python3 .claude/hooks/cerberus_gate.py)"
+          rm -f /tmp/proj/.claude/.cerberus-pending
+          printf '%s\n' '{"role":"assistant","message":{"content":"done, it works"}}' > /tmp/t2.jsonl
+          test -z "$(echo '{"cwd":"/tmp/proj","transcript_path":"/tmp/t2.jsonl"}' \
+            | python3 .claude/hooks/cerberus_gate.py)"
+          echo "an enforcing gate still lets ordinary turns end"
+
+          # ...and must refuse once the project asks.
+          python3 - <<'PY'
+          import json, pathlib
+          p = pathlib.Path("/tmp/proj/.claude/cerberus.json")
+          d = json.loads(p.read_text(encoding="utf-8"))
+          d["enforce"] = True
+          p.write_text(json.dumps(d, indent=2) + "\n", encoding="utf-8")
+          PY
           echo '{"cwd":"/tmp/proj","tool_input":{"file_path":"app/x.py"}}' \
             | python3 .claude/hooks/cerberus_mark.py
           printf '%s\n' '{"role":"assistant","message":{"content":"done, it works"}}' > /tmp/t.jsonl

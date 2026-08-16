@@ -128,6 +128,11 @@ def record(file_path: str, data: dict) -> None:
         os.environ.get("CLAUDE_PROJECT_DIR") or data.get("cwd") or os.getcwd()
     )
     cfg = Config.load(root)
+    if not cfg.enforce:
+        # Not switched on. A tool nobody asked for should leave no trace, and
+        # the first refusal after switching on can start from a clean slate.
+        return 0
+
 
     if not cfg.is_source_file(file_path):
         return

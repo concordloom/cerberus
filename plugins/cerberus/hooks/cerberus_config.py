@@ -2,10 +2,10 @@
 """Shared configuration for the cerberus hooks.
 
 Both hooks read the same optional config file so that a project can describe
-its own layout without editing the hook scripts. Everything has a default: a
-gate that requires configuration before it does anything would be silently
-inert in every project that forgot to configure it, which is the exact failure
-this gate exists to prevent.
+its own layout without editing the hook scripts. Everything has a default —
+including `enforce`, which is off, so a project that never asked is never
+interrupted. That is a deliberate trade and the argument on both sides is at
+``ENFORCE_DEFAULT`` below.
 
 Config file, searched relative to the project root:
 
@@ -34,6 +34,16 @@ import pathlib
 import re
 
 MARKER_DEFAULT = ".claude/.cerberus-pending"
+
+#: Enforcement is off until a project asks for it. The hooks are installed and
+#: silent: nothing is recorded, nothing is refused, and the skills are there to
+#: invoke by name.
+#:
+#: This reverses an argument this project used to make — that a gate which stays
+#: inert until configured is indistinguishable from no gate. The counter-evidence
+#: is that a gate firing on ordinary words five times an hour does not get tuned,
+#: it gets uninstalled, and then it is worth even less than an advisory one.
+ENFORCE_DEFAULT = False
 
 # "C:/x/y.py" after _norm. Without this it reads as a relative path.
 DRIVE_LETTER = re.compile(r"^[A-Za-z]:/")
@@ -96,6 +106,24 @@ class Config:
         ]
         self.claim_patterns = raw.get("claim_patterns", CLAIM_PATTERNS_DEFAULT)
         self.marker = raw.get("marker", MARKER_DEFAULT)
+        # Not `bool()`: `"false"` is a truthy string and the commonest typo for
+        # this key, and it would have read as on. Only a real boolean counts;
+        # anything else falls back to the default rather than guessing.
+        declared = raw.get("enforce", ENFORCE_DEFAULT)
+        malformed = "enforce" in raw and not isinstance(declared, bool)
+        # `"true"`, `1` and `"yes"` are somebody asking for enforcement, not
+        # somebody declining it. Falling back to the default there switched the
+        # gate off on the commonest typo for a boolean key — the same defect as
+        # a broken file, one level down. Treat it as asked-for, and say why.
+        self.enforce = True if malformed else (
+            declared if isinstance(declared, bool) else ENFORCE_DEFAULT
+        )
+        self.enforce_malformed = malformed
+        #: Set when the config could not be parsed. A project that asked for
+        #: enforcement and then broke its config must keep being refused —
+        #: falling back to "off" would let a typo switch the gate off, which is
+        #: the defect this default otherwise avoids, wearing opposite clothes.
+        self.unreadable = False
 
     @staticmethod
     def _norm(p: str) -> str:
@@ -114,10 +142,30 @@ class Config:
             except FileNotFoundError:
                 continue
             except Exception:
-                # A malformed config must not disable the gate: falling back to
-                # defaults keeps it loud, whereas returning early would make a
-                # typo silently switch verification off.
-                return cls(root)
+                # Somebody configured something here, so this is not a project
+                # that never asked. Enforce on defaults and say the file cannot
+                # be read — falling back to "off" would let a typo switch the
+                # gate off, which is the defect the opt-in default otherwise
+                # avoids, wearing the opposite clothes.
+                broken = cls(root)
+                broken.enforce = True
+                broken.unreadable = True
+                if relative.startswith(".codex"):
+                    broken.marker = ".codex/.cerberus-pending"
+                return broken
+            if not isinstance(raw, dict):
+                # Valid JSON, wrong shape — `null`, `false`, `0`, `[]`, `""` and
+                # `[{...}]` all reach here. `raw or {}` used to swallow the
+                # falsy ones into defaults, which under an opt-in default means
+                # the gate quietly switches off; the truthy ones crashed both
+                # hooks with an AttributeError and failed open. The file exists,
+                # so this is a configured project with a broken file.
+                broken = cls(root)
+                broken.enforce = True
+                broken.unreadable = True
+                if relative.startswith(".codex"):
+                    broken.marker = ".codex/.cerberus-pending"
+                return broken
             cfg = cls(root, raw)
             if relative.startswith(".codex") and "marker" not in raw:
                 # The marker belongs beside the config that declared it, or a

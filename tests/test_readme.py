@@ -266,6 +266,20 @@ def test_every_kind_on_the_page_has_advice_in_the_code():
     assert not missing, f"documented kinds with no advice: {missing}"
 
 
+def test_the_page_says_refusals_are_off_until_asked():
+    # The default changed and two sentences shipped that day became false. This
+    # fails if the page ever goes back to promising a refusal out of the box.
+    for path, phrases in ((README, ("off", "enforce")), (README_RU, ("выключен", "enforce"))):
+        text = path.read_text(encoding="utf-8").lower()
+        for phrase in phrases:
+            assert phrase in text, f"{path.name}: {phrase!r}"
+    for path, dead in (
+        (README, "indistinguishable from no gate"),
+        (README_RU, "неотличим от"),
+    ):
+        assert dead not in path.read_text(encoding="utf-8"), path.name
+
+
 def test_the_page_says_how_to_switch_it_off():
     # tests/test_setup.py already demands this of the setup output. The front
     # door — where someone decides whether to install a thing that intercepts
@@ -290,6 +304,8 @@ def test_the_quoted_refusal_is_what_the_hook_really_prints():
     with tempfile.TemporaryDirectory() as d:
         root = pathlib.Path(d)
         (root / ".claude").mkdir()
+        # The project has to ask: refusals are off by default now.
+        (root / ".claude" / "cerberus.json").write_text('{"enforce": true}', encoding="utf-8")
         env = {**os.environ, "CLAUDE_PROJECT_DIR": str(root)}
         subprocess.run(
             [sys.executable, str(hooks / "cerberus_mark.py")],

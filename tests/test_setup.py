@@ -232,7 +232,8 @@ def test_a_configured_project_reachable_only_by_hand_still_gets_an_answer():
     # and the one refused before the question was asked.
     root = project({"build.gradle": "plugins { id 'java' }\n",
                     ".claude/cerberus.json": json.dumps(
-                        {"verification": {"artifact_kind": "service", "stage1": ["true"]}})})
+                        {"enforce": True,
+                         "verification": {"artifact_kind": "service", "stage1": ["true"]}})})
     rc, out = run_setup(root)
     assert rc == 0, out
     assert "Tried it:" in out, "it never demonstrated:\n" + out
@@ -801,6 +802,9 @@ def test_the_codex_hooks_actually_fire_in_the_layout_the_installer_writes():
         (root / "app" / "x.py").write_text("x = 1\n", encoding="utf-8")
         subprocess.run(["sh", str(ROOT / "install.sh"), "--codex"],
                        cwd=str(root), capture_output=True, text=True)
+        # A real project switches this on; the installer ships it off.
+        config = root / ".codex" / "cerberus.json"
+        config.write_text(json.dumps({"enforce": True}), encoding="utf-8")
         hooks = root / ".codex" / "hooks"
         env = {k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"}
         subprocess.run(
@@ -822,6 +826,94 @@ def test_the_codex_hooks_actually_fire_in_the_layout_the_installer_writes():
         assert ".codex/cerberus.json" in payload["reason"], (
             "the refusal named the wrong project's config: " + payload["reason"]
         )
+
+
+def test_the_codex_install_is_finished_by_the_step_it_prints():
+    """N1/the round-two regression: the whole `--codex` population got nothing.
+
+    The installer rewrites the path inside the example's `//` comment, so the
+    byte-identity check stopped recognising its own copy — setup then read it as
+    somebody's deliberate configuration, wrote nothing, and reported the
+    placeholder `echo` as a passing check.
+    """
+    with tempfile.TemporaryDirectory() as d:
+        root = pathlib.Path(d)
+        (root / "tests").mkdir()
+        (root / "pyproject.toml").write_text('[project]\nname = "d"\nversion = "1"\n', encoding="utf-8")
+        (root / "tests" / "test_d.py").write_text("def test_ok():\n    assert True\n", encoding="utf-8")
+        subprocess.run(["sh", str(ROOT / "install.sh"), "--codex"],
+                       cwd=str(root), capture_output=True, text=True)
+        proc = subprocess.run(
+            [sys.executable, str(root / ".codex" / "hooks" / "cerberus_setup.py")],
+            cwd=str(root), capture_output=True, text=True,
+            env={k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"},
+        )
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        assert not (root / ".claude").exists(), "a .claude directory was invented for a Codex project"
+        config = json.loads((root / ".codex" / "cerberus.json").read_text(encoding="utf-8"))
+        assert config["enforce"] is True, config
+        stage1 = config["verification"]["stage1"]
+        assert stage1 and not any(str(c).startswith("echo ") for c in stage1), stage1
+        assert "was refused" in proc.stdout, proc.stdout
+
+
+def test_check_names_the_file_the_real_run_would_write():
+    # The write path hardcoded .claude while the read path had been generalised,
+    # so --check named one file and the real run wrote another.
+    with tempfile.TemporaryDirectory() as d:
+        root = pathlib.Path(d)
+        (root / ".codex").mkdir()
+        (root / "tests").mkdir()
+        (root / "pyproject.toml").write_text('[project]\nname = "d"\nversion = "1"\n', encoding="utf-8")
+        (root / "tests" / "test_d.py").write_text("def test_ok():\n    assert True\n", encoding="utf-8")
+        for name in ("cerberus_setup.py", "cerberus_config.py", "cerberus_mark.py", "cerberus_gate.py"):
+            (root / ".codex" / "hooks").mkdir(exist_ok=True)
+            (root / ".codex" / "hooks" / name).write_text(
+                (HOOKS / name).read_text(encoding="utf-8"), encoding="utf-8")
+        env = {k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"}
+        dry = subprocess.run(
+            [sys.executable, str(root / ".codex" / "hooks" / "cerberus_setup.py"), "--check"],
+            cwd=str(root), capture_output=True, text=True, env=env).stdout
+        assert ".codex" in dry, dry
+        subprocess.run([sys.executable, str(root / ".codex" / "hooks" / "cerberus_setup.py")],
+                       cwd=str(root), capture_output=True, text=True, env=env)
+        assert (root / ".codex" / "cerberus.json").exists(), "written somewhere else"
+        assert not (root / ".claude" / "cerberus.json").exists()
+
+
+def test_both_configs_present_resolves_the_way_the_hooks_do():
+    # N8: reversing the search order passed the whole suite, because nothing
+    # built a project with both. Setup has to agree with Config.load or it
+    # writes to a file the hooks will not read.
+    sys.path.insert(0, str(HOOKS))
+    import cerberus_setup
+    from cerberus_config import Config
+
+    with tempfile.TemporaryDirectory() as d:
+        root = pathlib.Path(d)
+        for agent in (".claude", ".codex"):
+            (root / agent).mkdir()
+            (root / agent / "cerberus.json").write_text(
+                json.dumps({"enforce": True, "marker": f"{agent}/.cerberus-pending"}),
+                encoding="utf-8")
+        resolved = cerberus_setup.resolve_config(root)
+        loaded = Config.load(root)
+        assert resolved.parent.name == pathlib.Path(loaded.marker).parent.name, (
+            f"setup would write {resolved}, the hooks read {loaded.marker}"
+        )
+
+
+def test_the_codex_wiring_is_recognised_as_wiring():
+    # `_hooked` could not resolve the command substitution the Codex wiring uses
+    # for the project root, so the installer's own file read as wiring nothing.
+    with tempfile.TemporaryDirectory() as d:
+        root = pathlib.Path(d)
+        subprocess.run(["sh", str(ROOT / "install.sh"), "--codex"],
+                       cwd=str(root), capture_output=True, text=True)
+        sys.path.insert(0, str(HOOKS))
+        import cerberus_setup
+        connected, why = cerberus_setup.wiring(root)
+        assert connected, why
 
 
 # ------------------------------------------------------- what the user reads
