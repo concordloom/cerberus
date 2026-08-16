@@ -58,9 +58,10 @@ curl -fsSL https://raw.githubusercontent.com/concordloom/cerberus/main/install.s
 codex plugin remove cerberus@concordloom    # Codex
 ```
 
-Если ставили в репозиторий: удалите `cerberus/`, `critic/` и `setup/` из
-`.claude/skills/` или `.agents/skills/`, а также `cerberus.json`, если он больше
-не нужен.
+Если ставили в репозиторий: удалите `cerberus/`, `cerberus-critic/` и
+`cerberus-setup/` из `.claude/skills/` или `.agents/skills/`, а также
+`cerberus.json`, если он больше не нужен. Установки 2.3.1 и раньше клали
+`critic/` и `setup/` — обновление их не убирает, удалите руками.
 
 ## Быстрый старт
 
