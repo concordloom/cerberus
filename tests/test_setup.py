@@ -27,6 +27,7 @@ import json
 import os
 import pathlib
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -616,9 +617,30 @@ def test_a_check_the_configuration_lacks_is_still_offered():
     assert "compileall" in out or "pytest" in out, out
 
 
+def _project_with_a_failing_check() -> pathlib.Path:
+    """A project where some check RUNS and fails — not one that is absent.
+
+    The first version used a deliberately failing pytest, and pytest is not
+    installed on every runner: there it came back 127, which is "absent", the
+    warning never printed, and the test failed for a reason that had nothing to
+    do with what it checks. So the toolchain is probed rather than assumed, and
+    if none of them can produce the state the test needs it says so out loud
+    instead of passing quietly.
+    """
+    if shutil.which("pytest"):
+        return project({**PY_PROJECT,
+                        "tests/test_demo.py": "def test_bad():\n    assert False\n"})
+    if shutil.which("npm"):
+        return project({"package.json": json.dumps(
+            {"name": "d", "scripts": {"test": "exit 1", "lint": "exit 0"}})})
+    raise AssertionError(
+        "no toolchain here can run a check and fail it — install pytest or npm; "
+        "skipping silently would report coverage this test does not have")
+
+
 def test_a_failing_check_is_reported_beside_the_list():
     """#39, point 3. It was the fourth thing the reader reached."""
-    root = project({**PY_PROJECT, "tests/test_demo.py": "def test_bad():\n    assert False\n"})
+    root = _project_with_a_failing_check()
     _, out = run_setup(root)
     lines = out.splitlines()
     warning = next((i for i, l in enumerate(lines) if "failing right now" in l), None)
