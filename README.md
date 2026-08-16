@@ -43,9 +43,11 @@ Checks I ran here, and will run before anyone says the work is done:
 Tried it: saying the work was done was refused, and it named the edited file
 ```
 
-Codex has no hook mechanism, so the gate is advisory there: followed when the
-skill is invoked, not enforced on every turn. On Claude Code the Stop hook
-makes it mechanical.
+Both enforce it. Codex has the same two events and the same block protocol, so
+the installer wires `.codex/hooks.json` the way it wires `.claude/settings.json`
+— the difference is only where the file lives. Installing the skill *without*
+the hooks, on either agent, leaves the gate advisory: followed when invoked,
+not enforced on every turn.
 
 **Or put the files in your own repository** — the skill, the hooks and a
 `cerberus.json` you can commit. Nothing to clone; it detects whether the

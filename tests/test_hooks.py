@@ -201,6 +201,98 @@ def test_marker_accumulates_without_duplicating():
         assert sorted(lines) == ["app/a.py", "app/b.py"]
 
 
+# ------------------------------------------------------------- other agents
+
+
+def test_a_codex_edit_is_recorded():
+    # Codex routes edits through apply_patch and the payload shape is not
+    # documented, so the path is scraped and then corroborated against disk.
+    # Unverified against a real Codex session — see #27.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = pathlib.Path(d)
+        (tmp / "app").mkdir()
+        (tmp / "app" / "service.py").write_text("x = 1\n", encoding="utf-8")
+        run_hook("cerberus_mark.py", {
+            "cwd": str(tmp),
+            "hook_event_name": "PostToolUse",
+            "tool_name": "apply_patch",
+            "tool_input": {"input": "*** Update File: app/service.py\n@@\n-x = 1\n+x = 2\n"},
+        })
+        marker = tmp / ".claude" / ".cerberus-pending"
+        assert marker.exists() and "app/service.py" in marker.read_text(encoding="utf-8")
+
+
+def test_running_a_file_is_not_editing_it():
+    # The trap in scraping: `python3 app/service.py` in a Bash command names a
+    # source file that was RUN. Marking it would arm the gate for work nobody
+    # did, so extraction is gated on the tool name.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = pathlib.Path(d)
+        (tmp / "app").mkdir()
+        (tmp / "app" / "service.py").write_text("x = 1\n", encoding="utf-8")
+        run_hook("cerberus_mark.py", {
+            "cwd": str(tmp),
+            "tool_name": "Bash",
+            "tool_input": {"command": "python3 app/service.py"},
+        })
+        assert not (tmp / ".claude" / ".cerberus-pending").exists()
+
+
+def test_a_path_that_is_only_prose_is_not_recorded():
+    with tempfile.TemporaryDirectory() as d:
+        tmp = pathlib.Path(d)
+        run_hook("cerberus_mark.py", {
+            "cwd": str(tmp),
+            "tool_name": "apply_patch",
+            "tool_input": {"input": "see also legacy/gone.py, removed last year"},
+        })
+        assert not (tmp / ".claude" / ".cerberus-pending").exists()
+
+
+def test_the_claim_can_come_from_the_payload():
+    # Codex hands the Stop hook `last_assistant_message`; Claude Code does not.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = pathlib.Path(d)
+        run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/x.py"}})
+        _, out = run_hook("cerberus_gate.py", {
+            "cwd": str(tmp),
+            "hook_event_name": "Stop",
+            "last_assistant_message": "done, it works",
+        })
+        # Asserted before parsing: an empty result is a gap, not a pass, and
+        # letting json.loads raise turned a clear failure into a traceback that
+        # took the rest of the run down with it.
+        assert out, "nothing was returned — the payload's message was not read"
+        assert json.loads(out)["decision"] == "block"
+
+
+def test_a_continued_turn_is_not_blocked_again():
+    # Blocking a Stop on Codex feeds a continuation prompt back as new user
+    # input. Blocking again from there loops forever, so the flag saying the
+    # turn was already continued has to end it.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = pathlib.Path(d)
+        run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/x.py"}})
+        rc, out = run_hook("cerberus_gate.py", {
+            "cwd": str(tmp),
+            "hook_event_name": "Stop",
+            "last_assistant_message": "done, it works",
+            "stop_hook_active": True,
+        })
+        assert rc == 0 and out == "", "a continued turn was blocked again — that is the loop"
+
+
+def test_a_codex_project_keeps_its_state_in_codex():
+    # A Codex-only project should not have a .claude directory created for it.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = pathlib.Path(d)
+        (tmp / ".codex").mkdir()
+        (tmp / "app").mkdir()
+        run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/x.py"}})
+        assert (tmp / ".codex" / ".cerberus-pending").exists(), "state went somewhere else"
+        assert not (tmp / ".claude").exists(), "a .claude directory was invented"
+
+
 # ------------------------------------------------------------------ gate
 
 
@@ -341,6 +433,13 @@ def _main() -> int:
             except AssertionError as exc:
                 failures += 1
                 print(f"  FAIL {name}: {exc}")
+            except Exception as exc:
+                # Not just AssertionError: a test that raises anything else
+                # used to crash the whole run, so the remaining tests never
+                # executed and the report was a traceback rather than a list of
+                # failures. One broken test must not hide the others.
+                failures += 1
+                print(f"  ERROR {name}: {type(exc).__name__}: {exc}")
     print(f"\n{'FAILED' if failures else 'all tests passed'}")
     return 1 if failures else 0
 

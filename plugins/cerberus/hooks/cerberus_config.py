@@ -101,18 +101,35 @@ class Config:
     def _norm(p: str) -> str:
         return str(p).replace("\\", "/")
 
+    #: Searched in order. A project uses whichever agent directory it has, and
+    #: a project using both keeps one config rather than two that can disagree.
+    CONFIG_PATHS = (".claude/cerberus.json", ".codex/cerberus.json")
+
     @classmethod
     def load(cls, root: pathlib.Path) -> "Config":
-        path = root / ".claude" / "cerberus.json"
-        try:
-            return cls(root, json.loads(path.read_text(encoding="utf-8")))
-        except FileNotFoundError:
-            return cls(root)
-        except Exception:
-            # A malformed config must not disable the gate: falling back to
-            # defaults keeps it loud, whereas returning early would make a typo
-            # silently switch verification off.
-            return cls(root)
+        for relative in cls.CONFIG_PATHS:
+            path = root / relative
+            try:
+                raw = json.loads(path.read_text(encoding="utf-8"))
+            except FileNotFoundError:
+                continue
+            except Exception:
+                # A malformed config must not disable the gate: falling back to
+                # defaults keeps it loud, whereas returning early would make a
+                # typo silently switch verification off.
+                return cls(root)
+            cfg = cls(root, raw)
+            if relative.startswith(".codex") and "marker" not in raw:
+                # The marker belongs beside the config that declared it, or a
+                # Codex-only project writes session state into a .claude
+                # directory it does not otherwise have.
+                cfg.marker = ".codex/.cerberus-pending"
+            return cfg
+        if (root / ".codex").is_dir() and not (root / ".claude").is_dir():
+            cfg = cls(root)
+            cfg.marker = ".codex/.cerberus-pending"
+            return cfg
+        return cls(root)
 
     def marker_path(self) -> pathlib.Path:
         return self.root / self.marker

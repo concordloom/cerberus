@@ -387,6 +387,24 @@ def test_installing_is_explained_in_exactly_one_place():
         assert "plugin install" in quick and "skill-installer" in quick, path.name
 
 
+def test_nothing_claims_an_agent_lacks_hooks():
+    """A claim about the world that nobody compared to the world.
+
+    "Codex has no hook mechanism" lived here for months and spread to four
+    files, because it was prose. It is false: Codex documents the same two
+    events and the same block protocol. Anything asserting a provider cannot
+    enforce belongs in a capability the code declares, not in a sentence.
+    """
+    phrases = ("has no hook", "no hook mechanism", "нет механизма хуков",
+               "хуков там нет", "has no equivalent")
+    for path in sorted(ROOT.rglob("*.md")) + sorted(ROOT.rglob("*.sh")):
+        if ".git" in path.parts or path.name == "CHANGELOG.md":
+            continue
+        text = path.read_text(encoding="utf-8").lower()
+        for phrase in phrases:
+            assert phrase not in text, f"{path.relative_to(ROOT)}: {phrase!r}"
+
+
 def test_no_link_points_at_the_old_repository_name():
     for path in (README, README_RU):
         text = path.read_text(encoding="utf-8")
@@ -403,6 +421,13 @@ def _main() -> int:
             except AssertionError as exc:
                 failures += 1
                 print(f"  FAIL {name}: {exc}")
+            except Exception as exc:
+                # Not just AssertionError: a test that raises anything else
+                # used to crash the whole run, so the remaining tests never
+                # executed and the report was a traceback rather than a list of
+                # failures. One broken test must not hide the others.
+                failures += 1
+                print(f"  ERROR {name}: {type(exc).__name__}: {exc}")
     print(f"\n{'FAILED' if failures else 'all tests passed'}")
     return 1 if failures else 0
 

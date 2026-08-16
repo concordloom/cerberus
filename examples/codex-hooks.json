@@ -1,0 +1,28 @@
+{
+  "description": "Cerberus: record edits, and refuse a readiness claim while they are unverified.",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .codex/hooks/cerberus_mark.py",
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .codex/hooks/cerberus_gate.py",
+            "timeout": 20,
+            "statusMessage": "Checking the work was verified"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -102,6 +102,11 @@ def _last_assistant_text(transcript_path: str) -> str:
 
 
 def main() -> int:
+    # Blocking a Stop on Codex does not end the turn — it feeds a continuation
+    # prompt back as new user input, and `stop_hook_active` says the turn has
+    # already been continued that way. Blocking again from there is a loop:
+    # block, continue, block, forever. Claude Code has no such semantics and
+    # never sends the field, so this is inert there.
     try:
         data = json.load(sys.stdin)
     except Exception:
@@ -119,7 +124,16 @@ def main() -> int:
     if not marker.exists():
         return 0  # nothing unverified — let the turn end
 
-    text = _last_assistant_text(data.get("transcript_path", ""))
+    # Codex hands the message to the Stop hook directly; Claude Code does not,
+    # so the transcript is parsed only when it has to be. Reading a field beats
+    # parsing a file, and the transcript format is the likelier of the two to
+    # differ between agents.
+    if data.get("stop_hook_active"):
+        return 0
+
+    text = data.get("last_assistant_message")
+    if not isinstance(text, str) or not text:
+        text = _last_assistant_text(data.get("transcript_path", ""))
     if not text or not cfg.claims_readiness(text):
         return 0  # mid-work, not claiming readiness
 
