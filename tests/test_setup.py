@@ -552,6 +552,83 @@ def test_a_manifest_that_cannot_be_read_is_not_a_command():
             assert cerberus_setup._looks_like_a_command(root) is False, name
 
 
+# ------------------------------------------------------ what a re-run says
+
+
+#: Lines that teach rather than report. Repeating one on a second run is the
+#: defect in #39; repeating a check result or a named gap is not, because
+#: those are measured again each time.
+TEACHING = re.compile(r"invoke|yours to|ask for the|before saying", re.I)
+
+
+def _two_runs(files: dict) -> tuple[str, str]:
+    root = project(files)
+    _, first = run_setup(root)
+    _, second = run_setup(root)
+    return first, second
+
+
+def test_a_second_run_repeats_no_instruction():
+    """#39, point 1 as amended: state may repeat, advice may not."""
+    first, second = _two_runs(PY_PROJECT)
+    lines_first = {l.rstrip() for l in first.splitlines() if l.strip()}
+    repeated = [l.rstrip() for l in second.splitlines()
+                if l.strip() and l.rstrip() in lines_first]
+    teaching = [l for l in repeated if TEACHING.search(l)]
+    assert not teaching, "a second run repeated instructions:\n  " + "\n  ".join(teaching)
+
+
+def test_a_second_run_still_reports_what_is_outstanding():
+    """The other half, or the fix above would pass by printing nothing.
+
+    A re-run that says only "nothing changed" is worse than the noise it
+    replaced: the gap it exists to surface is the empty stage2.
+    """
+    _, second = _two_runs(PY_PROJECT)
+    assert "still missing" in second, second
+    assert "Checks it lists" in second, second
+
+
+def test_a_first_run_still_says_nothing_runs_by_itself():
+    """#39, point 4. Fixing the re-run must not silence the install."""
+    first, _ = _two_runs(PY_PROJECT)
+    assert "Nothing here runs by itself" in first, first
+
+
+def test_a_check_the_configuration_already_lists_is_not_offered_back():
+    """#39, point 2. One check, printed under two headings, ran twice."""
+    _, second = _two_runs(PY_PROJECT)
+    commands = [l.strip() for l in second.splitlines() if l.strip().startswith("ok ")]
+    assert len(commands) == len(set(commands)), f"a check was shown twice:\n{second}"
+
+
+def test_a_check_the_configuration_lacks_is_still_offered():
+    """The mixed cell: the block has to shrink, not vanish.
+
+    A project configured with a check that is not the one detection finds must
+    still be told about the other one, or point 2 is satisfied by deleting the
+    feature.
+    """
+    hand = {"verification": {"artifact_kind": "library", "stage1": ["true"], "stage2": ["true"]}}
+    root = project({**PY_PROJECT, "cerberus.json": json.dumps(hand)})
+    _, out = run_setup(root)
+    assert "does not list" in out, out
+    assert "compileall" in out or "pytest" in out, out
+
+
+def test_a_failing_check_is_reported_beside_the_list():
+    """#39, point 3. It was the fourth thing the reader reached."""
+    root = project({**PY_PROJECT, "tests/test_demo.py": "def test_bad():\n    assert False\n"})
+    _, out = run_setup(root)
+    lines = out.splitlines()
+    warning = next((i for i, l in enumerate(lines) if "failing right now" in l), None)
+    assert warning is not None, out
+    last_check = max(i for i, l in enumerate(lines)
+                     if l.startswith("  ok ") or l.startswith("  FAILING "))
+    assert warning == last_check + 1, (
+        f"the warning is {warning - last_check} lines below the list it belongs to:\n{out}")
+
+
 # ------------------------------------------------- what installing does NOT do
 
 
