@@ -1010,6 +1010,118 @@ def test_this_repository_verifies_it_with_a_live_session():
             f"this cannot fail, so it proves nothing: {command}")
 
 
+# ------------------------------------- a filled stage2 has to be ready (#51)
+
+
+def _with_stage2(commands: list) -> pathlib.Path:
+    return project({**PY_PROJECT, "cerberus.json": json.dumps(
+        {"verification": {"artifact_kind": "service", "stage1": ["true"],
+                          "stage2": commands}})})
+
+
+def test_a_stage2_still_holding_the_drafts_blanks_is_refused():
+    """#51, point 1. Pasted verbatim, a draft reads as configuration.
+
+    It then fails on a hostname nobody set, at the moment a verdict was due —
+    and the tempting way to write that up is the honest-looking `Not proven`
+    #49 was about.
+    """
+    root = _with_stage2(["curl -fsS YOUR_URL/version | jq -e .",
+                         "YOUR_LOG_QUERY --since=5m | grep -q x"])
+    code, out = run_setup(root)
+    assert code == 2, out
+    assert "YOUR_URL" in out and "YOUR_LOG_QUERY" in out, "it did not name the blanks"
+
+
+def test_a_finished_stage2_is_not_called_unfinished():
+    """The other side, or the rule is satisfied by refusing everything."""
+    root = _with_stage2(["curl -fsS https://svc.dev/version | jq -e .revision"])
+    code, out = run_setup(root)
+    assert code == 0, out
+    assert "blanks" not in out, out
+
+
+def test_the_blank_detector_does_not_fire_on_ordinary_shell():
+    """Env vars and real hosts are uppercase too; a loose rule would refuse them."""
+    sys.path.insert(0, str(SETUP.parent))
+    import cerberus_setup
+
+    assert cerberus_setup.unfinished([
+        "PYTHONPATH=src python3 -m pytest -q",
+        "RID=cerb-$(git rev-parse --short HEAD)",
+        "curl -fsS https://API.EXAMPLE.COM/v1 | jq -e .",
+        "kubectl -n prod rollout status deploy/svc",
+    ]) == []
+    assert cerberus_setup.unfinished(["helm upgrade YOUR_APP ./charts"]) == ["YOUR_APP"]
+
+
+def test_every_blank_the_draft_emits_is_one_the_detector_catches():
+    """The rule has to cover what this script itself prints.
+
+    Twice now a guard has been written for other people's commands and missed
+    its own: the log-query placeholder, and the `gh run list` form. Derived
+    from the draft rather than hand-listed so it cannot happen a third time.
+    """
+    sys.path.insert(0, str(SETUP.parent))
+    import cerberus_setup
+
+    for kind in cerberus_setup.DEPLOYED_KINDS:
+        for evidence, forge in (([("helm", "helm/"), ("image", "Dockerfile")], None),
+                                ([("k8s", "k8s/")], None),
+                                ([("ci", ".github/workflows/deploy.yml")],
+                                 cerberus_setup.FORGES[0][1:])):
+            draft = cerberus_setup.draft_stage2(kind, evidence, forge)
+            blanks = [w for line in draft for w in line.split()
+                      if w.isupper() and len(w) > 3 and w.strip("'\"$(){}|") == w]
+            missed = [b for b in blanks if not cerberus_setup.unfinished([b])]
+            assert not missed, f"the draft emits blanks the detector misses: {missed}"
+
+
+def test_the_skill_states_that_a_filled_stage2_is_not_optional():
+    """#51, point 2. Implied everywhere, written nowhere."""
+    for path, needles in (
+        (SKILLS / "cerberus" / "SKILL.md",
+         ("three states of stage2", "removed the choice", "**run it**")),
+        (SKILLS / "cerberus" / "SKILL.ru.md",
+         ("три состояния stage2", "снял выбор", "**выполнить**")),
+    ):
+        text = path.read_text(encoding="utf-8").lower()
+        for needle in needles:
+            assert needle.lower() in text, f"{path.name}: {needle!r}"
+
+
+def test_the_skill_calls_missing_access_a_blocker_not_a_narrowing():
+    """#51, point 3. "We could not log in today" must not lower the bar for good."""
+    for path, needles in ((SKILLS / "cerberus" / "SKILL.md",
+                           ("no access to run it", "not a narrowing")),
+                          (SKILLS / "cerberus" / "SKILL.ru.md",
+                           ("нет доступа выполнить", "не сужение"))):
+        text = path.read_text(encoding="utf-8").lower()
+        for needle in needles:
+            assert needle in text, f"{path.name}: {needle!r}"
+
+
+def test_the_three_states_are_named_in_one_place():
+    """#51, point 4. Scattered across three sections, nobody sees which they are in."""
+    for path in (SKILLS / "cerberus" / "SKILL.md", SKILLS / "cerberus" / "SKILL.ru.md"):
+        text = path.read_text(encoding="utf-8")
+        section = re.search(r"^### .*(?:three states|Три состояния).*?(?=^### )",
+                            text, re.M | re.S)
+        assert section, f"{path.name}: no single section naming the states"
+        body = section.group(0)
+        for needle in ("stage2_unreachable", "`Not proven`"):
+            assert needle in body, f"{path.name}: the section never mentions {needle}"
+        assert body.count("|") > 8, f"{path.name}: the three are not set out together"
+
+
+def test_the_self_check_asks_whether_a_filled_stage2_was_run():
+    for path, needle in ((SKILLS / "cerberus" / "SKILL.md", "if `stage2` was filled in, was it run"),
+                         (SKILLS / "cerberus" / "SKILL.ru.md", "если `stage2` был заполнен")):
+        checklist = [l for l in path.read_text(encoding="utf-8").lower().splitlines()
+                     if l.startswith("- [ ]")]
+        assert any(needle in l for l in checklist), f"{path.name}: not in the checklist"
+
+
 # ------------------------------------------------- what installing does NOT do
 
 

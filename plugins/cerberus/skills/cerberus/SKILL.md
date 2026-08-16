@@ -334,6 +334,36 @@ representation is admissible only when the claim is about that projection, or
 when it has separately been shown not to filter the value in question. A
 truncated allow-list does not prove data is missing upstream.
 
+### The three states of stage2, and which one is a choice
+
+Exactly one of these, and the configuration says which:
+
+| `stage2` | what it means | what the verdict does |
+|---|---|---|
+| empty | nobody has written the boundary down | derive it from `artifact_kind`, cross what you can, and list the rest as `Not proven` with the attempt behind each one |
+| `stage2_unreachable` with a reason | the project decided there is nowhere to reach | `READY scope: Stage 1`, quoting the reason |
+| filled | the project already answered the question | **run it** |
+
+The third row is not a suggestion. A project that wrote down how to cross its
+boundary has removed the choice: there is no `READY` without having run it, and
+no `Not proven` about it either — that clause is for limits you hit, and a
+`stage2` you were handed is not a limit.
+
+Two things that are not "filled":
+
+**Placeholders left in.** `--draft-stage2` prints blanks on purpose —
+`YOUR_URL`, `YOUR_NS`, `YOUR_ASSERTION_ON_THE_VALUE`. Pasted verbatim they read
+as configuration and fail later on a hostname nobody set, at the moment a
+verdict was due. A `stage2` still holding them is unfinished configuration:
+report it as a `BLOCKER` naming the blanks, and do not run it.
+
+**No access to run it.** If the commands are there and you cannot execute them —
+no credentials, no VPN, no permission — that is a `BLOCKER` naming what is
+missing. It is not a narrowing. `stage2_unreachable` is a decision the project
+made in advance; a missing token is a thing to go and get, and dressing one as
+the other turns "we could not log in today" into a permanent lowering of the
+bar.
+
 ### Not proven needs an attempt (blocking)
 
 `Not proven` is the honest sentence for a limit you actually hit. It is not a
@@ -548,6 +578,8 @@ Treat it as a `BLOCKER` on the configuration and say what is missing.
       from this gate, which examines the work?
 - [ ] Does every `Not proven` carry the command that was run and what it
       returned, rather than a conclusion about why it could not be?
+- [ ] If `stage2` was filled in, was it run — with no `Not proven` written
+      about a boundary the project had already told you how to cross?
 - [ ] Stage 0: matrix built (axes × cells), mixed cells enumerated, coverage
       marked per cell (✅/⏳/🧊/❌)?
 - [ ] Stage 0: did *I* generate the cells, rather than the user supplying them?
