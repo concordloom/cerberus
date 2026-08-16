@@ -11,16 +11,18 @@
 
 # cerberus
 
-**An adversarial verification gate for AI coding agents.** Before an agent tells
-you a change works, it has to seriously try to prove it is broken — and fail.
+**Your agent has to try to break its own change before it can tell you it
+works.** Three skills it reads and follows. No hook and no daemon — though an
+agent that has read them may reach for one when you say "done", which you can
+tell it not to.
 
-[Русская версия](README.ru.md) · [The skill itself](plugins/cerberus/skills/cerberus/SKILL.md) ([ru](plugins/cerberus/skills/cerberus/SKILL.ru.md))
+[Русская версия](README.ru.md) · [The gate's own instructions](plugins/cerberus/skills/cerberus/SKILL.md) ([ru](plugins/cerberus/skills/cerberus/SKILL.ru.md))
 
 ## Install
 
 ### For yourself
 
-Installs for you, in every project you open. Nothing is written to the repository.
+Installs for you, in every project you open. Writes nothing to the repository.
 
 **Claude Code**
 
@@ -38,35 +40,37 @@ codex plugin add cerberus@concordloom
 
 ### Into the repository
 
-Copies the skills into the project, so the whole team and CI get them from git,
-committed.
+Copies the skills into the project, so your team gets them from git without
+installing anything. Needs `python3` 3.10+, `curl` or `wget`, `tar` and `sh`. It lands in `.claude/skills/`, or
+`.agents/skills/` if the project already has an `.agents/` directory.
 
 ```console
 curl -fsSL https://raw.githubusercontent.com/concordloom/cerberus/main/install.sh | sh -s -- --setup
 ```
 
+Re-running it is safe, and is how you update this route.
+
 ## Uninstall
 
-**Claude Code**
-
 ```
-/plugin uninstall cerberus@concordloom
-```
-
-**Codex**
-
-```
-codex plugin remove cerberus@concordloom
+/plugin uninstall cerberus@concordloom      # Claude Code
+codex plugin remove cerberus@concordloom    # Codex
 ```
 
-**Installed into the repository** — delete `.claude/skills/cerberus`, `critic`
-and `setup`, and `cerberus.json` if you no longer want it.
+Installed into the repository: delete `cerberus/`, `critic/` and `setup/` from
+`.claude/skills/` or `.agents/skills/`, and `cerberus.json` if you no longer
+want it.
 
 ## Quick start
 
-**1. Ask your agent to set the project up.** It finds your checks, runs them and
-writes down the ones that pass. The output is English — the agent reads it and
-tells you in yours.
+**1. Set the project up.** Say this to your agent:
+
+```
+Run the setup skill on this project.
+```
+
+It finds your checks, runs them, and writes down the ones that pass. Output is
+English; your agent will tell you in your language.
 
 ```text
 Set up: Python library — change that if it is wrong.
@@ -75,127 +79,182 @@ Checks I ran here and wrote down:
   ok       pytest -q
 ```
 
-**2. Ask for the cerberus skill before saying a change works.** It runs the three
-stages against those checks and comes back with a verdict instead of a claim,
-which takes minutes rather than seconds. Your agent may also reach for it
-unasked: the skill names "done" and "it works" as the moment it is for, and one
-that has read that sometimes acts on it.
+**2. Then, before you believe "it works":**
 
-## What it does to your session
+```
+Run the cerberus skill on this change.
+```
 
-Nothing runs. There is no hook, no background process, and no file of yours
-that installing edits — the whole delivery is three skill directories and one
-config you own. Uninstalling is deleting them.
+It works better from an issue written before the change: without one, the agent
+enumerates what to test from the diff, which is the failure it exists to catch.
+What comes back:
 
-That is deliberate. A gate that interrupts on its own guess about which turns
-matter gets switched off, and a gate that is off protects nothing. So the
-judgement is left where it already lives — with you, and with the agent you are
-working with, which can weigh what it is about to claim in a way no file
-matcher can.
+```text
+Stage 1 — pytest 24 passed, ruff clean.
+Stage 2 — built the wheel, installed it into a clean venv, ran a consumer
+  from /tmp so the source tree could not shadow the import. Correct for
+  0.5, negative amounts and zero.
+  Old HEAD's wheel returned 12.6 for the same input and the check rejected
+  it, so the check can fail.
+Not proven: behaviour at exactly 0.5 — no rule was agreed.
 
-No model is called and nothing goes over the network. The setup step runs your
-own checks locally, once, and writes down which ones passed.
+Verdict: READY
+```
+
+`NOT READY` comes back the same way, with the reproduction attached:
+
+```text
+BLOCKER — rounding is applied twice for orders with a discount.
+  Reproduce: POST /orders with {"items":[…],"discount":0.1} gives total 23.94,
+  expected 23.95. Introduced by the change; old HEAD returns 23.95.
+Stage 2 not reached: Stage 1 has a blocker.
+
+Verdict: NOT READY
+```
+
+## cerberus.json
+
+One file, and the skills are its only readers. New projects get it in the root;
+installs from before 2.1 keep theirs in `.claude/cerberus.json` or
+`.codex/cerberus.json` and are still read there. The four keys, and `stage2_unreachable` below is the fifth and last:
+
+```json
+{
+  "verification": {
+    "artifact_kind": "service",
+    "stage1": ["go build ./...", "go test ./... -race", "golangci-lint run"],
+    "stage2": [
+      "gh run watch --exit-status $(gh run list --commit $(git rev-parse HEAD) --limit 1 --json databaseId --jq '.[0].databaseId')",
+      "kubectl -n dev rollout status deploy/orders --timeout=5m",
+      "curl -fsS https://orders.dev.internal/version | jq -e --arg sha \"$(git rev-parse HEAD)\" '.commit == $sha'",
+      "curl -fsS https://orders.dev.internal/orders -d @testdata/order.json | jq -e '.status == \"accepted\"'"
+    ],
+    "notes": "kube context dev-eu1 only, never prod. Deploy workflow takes ~8 min."
+  }
+}
+```
+
+Every entry is a shell command run from the repository root, in order, and a
+non-zero exit fails the stage — which is why each line above ends in something
+that *can* return non-zero. A stage stops at its first failure.
+
+`setup` writes `artifact_kind` and `stage1` after running the commands. `stage2`
+is yours — see below. `notes` is anything the agent should know and cannot read
+off the disk.
 
 ## The three heads
 
-The three heads on the gate are the three stages the agent owes you before it
-says a change works.
+The three heads over the gate are the three stages.
 
 | | Stage | What the agent has to do |
 |---|---|---|
-| 🟢 | **0** | Enumerate the behaviour space, before testing any of it |
-| 🟡 | **1** | Break the code: consumption paths, completeness, negative cases |
-| 🔴 | **2** | Break it past the delivery boundary, with a check that can fail |
+| 🟢 | **0** | Enumerate what could break, before testing any of it |
+| 🟡 | **1** | Break the code: how it is used from outside, completeness, negative cases |
+| 🔴 | **2** | Break it where it really runs, with a check that can fail |
 
-Skipping the first is the usual failure. The other two verify what you tried to
-break; only Stage 0 decides what there was to break in the first place. All of
-it, at the length an agent needs, is in
-[SKILL.md](plugins/cerberus/skills/cerberus/SKILL.md).
+Stage 0 is the one that gets skipped. The other two verify what you thought to
+try; only Stage 0 decides what there was to try. The full method, at the length
+an agent needs, is in [SKILL.md](plugins/cerberus/skills/cerberus/SKILL.md).
 
-## The one thing to configure
+## Stage 2 and the delivery boundary
 
-Stage 2 has to cross your **delivery boundary** — the first thing that stops
-being under your control once the change ships. Nothing can work that out for
-you, so it is the one field `cerberus.json` leaves to you:
+Stage 2 has to reach past the first thing that stops being under your control
+once the change ships:
 
-| what you ship | what Stage 2 has to reach |
+| `artifact_kind` | what Stage 2 has to reach |
 |---|---|
-| a service | a deployed instance, driven to a real result |
-| a library | the built package, installed into a clean environment, imported |
-| a CLI | the installed binary, real arguments, real exit codes |
-| a chart or IaC module | applied to a real cluster or account |
-| a migration | a copy of real shape and scale |
-| a prompt or parser | a real model call through the production entry point |
-| a plugin or codegen | a real downstream project built with it |
+| `service` — a service or application | a deployed instance, driven to a real result |
+| `library` — a package | the built package, installed somewhere clean, imported |
+| `cli` — a command | the installed binary, real arguments, real exit codes |
+| `chart` — a chart or IaC module | applied to a real cluster or account |
+| `migration` — a schema change | a copy of real shape and scale |
+| `model-boundary` — a prompt or parser | a real model call through the production entry point |
+| `plugin` — a plugin or codegen | a real downstream project built with it |
 
-The value goes in `artifact_kind` — `service`, `library`, `cli`, `chart`,
-`migration`, `model-boundary`, `plugin` — one row each, in that order.
+**If CI deploys for you**, Stage 2 has three parts, and the third is the one
+people skip:
 
-If your deploy runs in CI, Stage 2 is push, wait for the pipeline, and then
-prove the instance answering you is *this* commit — waiting is not verifying.
-Ask the agent to run `setup` with `--draft-stage2`: it reads your `helm/`,
-manifests, compose file or deploy job and prints those commands, with the traps
-in them named.
+```
+gh run watch --exit-status $(gh run list --commit $(git rev-parse HEAD) --limit 1 --json databaseId --jq '.[0].databaseId')
+kubectl -n dev rollout status deploy/orders --timeout=5m
+curl -fsS https://orders.dev.internal/version | jq -e --arg sha "$(git rev-parse HEAD)" '.commit == $sha'
+```
 
-If there is genuinely nowhere to deploy, do not leave `stage2` empty: write
-`stage2_unreachable` with the reason. Every verdict then narrows to
-`READY scope: Stage 1` and quotes it. Empty reads as nobody got round to it; a
-reason reads as a decision.
+Wait for the pipeline *for this commit* with a command that goes red when it
+does; wait for the rollout; then prove the instance answering you is this
+commit. Without the third line you can go green against the build that was
+already running. If there is no `/version` endpoint, compare the image digest:
+`kubectl -n dev get deploy/orders -o jsonpath='{.spec.template.spec.containers[0].image}'`.
 
-## What goes in cerberus.json
+**If your pipeline only deploys from the default branch**, there is no honest
+Stage 2 before the merge. Pick one and write it down: deploy the branch to a
+preview namespace, run the verdict after the merge and before the release, or
+declare `stage2_unreachable` below.
 
-One block, and it is a note rather than a program. `artifact_kind` names your
-delivery boundary, `stage1` is the commands to run locally, `stage2` is what has
-to be reached past that boundary, and `notes` is anything the agent should know
-— which account, which environment, what must never be touched.
+For `service` and `chart` the setup script can draft those commands from your
+`helm/`, manifests, compose file or deploy job — ask the agent to run `setup`
+with `--draft-stage2`. It prints a draft with blanks to fill in and the traps
+named, and writes nothing. For the other five kinds there is no draft; the table
+above is the specification.
 
-No program reads any of it. The skills do, and getting it wrong costs an agent
-some wasted work rather than silently weakening anything. Setup writes
-`artifact_kind` and `stage1` after running the commands; `stage2` it drafts but
-never writes, because a placeholder that exits 0 is worse than an obvious gap.
-Once you do fill it in, running it is no longer optional — that is the point of
-writing it down.
+**If there is genuinely nowhere to deploy**, leave `stage2` as `[]` and add a
+fifth key next to it inside `verification`:
 
-Upgrading and removing are the plugin commands you installed with: `/plugin` or
-`codex plugin`, by name. The installer route is the files themselves.
+```json
+"stage2": [],
+"stage2_unreachable": "GitLab deploys from the default branch only; no preview namespace yet"
+```
+
+Every verdict then narrows to `READY scope: Stage 1` and quotes your reason.
+Once `stage2` *is* filled in, running it is no longer optional.
+
+## What it does to your session
+
+No hook, no background process, no file of yours edited by installing. The
+skills are text your agent reads when you ask for them, and — as the first
+paragraph says — an agent may reach for them on "done" of its own accord. Tell
+it not to the way you tell it anything else: "don't run cerberus unless I ask".
+
+What does execute: `setup` runs candidate check commands in your project — test
+runners, linters, a build — to find out which pass. Stage 2 runs the commands
+**you** put in `stage2`, with whatever credentials your shell has. `notes` is a
+note to the agent, not a permission boundary: if your kubeconfig can reach
+production, so can a command in `stage2`. Point them at a throwaway environment,
+and keep secrets out of the file — it is committed.
+
+The tooling calls no model and fetches nothing at runtime, though installing
+downloads from GitHub and a Stage 2 for a `model-boundary` artifact is a real
+model call by definition. The agent's own three stages cost tokens and take
+minutes rather than seconds. That is the trade; deciding when to pay it is why
+none of this fires by itself.
 
 ## The critic, which is not the gate
 
-Three skills ship together. The gate asks whether the thing does what you say it
-does. The critic asks whether what you *said* is true — a diagnosis, a
-mechanism, a claim about the codebase — by spawning an adversary whose mandate
-is to refute it.
-
-Neither covers the other: work can be right while its explanation is wrong, and
-a right explanation proves nothing ever ran.
-
-The third, `setup`, is the install step above. It works out what your checks are
-by running them, writes them down, and stops. Ask the agent for it by name to
-run it again — it knows where its own script is, which differs by how you
-installed: inside the plugin, or in `.claude/skills/setup/` if you used the
-installer.
+Three skills ship together: `cerberus`, `critic`, `setup`. `cerberus` asks
+whether the change does what you say it does. `critic` asks whether what you
+*said* is true — a diagnosis, a mechanism, a claim about the code — by spawning
+an adversary told to refute it. Neither covers the other: work can be right
+while its explanation is wrong, and an explanation being right proves nothing
+ever ran.
 
 ## Why
 
 An agent built a feature, saw rows appear in the database and activity in the
-logs, and reported *"works end to end"*. The credential it had written was
-never read by anything at runtime. No real run had ever happened, and a day was
-lost.
+logs, and reported "works end to end". The credential it had written was never
+read by anything at runtime. No real run had ever happened, and a day was lost.
 
-The method in SKILL.md is what catches that. Making it fire automatically was a
-second idea, tried for seven versions and dropped: it could tell that code had
-changed, never whether the change mattered, and being wrong about that is how
-tools get uninstalled.
+Making the check fire automatically was tried and dropped: a hook can tell that
+code changed, never whether the change mattered, and interrupting on the wrong
+guess is how a tool gets uninstalled.
 
 ## Requirements
 
-Python 3.10+ for the setup script, and nothing else. The skill format is
-[Claude Code](https://claude.com/claude-code)'s and Codex's; the method in
-[SKILL.md](plugins/cerberus/skills/cerberus/SKILL.md) is not specific to any
-agent and can be followed by hand.
+Python 3.10+ for the setup script. The repository route also needs `curl` or
+`wget`, `tar` and `sh`. The skill format is [Claude Code](https://claude.com/claude-code)'s
+and Codex's; the method in [SKILL.md](plugins/cerberus/skills/cerberus/SKILL.md)
+is not specific to any agent and can be followed by hand.
 
 ## License and origin
 
-MIT — see [LICENSE](LICENSE). Extracted from the internal engineering rules of
-an AI automation platform, written after the incident above and hardened
-against every later way the gate was found to be evadable.
+MIT — see [LICENSE](LICENSE). Extracted from the internal engineering rules of an
+AI automation platform, written after the incident above.

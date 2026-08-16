@@ -74,6 +74,48 @@ def compare(skill: pathlib.Path) -> list[str]:
     return problems
 
 
+def compare_pages() -> list[str]:
+    """The two README pages, which were never checked at all.
+
+    Eight divergences of meaning had accumulated by #66 — different scope in
+    the tagline, a term explained in one language and not the other, an update
+    path documented only in English — and nothing looked. Structure is what a
+    machine can compare; it would have caught half of them.
+    """
+    en, ru = ROOT / "README.md", ROOT / "README.ru.md"
+    if not ru.exists():
+        return ["README.ru.md is missing"]
+
+    a, b = profile(en), profile(ru)
+    problems: list[str] = []
+    if a["headings"] != b["headings"]:
+        problems.append(
+            "README: heading structure differs\n"
+            f"  README.md    : {len(a['headings'])} headings, levels {a['headings']}\n"
+            f"  README.ru.md : {len(b['headings'])} headings, levels {b['headings']}"
+        )
+    if a["fences"] != b["fences"]:
+        problems.append(
+            f"README: number of code blocks differs: {a['fences']} vs {b['fences']}"
+        )
+
+    # Commands are not prose: a route documented in one language and not the
+    # other is a reader who cannot install, and that is exactly how the
+    # installer's update path came to exist only in English.
+    for token in ("/plugin marketplace add", "/plugin install", "/plugin uninstall",
+                  "codex plugin marketplace add", "codex plugin add",
+                  "codex plugin remove", "install.sh", "--draft-stage2",
+                  "stage2_unreachable", "artifact_kind", "verification"):
+        in_en = token in en.read_text(encoding="utf-8")
+        in_ru = token in ru.read_text(encoding="utf-8")
+        if in_en != in_ru:
+            problems.append(
+                f"README: {token!r} appears in "
+                + ("English only" if in_en else "Russian only")
+            )
+    return problems
+
+
 def main() -> int:
     if not SKILLS:
         print("no skills found under plugins/*/skills/*", file=sys.stderr)
@@ -82,6 +124,10 @@ def main() -> int:
     problems: list[str] = []
     for skill in SKILLS:
         problems.extend(compare(skill))
+    page_problems = compare_pages()
+    problems.extend(page_problems)
+    if not page_problems:
+        print('parity ok: README — same headings, same blocks, same commands named')
 
     if problems:
         print("Translation parity failed. English is canonical.\n", file=sys.stderr)

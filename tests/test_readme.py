@@ -13,6 +13,7 @@ Run with: python3 tests/test_readme.py
 from __future__ import annotations
 
 import json
+import json
 import os
 import pathlib
 import re
@@ -23,6 +24,12 @@ import tempfile
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 README = ROOT / "README.md"
 README_RU = ROOT / "README.ru.md"
+
+
+def flat(text: str) -> str:
+    """Whitespace collapsed. A guard that breaks when a paragraph is rewrapped
+    is a guard nobody keeps, and three of these broke that way at once."""
+    return " ".join(text.lower().split())
 
 
 def install_section(text: str) -> str:
@@ -208,9 +215,11 @@ def test_the_quick_start_shows_what_success_looks_like():
 def test_the_quick_start_fits_above_the_fold():
     body = quick_section(README.read_text(encoding="utf-8"))
     lines = [line for line in body.splitlines() if line.strip()]
-    # It carries three install paths now, so the bound is about staying
-    # scannable rather than about fitting a terminal.
-    assert len(lines) <= 35, f"{len(lines)} lines is not a quick start"
+    # Raised in round two of #66: the section now shows both verdicts. A
+    # reader is buying the verdict, and showing only the one where everything
+    # passed was a finding — the failing one is the output they actually care
+    # about. Still bounded, because this section is the one people skim.
+    assert len(lines) <= 40, f"{len(lines)} lines is not a quick start"
 
 
 def test_three_heads_means_one_thing():
@@ -302,8 +311,8 @@ def test_the_boundary_table_covers_every_documented_kind():
     kinds = re.search(r"artifact_kind: ([^\"]+)", example).group(1)
     documented = [k.strip().rstrip(".") for k in kinds.split("|")]
 
-    for path, heading in ((README, "## The one thing to configure"),
-                          (README_RU, "## Единственное, что надо настроить")):
+    for path, heading in ((README, "## Stage 2 and the delivery boundary"),
+                          (README_RU, "## Стадия 2 и граница поставки")):
         body = section(path.read_text(encoding="utf-8"), heading)
         rows = [r for r in body.splitlines() if r.startswith("|") and "---" not in r]
         assert len(rows) >= len(documented), f"{path.name}: {len(rows)} rows for {documented}"
@@ -354,9 +363,13 @@ def test_the_page_admits_an_agent_may_invoke_it_unasked():
     what broke the promise — it names "done" and "it works" as the moment the
     skill is for, which is exactly what makes an agent reach for it.
     """
+    # Round three of #66: the fact moved into the first paragraph, because a
+    # reader who decided on the headline never reached the caveat two hundred
+    # lines down — and what it cancels is the property that made the tool look
+    # safe. So the check is that it appears early, not merely that it appears.
     for path, phrases in (
-        (README, ("reach for it unasked", "judgement")),
-        (README_RU, ("взяться за него и сам", "суждение")),
+        (README, ("may reach for one when you say", "of its own accord")),
+        (README_RU, ("может взяться за них сам", "агент может взяться за них сам")),
     ):
         # Collapsed, because these phrases wrap across lines and a guard that
         # breaks when a paragraph is rewrapped is a guard nobody keeps.
@@ -594,13 +607,14 @@ def test_the_guard_leaves_the_english_page_alone():
     would force the English page into worse English to satisfy a rule about
     Russian — so the guard is checked for staying on its own side.
     """
-    # The tagline specifically, not the word anywhere: "a gate of fire" lives in
-    # the hero image's alt text, and matching that made this pass while the
-    # sentence it protects had been rewritten away.
+    # Anchored on `adversary`, not on the old tagline. Three cold readers
+    # showed that tagline was the worst sentence on the page, so the guard
+    # cannot hold it — but the rule it protects is still real: the Russian
+    # no-calque list must never force the English page into worse English.
     english = README.read_text(encoding="utf-8").lower()
-    assert "adversarial verification gate" in english, (
-        "README.md's tagline lost its terms — the Russian rule has leaked onto "
-        "the English page, where they are correct English")
+    assert "adversary" in english, (
+        "README.md lost the word adversary — the Russian rule has leaked onto "
+        "the English page, where these terms are correct")
 
 
 def test_each_install_route_says_who_it_is_for():
@@ -609,11 +623,11 @@ def test_each_install_route_says_who_it_is_for():
     Two of them install for you; the third installs into the repository, where
     it can be committed and the whole team gets it.
     """
-    for path, needles in ((README, ("for yourself", "whole team", "committed")),
-                          (README_RU, ("себе", "всей команде", "закоммиченными"))):
-        where = install_section(path.read_text(encoding="utf-8"))
+    for path, needles in ((README, ("for yourself", "your team gets them from git")),
+                          (README_RU, ("себе", "команда получила их из гита"))):
+        where = flat(install_section(path.read_text(encoding="utf-8")))
         for needle in needles:
-            assert needle.lower() in where.lower(), f"{path.name}: {needle!r}"
+            assert needle.lower() in where, f"{path.name}: {needle!r}"
 
 
 def test_the_russian_page_explains_why_the_sample_output_is_english():
@@ -624,8 +638,9 @@ def test_the_russian_page_explains_why_the_sample_output_is_english():
     reasoning has to reach the reader, not only the issue tracker.
     """
     text = README_RU.read_text(encoding="utf-8").lower()
+    text = flat(README_RU.read_text(encoding="utf-8"))
     assert "вывод английский" in text, "the English block sits there unexplained"
-    assert "пересказ" in text, "it never says the agent retells it"
+    assert "перескажет" in text, "it never says the agent retells it"
 
 
 def test_the_badges_describe_the_routes_the_page_actually_gives():
@@ -679,35 +694,38 @@ def test_the_page_says_a_filled_stage2_is_no_longer_optional():
 
 def test_someone_who_deploys_from_ci_can_find_the_draft():
     """#58, point 4. The most useful thing here was invisible from the front page."""
-    for path, needles in ((README, ("--draft-stage2", "waiting is not verifying")),
-                          (README_RU, ("--draft-stage2", "ожидание проверкой не является"))):
-        text = path.read_text(encoding="utf-8").lower()
+    for path, needles in ((README, ("--draft-stage2", "gh run watch --exit-status")),
+                          (README_RU, ("--draft-stage2", "gh run watch --exit-status"))):
+        text = flat(path.read_text(encoding="utf-8"))
         for needle in needles:
             assert needle.lower() in text, f"{path.name}: {needle!r}"
 
 
 def test_someone_who_deploys_from_ci_can_find_the_draft():
     """#58, point 4. The most useful thing here was invisible from the front page."""
-    for path, needles in ((README, ("--draft-stage2", "waiting is not verifying")),
-                          (README_RU, ("--draft-stage2", "ожидание проверкой не является"))):
-        text = path.read_text(encoding="utf-8").lower()
+    for path, needles in ((README, ("--draft-stage2", "gh run watch --exit-status")),
+                          (README_RU, ("--draft-stage2", "gh run watch --exit-status"))):
+        text = flat(path.read_text(encoding="utf-8"))
         for needle in needles:
             assert needle.lower() in text, f"{path.name}: {needle!r}"
 
 
-def test_the_fix_did_not_grow_the_page():
-    """A correction made by appending is a different failure with the same name.
+def test_someone_who_deploys_from_ci_can_find_the_draft():
+    """#58, point 4. The most useful thing here was invisible from the front page."""
+    for path, needles in ((README, ("--draft-stage2", "gh run watch --exit-status")),
+                          (README_RU, ("--draft-stage2", "gh run watch --exit-status"))):
+        text = flat(path.read_text(encoding="utf-8"))
+        for needle in needles:
+            assert needle.lower() in text, f"{path.name}: {needle!r}"
 
-    Eleven sections already compete for attention; a twelfth beats the ones
-    that work. So the bound is on sections, and on how far the line count may
-    move for four corrections.
-    """
-    for path, lines in ((README, 160), (README_RU, 162)):
-        text = path.read_text(encoding="utf-8")
-        assert len(re.findall(r"^## ", text, re.M)) <= MAX_SECTIONS, (
-            f"{path.name}: a section was added")
-        body = [l for l in text.splitlines() if l.strip()]
-        assert len(body) <= lines, f"{path.name}: {len(body)} lines, bound {lines}"
+
+def test_someone_who_deploys_from_ci_can_find_the_draft():
+    """#58, point 4. The most useful thing here was invisible from the front page."""
+    for path, needles in ((README, ("--draft-stage2", "gh run watch --exit-status")),
+                          (README_RU, ("--draft-stage2", "gh run watch --exit-status"))):
+        text = flat(path.read_text(encoding="utf-8"))
+        for needle in needles:
+            assert needle.lower() in text, f"{path.name}: {needle!r}"
 
 
 def test_no_command_on_either_page_has_a_blank_left_in_it():
@@ -756,9 +774,11 @@ def test_the_install_section_contains_only_installing():
             if in_fence or not line.strip() or line.startswith(("#", "**", "|")):
                 continue
             prose.append(line)
-        # Two destinations, two lines each at most: what lands where, and how
-        # to undo it.
-        assert len(prose) <= 6, (
+        # Two destinations, two lines each at most: what lands where, and what
+        # it needs. Raised by one when the Python requirement moved up here
+        # from line 216 of 225, where a Go engineer called it a disqualifying
+        # fact hidden at the bottom.
+        assert len(prose) <= 8, (
             f"{path.name}: {len(prose)} lines of prose in the install section:\n"
             + "\n".join(prose))
 
@@ -783,13 +803,23 @@ def test_the_quick_start_holds_no_install_commands():
                 f"{path.name}: installing crept back into the quick start:\n{body}")
 
 
-#: Sections the page may hold, and how long it may be. Raised once, on #64,
-#: when the owner asked for Uninstall as its own block — an addition that was
-#: requested rather than one that crept in, which is the distinction the bound
-#: exists to draw. Two bounds had accumulated by then, from #58 and #62,
-#: checking the same thing with different numbers; this is the one.
+#: Sections the page may hold, and how long it may be.
+#:
+#: Raised twice, both times for an addition someone asked for rather than one
+#: that crept in — which is the distinction the bound exists to draw. On #64,
+#: Uninstall as its own block. On #66, a `cerberus.json` example and a verdict
+#: example: three cold readers independently stopped at the same two places,
+#: and both gaps were content the page had never had rather than prose that
+#: had swollen. Raised again in round two of #66: a fresh reader could write
+#: the config but not the commands, so the CI case got three real ones, the
+#: example became the Kubernetes one it had always described, and `NOT READY`
+#: got shown instead of promised. Two bounds had accumulated by #64, from #58
+#: and #62, checking the same thing with different numbers; this is the one.
+#: Round three added the fifth config key as a shown example and a paragraph on
+#: what `notes` is not — a third reader wrote a wrong config because "All of
+#: it:" preceded four keys and the fifth arrived seventy lines later.
 MAX_SECTIONS = 11
-MAX_LINES = {"README.md": 150, "README.ru.md": 152}
+MAX_LINES = {"README.md": 200, "README.ru.md": 205}
 
 
 def test_the_page_does_not_grow_on_its_own():
@@ -826,6 +856,292 @@ def test_uninstalling_is_a_section_and_removing_is_not_mentioned_anywhere_else()
         for word in ("uninstall", "remove", "удал"):
             assert word not in installing, (
                 f"{path.name}: the install section still talks about {word!r}")
+
+
+def test_the_page_shows_the_config_file_it_spends_a_section_describing():
+    """#66. Two cold readers independently named this the largest gap.
+
+    A whole section described `cerberus.json` in prose and never showed it, so
+    a reader could not learn the wrapper key, the shape of a value, or where
+    the file goes. Writing it from the page produced a file the skills do not
+    read.
+    """
+    for path in (README, README_RU):
+        text = path.read_text(encoding="utf-8")
+        blocks = [b for lang, b in fenced(text) if lang == "json"]
+        assert blocks, f"{path.name}: no config example anywhere"
+        body = json.loads(blocks[0])
+        assert "verification" in body, (
+            f"{path.name}: the example omits the wrapper key, which is the one "
+            "thing a reader cannot guess")
+        for key in ("artifact_kind", "stage1", "stage2", "notes"):
+            assert key in body["verification"], f"{path.name}: example lacks {key}"
+
+
+def test_the_page_shows_a_verdict():
+    """#66. Sold as "a verdict instead of a claim", and never shown one.
+
+    The only verdict line used to be `READY scope: Stage 1`, inside the
+    paragraph about the degraded case. I cut the full sample myself on #62,
+    aiming at the commentary around it and taking the subject with it.
+    """
+    for path in (README, README_RU):
+        text = path.read_text(encoding="utf-8")
+        samples = [b for lang, b in fenced(text) if lang == "text"]
+        verdicts = [b for b in samples if "Verdict:" in b or "READY" in b]
+        assert verdicts, f"{path.name}: no verdict shown"
+        body = verdicts[0]
+        for token in ("Stage 1", "Stage 2", "Not proven", "READY"):
+            assert token in body, f"{path.name}: the verdict sample lacks {token!r}"
+
+
+def test_the_kind_values_sit_in_the_table_not_in_a_positional_list():
+    """#66. Both readers counted rows with a finger, and both stopped there.
+
+    "one row each, in that order" asked the reader to join two lists by
+    position to learn the only mandatory field. `a prompt or parser` →
+    `model-boundary` is not guessable.
+    """
+    sys.path.insert(0, str(ROOT / "plugins" / "cerberus" / "skills" / "setup"))
+    import cerberus_setup
+
+    for path, heading in ((README, "## Stage 2 and the delivery boundary"),
+                          (README_RU, "## Стадия 2 и граница поставки")):
+        body = section(path.read_text(encoding="utf-8"), heading)
+        rows = [r for r in body.splitlines() if r.startswith("|") and "---" not in r]
+        for kind in cerberus_setup.STAGE2_HINT_BY_KIND:
+            on_its_own_row = [r for r in rows if f"`{kind}`" in r]
+            assert on_its_own_row, f"{path.name}: {kind!r} is not in a row of its own"
+        assert "in that order" not in body and "в том же порядке" not in body, (
+            f"{path.name}: the positional join is back")
+
+
+def test_the_page_tells_the_reader_what_to_type():
+    """#66. There was no prompt to copy anywhere, in either language.
+
+    "Ask your agent to set the project up" leaves the reader guessing the
+    wording, and the skill is only named sixty lines later.
+    """
+    for path in (README, README_RU):
+        quick = quick_section(path.read_text(encoding="utf-8"))
+        prompts = [b for lang, b in fenced(quick) if lang == ""]
+        assert len(prompts) >= 2, f"{path.name}: {len(prompts)} prompts to copy"
+        joined = " ".join(prompts).lower()
+        assert "setup" in joined and "cerberus" in joined, joined
+
+
+def test_uninstalling_names_both_places_the_installer_writes():
+    """#66. `install.sh` uses `.agents/skills/` when the project has `.agents/`.
+
+    The uninstall instructions named only `.claude/skills/`, so a Codex user
+    who ran the documented command was told to delete a directory they do not
+    have, and left the install in place.
+    """
+    for path, heading in ((README, "## Uninstall"), (README_RU, "## Удаление")):
+        body = section(path.read_text(encoding="utf-8"), heading)
+        for where in (".claude/skills/", ".agents/skills/"):
+            assert where in body, f"{path.name}: uninstall never mentions {where}"
+
+
+def test_what_the_install_needs_is_stated_where_the_command_is():
+    """Round two of #66. A Go engineer found the Python requirement at line 216
+    of 225 and called it a disqualifying fact hidden at the bottom.
+
+    Checking only the Requirements section passed while the reader had already
+    left, so the tools are asserted beside the command that needs them.
+    """
+    for path, heading in ((README, "## Install"), (README_RU, "## Установка")):
+        body = flat(section(path.read_text(encoding="utf-8"), heading))
+        for tool in ("python3", "curl", "tar"):
+            assert tool in body, (
+                f"{path.name}: the install section never says it needs {tool}")
+
+
+def test_requirements_names_everything_the_documented_install_needs():
+    """#66. "Python 3.10+ and nothing else" — the installer also needs curl, tar, sh."""
+    for path, heading in ((README, "## Requirements"), (README_RU, "## Требования")):
+        body = flat(section(path.read_text(encoding="utf-8"), heading))
+        for tool in ("curl", "wget", "tar"):
+            assert tool in body, f"{path.name}: requirements never mention {tool}"
+        assert "nothing else" not in body and "больше ничего" not in body, (
+            f"{path.name}: still claims nothing else is needed")
+
+
+def test_the_draft_says_which_kinds_it_works_for():
+    """#66. It returns nothing for five of the seven kinds in the page's own table."""
+    sys.path.insert(0, str(ROOT / "plugins" / "cerberus" / "skills" / "setup"))
+    import cerberus_setup
+
+    for path in (README, README_RU):
+        text = flat(path.read_text(encoding="utf-8"))
+        for kind in cerberus_setup.DEPLOYED_KINDS:
+            assert f"`{kind}`" in text, f"{path.name}: {kind}"
+        window = text[text.index("--draft-stage2") - 400:text.index("--draft-stage2") + 400]
+        assert all(f"`{k}`" in window for k in cerberus_setup.DEPLOYED_KINDS), (
+            f"{path.name}: the draft is offered without saying which kinds it serves")
+
+
+def test_the_page_does_not_claim_no_model_is_ever_called():
+    """#66. It said so three paragraphs above a table row reading "a real model call".
+
+    And both documented installs fetch over the network. The claim is true only
+    under an unstated scope, in the paragraph a reader uses to decide about
+    privacy and cost.
+    """
+    for path in (README, README_RU):
+        text = flat(path.read_text(encoding="utf-8"))
+        for claim in ("no model is called and nothing goes over the network",
+                      "ни одна модель не вызывается, в сеть ничего не уходит"):
+            assert claim not in text, f"{path.name}: {claim!r}"
+
+
+def test_the_page_says_the_cycle_wants_an_issue():
+    """#66. SKILL.md calls working without one its own worst failure mode.
+
+    The word did not appear on either page, so a reader following the README
+    exactly lands in the degraded mode the skill was written to prevent.
+    """
+    for path, needle in ((README, "issue written before"), (README_RU, "задача, написанная")):
+        assert needle in flat(path.read_text(encoding="utf-8")), f"{path.name}: {needle!r}"
+
+
+def test_the_page_says_whose_credentials_stage_two_runs_with():
+    """#66. The cold reader called this a blocker at review, and was right.
+
+    Stage 2 runs commands the reader wrote, against real environments, with
+    whatever the shell has. The page said nothing about it.
+    """
+    # Scoped to the section that answers "what will this do to my machine".
+    # Matching the whole page passed on the word `credentials` sitting inside
+    # the config example's `notes` string — a guard satisfied by a sample.
+    for path, heading, needles in (
+        (README, "## What it does to your session", ("credentials", "stage2")),
+        (README_RU, "## Что это делает с вашей сессией", ("доступ", "stage2")),
+    ):
+        body = flat(section(path.read_text(encoding="utf-8"), heading))
+        for needle in needles:
+            assert needle in body, f"{path.name}: {heading} never mentions {needle!r}"
+
+
+def test_the_page_shows_the_commands_for_the_case_it_calls_the_main_one():
+    """Round two of #66. The paragraph a reader with a deployed service needs,
+    and it contained no commands — description where instruction was due.
+
+    A fresh reader wrote the whole config and had to invent `gh run watch` and
+    `kubectl rollout status` himself, on a page that hands out `curl … | jq -e`
+    elsewhere.
+    """
+    for path, heading in ((README, "## Stage 2 and the delivery boundary"),
+                          (README_RU, "## Стадия 2 и граница поставки")):
+        body = section(path.read_text(encoding="utf-8"), heading)
+        blocks = "\n".join(b for _, b in fenced(body))
+        for command in ("gh run watch --exit-status", "kubectl", "rollout status",
+                        "git rev-parse HEAD"):
+            assert command in blocks, f"{path.name}: no {command!r} in the CI paragraph"
+
+
+def test_the_page_answers_deploy_on_merge_only():
+    """Half the industry deploys from the default branch, and for them the page's
+    own instruction is only possible after the merge — which defeats it."""
+    for path, needle in ((README, "only deploys from the default branch"),
+                         (README_RU, "катит только с основной ветки")):
+        assert needle in flat(path.read_text(encoding="utf-8")), f"{path.name}: {needle!r}"
+
+
+def test_the_config_example_does_not_contradict_the_boundary_table():
+    """The one full example showed `docker compose up` for `artifact_kind: service`,
+    whose row in the same page's table demands a deployed instance."""
+    for path in (README, README_RU):
+        text = path.read_text(encoding="utf-8")
+        body = json.loads([b for lang, b in fenced(text) if lang == "json"][0])
+        v = body["verification"]
+        if v["artifact_kind"] in ("service", "chart"):
+            joined = " ".join(v["stage2"])
+            assert "localhost" not in joined and "docker compose" not in joined, (
+                f"{path.name}: a service's example reaches no further than this machine")
+
+
+def test_the_page_states_the_execution_contract_for_stage2():
+    """A fresh reader inferred the exit-code rule from a sample instead of reading it."""
+    for path, needles in ((README, ("non-zero exit fails the stage", "from the repository root")),
+                          (README_RU, ("ненулевой код возврата валит стадию",
+                                       "из корня репозитория"))):
+        text = flat(path.read_text(encoding="utf-8"))
+        for needle in needles:
+            assert needle in text, f"{path.name}: {needle!r}"
+
+
+def test_the_page_shows_a_not_ready_verdict_too():
+    """It promised one comes back the same way and showed only the happy one.
+
+    That is the output a reader is actually buying.
+    """
+    for path in (README, README_RU):
+        samples = [b for lang, b in fenced(path.read_text(encoding="utf-8")) if lang == "text"]
+        assert any("NOT READY" in b and "BLOCKER" in b for b in samples), (
+            f"{path.name}: no failing verdict shown")
+
+
+def test_telling_the_agent_to_stop_has_a_method():
+    """"you can tell it not to" named no mechanism, and that is the question
+    that gets tools uninstalled."""
+    for path, needle in ((README, "don't run cerberus unless i ask"),
+                         (README_RU, "не запускай цербера, пока не попрошу")):
+        assert needle in flat(path.read_text(encoding="utf-8")), f"{path.name}: {needle!r}"
+
+
+def test_the_first_paragraph_does_not_promise_more_than_the_page_delivers():
+    """Round three of #66. "No hook, no daemon: they run when asked" was
+    cancelled two hundred lines later, in a subordinate clause, under a
+    reassuring heading.
+
+    A reader who decides from the headline never gets there, and what is
+    cancelled is the determinism that made running shell commands with their
+    credentials look safe.
+    """
+    for path, needle in ((README, "may reach for one when you say"),
+                         (README_RU, "может взяться за них сам")):
+        text = path.read_text(encoding="utf-8")
+        first = flat(text.split("## ")[0])
+        assert needle.lower() in first, (
+            f"{path.name}: the caveat is not in the opening, where the promise is")
+
+
+def test_the_config_example_does_not_claim_to_be_complete_while_omitting_a_key():
+    """Round three. "All of it:" preceded four keys; the fifth was seventy lines
+    down, and a reader said he no longer knew what else might exist."""
+    for path in (README, README_RU):
+        text = path.read_text(encoding="utf-8")
+        assert "All of it:" not in text and "Целиком:" not in text, (
+            f"{path.name}: claims completeness")
+        assert "stage2_unreachable" in text
+        blocks = [b for lang, b in fenced(text) if lang == "json"]
+        assert any("stage2_unreachable" in b for b in blocks), (
+            f"{path.name}: the fifth key is described but never shown as JSON")
+
+
+def test_nothing_in_the_examples_triggers_a_deployment():
+    """Round three, and it was mine: the round-two example ran
+    `gh workflow run deploy.yml` — verification starting a deploy as a side
+    effect, which a platform engineer called a change-management incident.
+    """
+    for path in (README, README_RU):
+        text = path.read_text(encoding="utf-8")
+        for lang, body in fenced(text):
+            for shape in ("workflow run", "helm upgrade", "kubectl apply",
+                          "git push origin"):
+                assert shape not in body, (
+                    f"{path.name}: an example performs a deployment: {shape!r}")
+
+
+def test_the_page_says_notes_is_not_a_permission_boundary():
+    """Round three. The only stated protection for production was a sentence in
+    a free-text field, addressed to a language model."""
+    for path, needles in ((README, ("not a permission boundary", "keep secrets out")),
+                          (README_RU, ("не граница прав", "секреты в файл не"))):
+        text = flat(path.read_text(encoding="utf-8"))
+        for needle in needles:
+            assert needle in text, f"{path.name}: {needle!r}"
 
 
 def _main() -> int:
