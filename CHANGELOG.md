@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.2](https://github.com/concordloom/cerberus/compare/v2.0.1...v2.0.2) (2026-08-16)
+
+
+### Bug Fixes
+
+* the closing message was written for a first install and printed on every run ([#40](https://github.com/concordloom/cerberus/issues/40)) ([3fb0c6d](https://github.com/concordloom/cerberus/commit/3fb0c6dc860743e995f39168838874d85f2921cc)), closes [#39](https://github.com/concordloom/cerberus/issues/39)
+
 ## [2.0.1](https://github.com/concordloom/cerberus/compare/v2.0.0...v2.0.1) (2026-08-16)
 
 
