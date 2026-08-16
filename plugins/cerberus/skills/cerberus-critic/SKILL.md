@@ -1,5 +1,5 @@
 ---
-name: critic
+name: cerberus-critic
 description: Adversarial review of a claim before it is published. Use before saying "the cause is X", "this is not our bug", "the class is closed", "this will prevent it" or before relaying someone else's analysis.
 when_to_use: Before publishing a diagnosis, an explanation of a mechanism, a conclusion that implies work, or a retelling of another review.
 ---

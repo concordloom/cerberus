@@ -34,7 +34,7 @@ import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SKILLS = ROOT / "plugins" / "cerberus" / "skills"
-SETUP = SKILLS / "setup" / "cerberus_setup.py"
+SETUP = SKILLS / "cerberus-setup" / "cerberus_setup.py"
 INSTALL = ROOT / "install.sh"
 
 # Load-bearing internally, meaningless to someone being set up. The whole point
@@ -84,7 +84,7 @@ DEAD_KEYS = [
 def project(files: dict[str, str]) -> pathlib.Path:
     """Build a throwaway project with the setup script beside its skill."""
     tmp = pathlib.Path(tempfile.mkdtemp())
-    target = tmp / ".claude" / "skills" / "setup"
+    target = tmp / ".claude" / "skills" / "cerberus-setup"
     target.mkdir(parents=True)
     (target / "cerberus_setup.py").write_text(SETUP.read_text(encoding="utf-8"), encoding="utf-8")
     # `_write` rather than a loop here: some fixtures need a directory, which a
@@ -96,7 +96,7 @@ def project(files: dict[str, str]) -> pathlib.Path:
 
 def run_setup(root: pathlib.Path, *args: str) -> tuple[int, str]:
     proc = subprocess.run(
-        [sys.executable, str(root / ".claude" / "skills" / "setup" / "cerberus_setup.py"), *args],
+        [sys.executable, str(root / ".claude" / "skills" / "cerberus-setup" / "cerberus_setup.py"), *args],
         cwd=str(root),
         capture_output=True,
         text=True,
@@ -371,7 +371,7 @@ def test_a_check_never_inherits_stdin():
 def test_a_project_path_with_a_space_is_still_recognised():
     tmp = pathlib.Path(tempfile.mkdtemp()) / "a project"
     tmp.mkdir()
-    target = tmp / ".claude" / "skills" / "setup"
+    target = tmp / ".claude" / "skills" / "cerberus-setup"
     target.mkdir(parents=True)
     (target / "cerberus_setup.py").write_text(SETUP.read_text(encoding="utf-8"), encoding="utf-8")
     for name, text in PY_PROJECT.items():
@@ -925,7 +925,7 @@ def test_the_wrong_revision_trap_is_explained_not_only_avoided():
 
 def test_the_skill_states_the_three_answers_to_merge_only_deployment():
     """#47, point 4. Choosing silently is how a verdict covers an undeployed revision."""
-    for path in (SKILLS / "setup" / "SKILL.md", SKILLS / "setup" / "SKILL.ru.md"):
+    for path in (SKILLS / "cerberus-setup" / "SKILL.md", SKILLS / "cerberus-setup" / "SKILL.ru.md"):
         text = path.read_text(encoding="utf-8").lower()
         for needle in ("preview", "stage2_unreachable") if path.name.endswith("ru.md") is False \
                 else ("превью", "stage2_unreachable"):
@@ -935,8 +935,8 @@ def test_the_skill_states_the_three_answers_to_merge_only_deployment():
 
 def test_the_skill_asks_about_access_before_writing_commands():
     """A stage2 nobody can run returns Not proven forever, for a mechanical reason."""
-    for path, needles in ((SKILLS / "setup" / "SKILL.md", ("access", "credentials")),
-                          (SKILLS / "setup" / "SKILL.ru.md", ("доступ", "учётные"))):
+    for path, needles in ((SKILLS / "cerberus-setup" / "SKILL.md", ("access", "credentials")),
+                          (SKILLS / "cerberus-setup" / "SKILL.ru.md", ("доступ", "учётные"))):
         text = path.read_text(encoding="utf-8").lower()
         for needle in needles:
             assert needle in text, f"{path.name}: {needle!r}"
@@ -944,8 +944,8 @@ def test_the_skill_asks_about_access_before_writing_commands():
 
 def test_the_skill_requires_reading_the_commands_back_before_writing_them():
     """What they said and what you understood diverge silently."""
-    for path, needle in ((SKILLS / "setup" / "SKILL.md", "say back what you understood"),
-                         (SKILLS / "setup" / "SKILL.ru.md", "перескажи, что ты понял")):
+    for path, needle in ((SKILLS / "cerberus-setup" / "SKILL.md", "say back what you understood"),
+                         (SKILLS / "cerberus-setup" / "SKILL.ru.md", "перескажи, что ты понял")):
         assert needle in path.read_text(encoding="utf-8").lower(), path.name
 
 
@@ -1161,8 +1161,8 @@ def test_installing_brings_every_skill_and_the_script_beside_its_own():
             installed = {p.name for p in (root / where).iterdir()} if (root / where).is_dir() else set()
             expected = {p.name for p in SKILLS.iterdir() if (p / "SKILL.md").exists()}
             assert installed == expected, f"{flag}: installed {installed}, expected {expected}"
-            script = root / where / "setup" / "cerberus_setup.py"
-            assert script.exists(), f"{flag}: the setup skill describes a script that was not installed"
+            script = root / where / "cerberus-setup" / "cerberus_setup.py"
+            assert script.exists(), f"{flag}: the cerberus-setup skill describes a script that was not installed"
             # `cp -R` of a source tree that has been run carries its byte cache,
             # stamped with this machine's Python version, into the user's repo.
             junk = [str(p.relative_to(root)) for p in root.rglob("__pycache__")]
@@ -1318,6 +1318,57 @@ def test_questions_come_with_concrete_options():
     root = project(MAKE_PROJECT)
     _, out = run_setup(root)
     assert "1." in out and "2." in out, out
+
+
+#: Words another plugin will also use for a skill. Skill names are one flat
+#: namespace across everything a person has installed, and a collision is
+#: silent: two directories answer to the name, both load, and the agent picks
+#: by description. Reproduced on #69 with a foreign `setup`.
+GENERIC_NAMES = {
+    "setup", "critic", "review", "test", "tests", "check", "verify", "docs",
+    "build", "deploy", "release", "lint", "format", "install", "config",
+    "gate", "audit", "plan", "commit", "debug",
+}
+
+
+def test_no_skill_is_named_something_another_plugin_would_use():
+    """#69, point 5. Fixed once and left to judgement is fixed until the next skill.
+
+    `cerberus` keeps its name: it is the product, and a distinctive one. The
+    other two were named for their role inside this repository, as though this
+    repository were the only thing installed.
+    """
+    for skill in sorted(SKILLS.iterdir()):
+        if not (skill / "SKILL.md").exists():
+            continue
+        head = (skill / "SKILL.md").read_text(encoding="utf-8").split("---")[1]
+        declared = re.search(r"^name:\s*(\S+)", head, re.M).group(1)
+        assert declared == skill.name, (
+            f"{skill.name}: frontmatter says {declared!r}")
+        if declared == "cerberus":
+            continue
+        assert declared not in GENERIC_NAMES, (
+            f"{declared!r} is a name another plugin will use — prefix it")
+        assert declared.startswith("cerberus-"), (
+            f"{declared!r} does not say whose it is")
+
+
+def test_the_product_keeps_its_own_name():
+    """#69, point 4. Renaming everything for symmetry helps nobody."""
+    names = {p.name for p in SKILLS.iterdir() if (p / "SKILL.md").exists()}
+    assert "cerberus" in names, f"the product lost its name: {names}"
+    assert "cerberus-cerberus" not in names
+
+
+def test_both_languages_declare_the_same_skill_name():
+    """A rename that touches one file of a pair is a skill with two names."""
+    for skill in sorted(SKILLS.iterdir()):
+        ru = skill / "SKILL.ru.md"
+        if not ru.exists():
+            continue
+        head = ru.read_text(encoding="utf-8").split("---")[1]
+        declared = re.search(r"^name:\s*(\S+)", head, re.M).group(1)
+        assert declared == skill.name, f"{skill.name}: SKILL.ru.md says {declared!r}"
 
 
 def _main() -> int:

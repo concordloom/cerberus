@@ -329,7 +329,7 @@ def test_every_kind_on_the_page_has_advice_in_the_code():
     not know, so two rows added to match the documented enum were quietly
     getting library advice.
     """
-    sys.path.insert(0, str(ROOT / "plugins" / "cerberus" / "skills" / "setup"))
+    sys.path.insert(0, str(ROOT / "plugins" / "cerberus" / "skills" / "cerberus-setup"))
     import cerberus_setup
 
     example = (ROOT / "cerberus.example.json").read_text(encoding="utf-8")
@@ -449,7 +449,7 @@ def test_the_quoted_output_is_what_setup_really_prints():
     and no ellipsis, and the cut portion contradicted the paragraph beneath it.
     The same rule now applies to the setup output the quick start quotes.
     """
-    setup = ROOT / "plugins" / "cerberus" / "skills" / "setup" / "cerberus_setup.py"
+    setup = ROOT / "plugins" / "cerberus" / "skills" / "cerberus-setup" / "cerberus_setup.py"
     with tempfile.TemporaryDirectory() as d:
         root = pathlib.Path(d)
         (root / "tests").mkdir()
@@ -656,7 +656,7 @@ def test_the_badges_describe_the_routes_the_page_actually_gives():
 def test_no_path_is_handed_out_without_saying_which_install_it_belongs_to():
     """#58's mixed cell: the recommended route, and the page got it wrong.
 
-    `python3 .claude/skills/setup/cerberus_setup.py` exists only after
+    `python3 .claude/skills/cerberus-setup/cerberus_setup.py` exists only after
     `install.sh`. A plugin user has it under the plugin's cache, and that was
     the one sentence telling them how to run setup again.
     """
@@ -664,7 +664,7 @@ def test_no_path_is_handed_out_without_saying_which_install_it_belongs_to():
         text = path.read_text(encoding="utf-8")
         lines = text.splitlines()
         for n, line in enumerate(lines):
-            if ".claude/skills/setup" not in line:
+            if ".claude/skills/cerberus-setup" not in line:
                 continue
             # The same sentence, not a nearby paragraph: a four-line window
             # matched the word "install" from "the install step above" and
@@ -902,7 +902,7 @@ def test_the_kind_values_sit_in_the_table_not_in_a_positional_list():
     position to learn the only mandatory field. `a prompt or parser` →
     `model-boundary` is not guessable.
     """
-    sys.path.insert(0, str(ROOT / "plugins" / "cerberus" / "skills" / "setup"))
+    sys.path.insert(0, str(ROOT / "plugins" / "cerberus" / "skills" / "cerberus-setup"))
     import cerberus_setup
 
     for path, heading in ((README, "## Stage 2 and the delivery boundary"),
@@ -969,7 +969,7 @@ def test_requirements_names_everything_the_documented_install_needs():
 
 def test_the_draft_says_which_kinds_it_works_for():
     """#66. It returns nothing for five of the seven kinds in the page's own table."""
-    sys.path.insert(0, str(ROOT / "plugins" / "cerberus" / "skills" / "setup"))
+    sys.path.insert(0, str(ROOT / "plugins" / "cerberus" / "skills" / "cerberus-setup"))
     import cerberus_setup
 
     for path in (README, README_RU):
@@ -1142,6 +1142,19 @@ def test_the_page_says_notes_is_not_a_permission_boundary():
         text = flat(path.read_text(encoding="utf-8"))
         for needle in needles:
             assert needle in text, f"{path.name}: {needle!r}"
+
+
+def test_the_page_says_what_an_update_leaves_behind_after_the_rename():
+    """#69. The plugin routes replace the directories; the installer route does not.
+
+    Someone updating from 2.3.1 keeps `critic/` and `setup/` on disk, which is
+    exactly the collision the rename was for — with our own old copy.
+    """
+    for path, needles in ((README, ("2.3.1", "left behind")),
+                          (README_RU, ("2.3.1", "обновление их не убирает"))):
+        text = flat(path.read_text(encoding="utf-8"))
+        for needle in needles:
+            assert needle.lower() in text, f"{path.name}: {needle!r}"
 
 
 def _main() -> int:

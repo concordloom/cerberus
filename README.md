@@ -57,16 +57,18 @@ Re-running it is safe, and is how you update this route.
 codex plugin remove cerberus@concordloom    # Codex
 ```
 
-Installed into the repository: delete `cerberus/`, `critic/` and `setup/` from
-`.claude/skills/` or `.agents/skills/`, and `cerberus.json` if you no longer
-want it.
+Installed into the repository: delete `cerberus/`, `cerberus-critic/` and
+`cerberus-setup/` from `.claude/skills/` or `.agents/skills/`, and
+`cerberus.json` if you no longer want it. Installs from 2.3.1 and earlier used
+`critic/` and `setup/` — those directories are left behind by an update and are
+yours to delete.
 
 ## Quick start
 
 **1. Set the project up.** Say this to your agent:
 
 ```
-Run the setup skill on this project.
+Run the cerberus-setup skill on this project.
 ```
 
 It finds your checks, runs them, and writes down the ones that pass. Output is
@@ -138,7 +140,7 @@ Every entry is a shell command run from the repository root, in order, and a
 non-zero exit fails the stage — which is why each line above ends in something
 that *can* return non-zero. A stage stops at its first failure.
 
-`setup` writes `artifact_kind` and `stage1` after running the commands. `stage2`
+`cerberus-setup` writes `artifact_kind` and `stage1` after running the commands. `stage2`
 is yours — see below. `notes` is anything the agent should know and cannot read
 off the disk.
 
@@ -192,8 +194,8 @@ preview namespace, run the verdict after the merge and before the release, or
 declare `stage2_unreachable` below.
 
 For `service` and `chart` the setup script can draft those commands from your
-`helm/`, manifests, compose file or deploy job — ask the agent to run `setup`
-with `--draft-stage2`. It prints a draft with blanks to fill in and the traps
+`helm/`, manifests, compose file or deploy job — ask the agent to run
+`cerberus-setup` with `--draft-stage2`. It prints a draft with blanks to fill in and the traps
 named, and writes nothing. For the other five kinds there is no draft; the table
 above is the specification.
 
@@ -215,7 +217,7 @@ skills are text your agent reads when you ask for them, and — as the first
 paragraph says — an agent may reach for them on "done" of its own accord. Tell
 it not to the way you tell it anything else: "don't run cerberus unless I ask".
 
-What does execute: `setup` runs candidate check commands in your project — test
+What does execute: `cerberus-setup` runs candidate check commands in your project — test
 runners, linters, a build — to find out which pass. Stage 2 runs the commands
 **you** put in `stage2`, with whatever credentials your shell has. `notes` is a
 note to the agent, not a permission boundary: if your kubeconfig can reach
@@ -230,8 +232,8 @@ none of this fires by itself.
 
 ## The critic, which is not the gate
 
-Three skills ship together: `cerberus`, `critic`, `setup`. `cerberus` asks
-whether the change does what you say it does. `critic` asks whether what you
+Three skills ship together: `cerberus`, `cerberus-critic`, `cerberus-setup`. `cerberus` asks
+whether the change does what you say it does. `cerberus-critic` asks whether what you
 *said* is true — a diagnosis, a mechanism, a claim about the code — by spawning
 an adversary told to refute it. Neither covers the other: work can be right
 while its explanation is wrong, and an explanation being right proves nothing
