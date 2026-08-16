@@ -662,14 +662,8 @@ def test_nothing_in_the_repository_still_describes_the_hooks():
             text = path.read_text(encoding="utf-8")
         except Exception:
             continue
-        # A section telling someone how to remove the old machinery has to name
-        # it. Exempted by section rather than by line, because every line in it
-        # is about removal and none of them describes anything as present.
-        upgrading = False
         for n, line in enumerate(text.splitlines(), 1):
-            if line.startswith("#"):
-                upgrading = bool(re.search(r"[Uu]pgrad|Обновление", line))
-            if upgrading or DENIES.search(line):
+            if DENIES.search(line):
                 continue
             if dead.search(line):
                 offenders.append(f"{path.relative_to(ROOT)}:{n}: {line.strip()[:70]}")
