@@ -25,6 +25,15 @@ README = ROOT / "README.md"
 README_RU = ROOT / "README.ru.md"
 
 
+def install_section(text: str) -> str:
+    """Wherever installing lives, so a guard survives the page being reordered."""
+    return section(text, "## Install" if "## Install" in text else "## Установка")
+
+
+def quick_section(text: str) -> str:
+    return section(text, "## Quick start" if "## Quick start" in text else "## Быстрый старт")
+
+
 def section(text: str, heading: str) -> str:
     """The body of one `## heading`, up to the next one."""
     start = text.index(heading)
@@ -66,7 +75,7 @@ def console_blocks(text: str) -> list[str]:
 
 def documented_install() -> tuple[str, str]:
     """The page's install command, split into the URL it fetches and its flags."""
-    blocks = console_blocks(section(README.read_text(encoding="utf-8"), "## Quick start"))
+    blocks = console_blocks(install_section(README.read_text(encoding="utf-8")))
     assert len(blocks) == 1, f"expected one runnable command, found {len(blocks)}"
     command = blocks[0]
     assert command.count("\n") == 0, "it must be one line to copy: " + command
@@ -123,7 +132,7 @@ def test_the_agent_commands_are_the_documented_ones():
     version to upgrade from. Codex reads the same marketplace, which was true
     before anyone here checked.
     """
-    blocks = shell_blocks(section(README.read_text(encoding="utf-8"), "## Quick start"))
+    blocks = shell_blocks(install_section(README.read_text(encoding="utf-8")))
     assert len(blocks) == 2, f"expected two install pairs, found {len(blocks)}"
     plugin = [line.strip() for line in blocks[0].splitlines() if line.strip()]
     assert plugin == [
@@ -144,9 +153,7 @@ def test_both_agents_install_the_same_way():
     difference reflects the agents or our ignorance. It reflected ours.
     """
     for path in (README, README_RU):
-        quick = section(path.read_text(encoding="utf-8"),
-                        "## Quick start" if path is README else "## Быстрый старт")
-        blocks = shell_blocks(quick)
+        blocks = shell_blocks(install_section(path.read_text(encoding="utf-8")))
         assert len(blocks) == 2, f"{path.name}: {len(blocks)} agent blocks"
         for block in blocks:
             lines = [l for l in block.splitlines() if l.strip()]
@@ -193,13 +200,13 @@ def test_nothing_still_sends_codex_somewhere_else():
 
 
 def test_the_quick_start_shows_what_success_looks_like():
-    body = section(README.read_text(encoding="utf-8"), "## Quick start")
+    body = quick_section(README.read_text(encoding="utf-8"))
     assert "```text" in body, "the reader is told to run something with no idea what it prints"
     assert "Checks I ran here" in body, body
 
 
 def test_the_quick_start_fits_above_the_fold():
-    body = section(README.read_text(encoding="utf-8"), "## Quick start")
+    body = quick_section(README.read_text(encoding="utf-8"))
     lines = [line for line in body.splitlines() if line.strip()]
     # It carries three install paths now, so the bound is about staying
     # scannable rather than about fitting a terminal.
@@ -348,10 +355,12 @@ def test_the_page_admits_an_agent_may_invoke_it_unasked():
     skill is for, which is exactly what makes an agent reach for it.
     """
     for path, phrases in (
-        (README, ("may also reach for it unasked", "judgement")),
-        (README_RU, ("может взяться за него и сам", "суждение")),
+        (README, ("reach for it unasked", "judgement")),
+        (README_RU, ("взяться за него и сам", "суждение")),
     ):
-        text = path.read_text(encoding="utf-8").lower()
+        # Collapsed, because these phrases wrap across lines and a guard that
+        # breaks when a paragraph is rewrapped is a guard nobody keeps.
+        text = " ".join(path.read_text(encoding="utf-8").lower().split())
         for phrase in phrases:
             assert phrase in text, f"{path.name}: {phrase!r}"
 
@@ -511,10 +520,8 @@ def test_installing_is_explained_in_exactly_one_place():
             if re.search(r"/plugin install |codex plugin add|install\.sh \|", commands):
                 installing.append(sec.splitlines()[0])
         assert len(installing) == 1, f"{path.name}: installing explained in {installing}"
-        quick = section(text, "## Quick start") if "## Quick start" in text else section(
-            text, "## Быстрый старт"
-        )
-        assert "plugin install" in quick and "codex plugin add" in quick, path.name
+        where = install_section(text)
+        assert "plugin install" in where and "codex plugin add" in where, path.name
 
 
 def test_nothing_claims_an_agent_lacks_hooks():
@@ -602,12 +609,11 @@ def test_each_install_route_says_who_it_is_for():
     Two of them install for you; the third installs into the repository, where
     it can be committed and the whole team gets it.
     """
-    for path, needles in ((README, ("whole team", "committed")),
-                          (README_RU, ("всей команде", "закоммитить"))):
-        quick = section(path.read_text(encoding="utf-8"),
-                        "## Quick start" if path is README else "## Быстрый старт")
+    for path, needles in ((README, ("for yourself", "whole team", "committed")),
+                          (README_RU, ("себе", "всей команде", "закоммиченными"))):
+        where = install_section(path.read_text(encoding="utf-8"))
         for needle in needles:
-            assert needle.lower() in quick.lower(), f"{path.name}: {needle!r}"
+            assert needle.lower() in where.lower(), f"{path.name}: {needle!r}"
 
 
 def test_the_russian_page_explains_why_the_sample_output_is_english():
@@ -718,6 +724,65 @@ def test_no_command_on_either_page_has_a_blank_left_in_it():
                 continue
             assert not re.search(r"<[a-zа-я][^>]*>", inline, re.I), (
                 f"{path.name}: a command with a blank in it: {inline!r}")
+
+
+def test_the_install_section_contains_only_installing():
+    """#62. Someone who came to install should read commands, not paragraphs.
+
+    The complaint was that the two commands were buried in prose about setup,
+    sample output, and why that output is English. So the section is bounded:
+    every line in it is a command, a heading, a badge of who it is for, or one
+    short line saying where the skills land.
+    """
+    for path in (README, README_RU):
+        text = path.read_text(encoding="utf-8")
+        where = install_section(text)
+        prose = []
+        in_fence = False
+        for line in where.splitlines():
+            if line.startswith("```"):
+                in_fence = not in_fence
+                continue
+            if in_fence or not line.strip() or line.startswith(("#", "**", "|")):
+                continue
+            prose.append(line)
+        # Two destinations, two lines each at most: what lands where, and how
+        # to undo it.
+        assert len(prose) <= 6, (
+            f"{path.name}: {len(prose)} lines of prose in the install section:\n"
+            + "\n".join(prose))
+
+
+def test_the_two_destinations_are_separate_and_labelled():
+    """#62, point 2. A reader must not have to infer which one they want."""
+    for path, needles in ((README, ("### For yourself", "### Into the repository")),
+                          (README_RU, ("### Себе", "### В репозиторий"))):
+        text = path.read_text(encoding="utf-8")
+        for needle in needles:
+            assert needle in text, f"{path.name}: {needle!r}"
+        assert text.index(needles[0]) < text.index(needles[1]), (
+            f"{path.name}: the personal route should come first")
+
+
+def test_the_quick_start_holds_no_install_commands():
+    """#62, point 4. It is what to do *after* installing."""
+    for path in (README, README_RU):
+        quick = quick_section(path.read_text(encoding="utf-8"))
+        for lang, body in fenced(quick):
+            assert "plugin" not in body and "install.sh" not in body, (
+                f"{path.name}: installing crept back into the quick start:\n{body}")
+
+
+def test_the_page_did_not_grow_by_being_restructured():
+    """#62, point 6, and the reason #58's bound exists.
+
+    A restructure that adds is the same failure as a fix that appends.
+    """
+    for path, lines in ((README, 145), (README_RU, 147)):
+        text = path.read_text(encoding="utf-8")
+        assert len(re.findall(r"^## ", text, re.M)) <= 10, f"{path.name}: a section was added"
+        body = [l for l in text.splitlines() if l.strip()]
+        assert len(body) <= lines, f"{path.name}: {len(body)} lines, bound {lines}"
 
 
 def _main() -> int:
