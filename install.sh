@@ -262,10 +262,10 @@ fi
 
 echo
 if [ "$WANT_CLAUDE" -eq 1 ]; then
-  # The example configuration's checks are placeholders, so at this point the
-  # gate refuses claims while checking nothing. Setup is what closes that, and
-  # it is the difference between installed and working — so it is offered as
-  # the next step rather than left to be discovered.
+  # Refusals ship off and the example's checks are placeholders, so at this
+  # point nothing happens at all. Setup writes real checks and switches
+  # enforcement on — it is the difference between installed and running, so it
+  # is offered as the next step rather than left to be discovered.
   if [ "$RUN_SETUP" -eq 1 ] && command -v python3 >/dev/null 2>&1; then
     # Not `|| true`: that turned a refusal into a silent success and left the
     # gate installed and unwired with exit 0 — a third route to the state this
@@ -287,7 +287,7 @@ if [ "$WANT_CLAUDE" -eq 1 ]; then
     echo
     echo "    python3 .claude/hooks/cerberus_setup.py"
     echo
-    echo "Until then it will refuse claims without checking anything."
+    echo "Refusals are off until you ask; that step switches them on."
   fi
 else
   echo "Done. Invoke the skill before claiming a change works."

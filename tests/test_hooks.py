@@ -236,6 +236,58 @@ def test_nothing_happens_until_a_project_asks():
             assert out == "", config
 
 
+def test_switching_it_off_silences_a_marker_that_already_exists():
+    # The guard in the gate had no test at all: every "it stays silent" case
+    # also had no marker, so deleting the guard outright left 123 tests green.
+    # This is the state that distinguishes them — and it is the exact thing the
+    # opt-out exists for: it kept firing, so you turned it off.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = pathlib.Path(d)
+        enforcing(tmp)
+        run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/x.py"}})
+        assert (tmp / ".claude" / ".cerberus-pending").exists(), "setup for the test failed"
+
+        (tmp / ".claude" / "cerberus.json").write_text('{"enforce": false}', encoding="utf-8")
+        _, out = run_hook("cerberus_gate.py", {
+            "cwd": str(tmp), "last_assistant_message": "done, it works"})
+        assert out == "", "it kept refusing after being switched off:\n" + out
+
+
+def test_a_config_of_the_wrong_shape_keeps_enforcing():
+    # Every one of these is valid JSON and none is an object. The falsy ones
+    # were swallowed into defaults — which under an opt-in default means the
+    # gate switches off — and the truthy ones crashed both hooks and failed
+    # open.
+    for raw in ("null", "false", "0", "[]", '""', '[{"enforce": true}]', '"a string"', "1"):
+        with tempfile.TemporaryDirectory() as d:
+            tmp = pathlib.Path(d)
+            (tmp / ".claude").mkdir()
+            (tmp / ".claude" / "cerberus.json").write_text(raw, encoding="utf-8")
+            rc, _ = run_hook("cerberus_mark.py", {
+                "cwd": str(tmp), "tool_input": {"file_path": "app/x.py"}})
+            assert rc == 0, f"{raw}: the hook crashed"
+            assert (tmp / ".claude" / ".cerberus-pending").exists(), raw
+            rc, out = run_hook("cerberus_gate.py", {
+                "cwd": str(tmp), "last_assistant_message": "done, it works"})
+            assert rc == 0, f"{raw}: the gate crashed and failed open"
+            assert out, f"{raw}: a broken config switched the gate off"
+            assert json.loads(out)["decision"] == "block", raw
+
+
+def test_enforce_must_be_a_boolean_to_count():
+    # `"false"` is a truthy string and the commonest typo for this key; it read
+    # as ON. `null` and `0` read as OFF. The coercion was wrong both ways.
+    for raw, expected in (('{"enforce": "false"}', False), ('{"enforce": "true"}', False),
+                          ('{"enforce": 1}', False), ('{"enforce": null}', False),
+                          ('{"enforce": true}', True)):
+        with tempfile.TemporaryDirectory() as d:
+            tmp = pathlib.Path(d)
+            (tmp / ".claude").mkdir()
+            (tmp / ".claude" / "cerberus.json").write_text(raw, encoding="utf-8")
+            cfg = Config.load(tmp)
+            assert cfg.enforce is expected, f"{raw} → {cfg.enforce}"
+
+
 def test_a_broken_config_keeps_enforcing_rather_than_switching_off():
     # The decisive cell. Under an opt-in default, "fall back to defaults" would
     # mean silent — so a typo in the file would switch the gate off, which is

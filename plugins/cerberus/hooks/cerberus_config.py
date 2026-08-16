@@ -2,10 +2,10 @@
 """Shared configuration for the cerberus hooks.
 
 Both hooks read the same optional config file so that a project can describe
-its own layout without editing the hook scripts. Everything has a default: a
-gate that requires configuration before it does anything would be silently
-inert in every project that forgot to configure it, which is the exact failure
-this gate exists to prevent.
+its own layout without editing the hook scripts. Everything has a default —
+including `enforce`, which is off, so a project that never asked is never
+interrupted. That is a deliberate trade and the argument on both sides is at
+``ENFORCE_DEFAULT`` below.
 
 Config file, searched relative to the project root:
 
@@ -106,7 +106,12 @@ class Config:
         ]
         self.claim_patterns = raw.get("claim_patterns", CLAIM_PATTERNS_DEFAULT)
         self.marker = raw.get("marker", MARKER_DEFAULT)
-        self.enforce = bool(raw.get("enforce", ENFORCE_DEFAULT))
+        # Not `bool()`: `"false"` is a truthy string and the commonest typo for
+        # this key, and it would have read as on. Only a real boolean counts;
+        # anything else falls back to the default rather than guessing.
+        declared = raw.get("enforce", ENFORCE_DEFAULT)
+        self.enforce = declared if isinstance(declared, bool) else ENFORCE_DEFAULT
+        self.enforce_malformed = "enforce" in raw and not isinstance(declared, bool)
         #: Set when the config could not be parsed. A project that asked for
         #: enforcement and then broke its config must keep being refused —
         #: falling back to "off" would let a typo switch the gate off, which is
@@ -135,6 +140,19 @@ class Config:
                 # be read — falling back to "off" would let a typo switch the
                 # gate off, which is the defect the opt-in default otherwise
                 # avoids, wearing the opposite clothes.
+                broken = cls(root)
+                broken.enforce = True
+                broken.unreadable = True
+                if relative.startswith(".codex"):
+                    broken.marker = ".codex/.cerberus-pending"
+                return broken
+            if not isinstance(raw, dict):
+                # Valid JSON, wrong shape — `null`, `false`, `0`, `[]`, `""` and
+                # `[{...}]` all reach here. `raw or {}` used to swallow the
+                # falsy ones into defaults, which under an opt-in default means
+                # the gate quietly switches off; the truthy ones crashed both
+                # hooks with an AttributeError and failed open. The file exists,
+                # so this is a configured project with a broken file.
                 broken = cls(root)
                 broken.enforce = True
                 broken.unreadable = True

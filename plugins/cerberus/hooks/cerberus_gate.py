@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Stop hook — refuse to end a turn that claims readiness without verification.
 
-Blocks only when BOTH hold:
+Blocks only when ALL of these hold:
 
   1. the marker exists, meaning source code was edited and no READY verdict has
      cleared it, AND

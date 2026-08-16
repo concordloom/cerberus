@@ -178,8 +178,8 @@ reads this. It is a note your agent reads and acts on: `stage1` is the commands
 it runs locally, `stage2` is what it has to reach past your delivery boundary.
 Getting it wrong costs an agent some wasted work.
 
-**Everything else** — `claim_patterns`, `ignore_patterns`, `source_extensions`,
-`watch_paths`, `marker`. The hooks read these on every run, and they ship
+**Everything else** — `enforce`, `claim_patterns`, `ignore_patterns`,
+`source_extensions`, `watch_paths`, `marker`. The hooks read these on every run, and they ship
 commented out with a `//` in front. Getting one wrong makes the gate quietly
 weaker than you think it is. That asymmetry is why setup writes the first half
 and never the second.
@@ -202,7 +202,8 @@ instead:
 - **it is holding a note you have dealt with** — the file is
   `.claude/.cerberus-pending`, one path per line, and it survives across
   sessions;
-- **you want it off** — depends how you installed it. Plugin:
+- **you want it off** — `"enforce": false`, and it goes quiet without being
+  uninstalled. To remove it entirely, that depends how you installed it. Plugin:
   `/plugin uninstall cerberus@concordloom`, and nothing is left in your
   project. Installer: delete the two entries from `.claude/settings.json`. On
   Codex there is nothing to switch off, because there is nothing running — the

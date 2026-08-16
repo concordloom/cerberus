@@ -11,10 +11,10 @@ Run it from the project root:
     python3 .claude/hooks/cerberus_setup.py --check   # run the checks, write nothing
 
 Why it exists: ``install.sh`` copies an example config whose checks are
-``echo`` placeholders. The blocking half of the gate then works — a readiness
-claim is refused — while the checks it tells you to run pass unconditionally.
-Armed and verifying nothing is a worse state than not installed, because it
-looks finished.
+``echo`` placeholders and whose refusals are switched off. So a fresh install
+does nothing at all, and the step that makes it do something has to write real
+checks *and* switch enforcement on. Half of that — armed while verifying
+nothing — is a worse state than either, because it looks finished.
 
 Three rules this follows, in order of how much damage breaking them does:
 
@@ -98,7 +98,7 @@ KIND_SIGNALS = [
 # distinction each produced a defect.
 #
 # tests/test_setup.py asserts these still match the shipped example.
-EXAMPLE_MARKER_COMMENT = 'Copy to .claude/cerberus.json. Safe to use as-is: only the key that has no sensible default is set. Everything else keeps the built-in defaults, so copying this verbatim never narrows the gate by accident.'
+EXAMPLE_MARKER_COMMENT = 'Copy to .claude/cerberus.json. Safe to use as-is: enforce is off, and the only other key set is the one with no sensible default. Everything else keeps the built-in defaults, so copying this verbatim never narrows the gate by accident.'
 EXAMPLE_MARKER_STAGE1 = ["echo 'replace with this project: tests, lint, type check'"]
 
 
@@ -563,7 +563,16 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     root = pathlib.Path(args.dir).resolve()
-    config = root / ".claude" / "cerberus.json"
+    # Whichever the project has. Looking only at .claude meant a Codex project
+    # that had deliberately set `enforce: false` got a second config written
+    # beside it — and since .claude wins the search order, its opt-out, its
+    # narrowed claim_patterns and its own checks were all shadowed.
+    config = next(
+        (root / rel for rel in ("​.claude/cerberus.json".lstrip("\u200b"), ".codex/cerberus.json")
+         if (root / rel).exists()),
+        root / (".codex/cerberus.json" if (root / ".codex").is_dir()
+                and not (root / ".claude").is_dir() else ".claude/cerberus.json"),
+    )
 
     runners, kind = detect(root)
 

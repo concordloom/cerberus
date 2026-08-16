@@ -1,5 +1,5 @@
 {
-  "//": "Copy to .claude/cerberus.json. Safe to use as-is: only the key that has no sensible default is set. Everything else keeps the built-in defaults, so copying this verbatim never narrows the gate by accident.",
+  "//": "Copy to .claude/cerberus.json. Safe to use as-is: enforce is off, and the only other key set is the one with no sensible default. Everything else keeps the built-in defaults, so copying this verbatim never narrows the gate by accident.",
 
   "//enforce": "Off until you ask. With it off the skills are yours to invoke and the hooks stay quiet — nothing recorded, nothing refused. Set it to true when you want a readiness claim refused while an edited file is unverified.",
   "enforce": false,

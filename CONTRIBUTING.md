@@ -96,9 +96,12 @@ git clone https://github.com/concordloom/cerberus /tmp/src
 mkdir /tmp/proj && cd /tmp/proj && sh /tmp/src/install.sh
 ```
 
-…and drive the installed gate: mark a source edit, claim readiness, and confirm
-the hook answers `decision: block`. A gate that installs but does not fire is
-indistinguishable from no gate.
+…then drive the installed gate, both ways. Refusals ship off, so a fresh
+install must **stay silent**: mark a source edit, claim readiness, and confirm
+nothing comes back. Then set `"enforce": true` in `.claude/cerberus.json` and
+do it again — now the hook must answer `decision: block`. One direction on its
+own proves nothing: a gate that never fires and a gate that always fires both
+pass a single-sided check.
 
 ## Russian text
 
