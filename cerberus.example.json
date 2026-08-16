@@ -12,6 +12,9 @@
       "echo 'service: curl the deployed health endpoint, then a real end-to-end run'",
       "echo 'library: build the package, install it into a fresh venv, import it as a consumer'"
     ],
-    "notes": "Free text the agent should know: where the environment is, which account to use, what must never be touched."
+    "notes": "Free text the agent should know: where the environment is, which account to use, what must never be touched.",
+
+    "//stage2_unreachable": "Only if there is genuinely nowhere to deploy. Set it to WHY, and every verdict narrows to Stage 1 and quotes that reason. Leaving it blank is rejected: a narrowed verdict that cannot say why is the gap this key exists to make visible.",
+    "//stage2_unreachable_example": "no dev cluster; this is an internal script run by hand"
   }
 }

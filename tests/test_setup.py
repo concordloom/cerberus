@@ -505,6 +505,9 @@ def test_the_kind_reaches_the_configuration_and_the_reader():
         got = config_of(root)["verification"]["artifact_kind"]
         assert got == expected, f"{label}: config says {got!r}, expected {expected!r}"
         hint = cerberus_setup.STAGE2_HINT_BY_KIND[expected]
+        # The hint has to survive the draft offer. It said what stage2 is FOR;
+        # an offer to draft one is not a substitute, and replacing it was
+        # caught here rather than by reading.
         assert hint in out, f"{label}: the reader was given the wrong advice\n{out}"
 
 
@@ -657,6 +660,181 @@ def test_a_failing_check_is_named_once_and_not_explained_twice():
     assert "worth a look" not in out, f"the same fact, twice:\n{out}"
     named = [l for l in out.splitlines() if "failing" in l.lower()]
     assert len(named) == 1, f"the failure is mentioned {len(named)} times:\n{out}"
+
+
+# --------------------------------------------------------- drafting stage2
+
+
+DEPLOYED_PROJECT = {
+    **PY_PROJECT,
+    "Dockerfile": "FROM scratch\n",
+    "helm/Chart.yaml": "name: d\nversion: 0.1.0\n",
+}
+
+
+def _draft(root: pathlib.Path) -> str:
+    return run_setup(root, "--draft-stage2")[1]
+
+
+def test_a_draft_is_offered_when_the_repository_says_how_it_deploys():
+    """#45, point 1. The default run stays short and points at the draft."""
+    root = project(DEPLOYED_PROJECT)
+    _, out = run_setup(root)
+    assert "--draft-stage2" in out, out
+    assert "Dockerfile" in out or "helm" in out, "it did not say what it read"
+
+
+def test_no_draft_and_no_guess_when_nothing_says_how_it_deploys():
+    """#45, point 4. A repository that gave no grounds gets no plausible answer."""
+    root = project(PY_PROJECT)
+    _, out = run_setup(root)
+    assert "--draft-stage2" not in out, out
+    drafted = _draft(root)
+    assert "kubectl" not in drafted and "helm upgrade" not in drafted, drafted
+
+
+def test_a_service_with_no_deployment_evidence_gets_no_draft():
+    """#45, point 4, on the path detection cannot reach.
+
+    `service` is detected FROM a Dockerfile, so this case only arises when a
+    person writes the kind by hand — and then there is nothing in the tree to
+    derive a deploy from. Dropping the evidence guard passed the whole suite
+    until this existed, because every fixture that reached the guard was a
+    library.
+    """
+    sys.path.insert(0, str(SETUP.parent))
+    import cerberus_setup
+
+    for kind in cerberus_setup.DEPLOYED_KINDS:
+        assert cerberus_setup.draft_stage2(kind, []) == [], (
+            f"{kind} with no evidence was given a draft anyway")
+
+    root = project({**PY_PROJECT, "cerberus.json": json.dumps(
+        {"verification": {"artifact_kind": "service", "stage1": ["true"], "stage2": []}})})
+    out = _draft(root)
+    assert "will not invent" in out, out
+    assert "curl" not in out.split("Whatever you write")[0], out
+
+
+def test_a_dockerfile_does_not_make_a_library_a_deployment():
+    """#45's mixed cell. A repo can hold a Dockerfile for CI and ship a library.
+
+    Drafting a deploy here would be a confident wrong answer, which this
+    project treats as worse than saying nothing.
+    """
+    sys.path.insert(0, str(SETUP.parent))
+    import cerberus_setup
+
+    evidence = [("image", "Dockerfile"), ("helm", "helm/")]
+    assert cerberus_setup.draft_stage2("library", evidence) == []
+    assert cerberus_setup.draft_stage2("cli", evidence) == []
+    assert cerberus_setup.draft_stage2("service", evidence), "a service got nothing"
+
+
+def test_the_draft_is_never_written_to_the_configuration():
+    """#45, point 2. The rule that keeps setup's output trustworthy.
+
+    It cannot run a deploy, so it may not record one. Proposing is not writing.
+    """
+    root = project(DEPLOYED_PROJECT)
+    run_setup(root)
+    before = (root / "cerberus.json").read_bytes()
+    _draft(root)
+    assert (root / "cerberus.json").read_bytes() == before, "the draft was written"
+    assert config_of(root)["verification"]["stage2"] == []
+
+
+def test_no_line_of_the_draft_could_pass_on_a_broken_deploy():
+    """#45, point 3. Every proposed command must be able to exit non-zero.
+
+    Checked against the shapes the script itself refuses, so a line added to
+    the draft that cannot fail is caught by the same rule it teaches.
+    """
+    sys.path.insert(0, str(SETUP.parent))
+    import cerberus_setup
+
+    for kind in cerberus_setup.DEPLOYED_KINDS:
+        for evidence in ([("helm", "helm/"), ("image", "Dockerfile")],
+                         [("k8s", "k8s/")],
+                         [("compose", "docker-compose.yml")],
+                         [("ci", ".github/workflows/deploy.yml")]):
+            for line in cerberus_setup.draft_stage2(kind, evidence):
+                why = cerberus_setup.unfailable(line)
+                assert why is None, f"{kind}/{evidence[0][0]}: {line!r} — {why}"
+
+
+def test_the_draft_names_the_traps_rather_than_only_avoiding_them():
+    """Avoiding them silently teaches nothing; the reader edits these lines."""
+    root = project(DEPLOYED_PROJECT)
+    out = _draft(root)
+    for trap in ("-f on curl", "grep -q", "jq -e"):
+        assert trap in out, f"the draft never explains {trap}:\n{out}"
+    assert "before your change" in out, "it never says to prove the draft can fail"
+
+
+def test_the_trap_detector_actually_catches_each_trap():
+    """The detector is what the test above leans on, so it is checked directly."""
+    sys.path.insert(0, str(SETUP.parent))
+    import cerberus_setup
+
+    for command in ("curl https://x/health",
+                    "echo deployed",
+                    "true",
+                    "# deploy it",
+                    "logcli query '{app=\"x\"}' --since=5m",
+                    "YOUR_LOG_QUERY --since=5m"):
+        assert cerberus_setup.unfailable(command), f"missed: {command!r}"
+    for command in ("curl -f https://x/health",
+                    "kubectl -n dev rollout status deploy/x",
+                    "logcli query '{app=\"x\"}' | grep -q abc"):
+        assert cerberus_setup.unfailable(command) is None, f"false alarm: {command!r}"
+
+
+# ----------------------------------------------- a boundary declared unreachable
+
+
+def _with_unreachable(reason) -> pathlib.Path:
+    root = project(PY_PROJECT)
+    run_setup(root)
+    path = root / "cerberus.json"
+    body = json.loads(path.read_text(encoding="utf-8"))
+    body["verification"]["stage2_unreachable"] = reason
+    path.write_text(json.dumps(body, ensure_ascii=False, indent=2), encoding="utf-8")
+    return root
+
+
+def test_a_declared_reason_is_reported_and_quoted():
+    """#45, point 6. Optional, but never invisible."""
+    root = _with_unreachable("no dev cluster; run by hand")
+    code, out = run_setup(root)
+    assert code == 0, out
+    assert "no dev cluster; run by hand" in out, out
+    assert "Stage 1" in out, "it never says what the verdict narrows to"
+
+
+def test_a_declared_key_with_no_reason_is_refused():
+    """#45, point 7. Blank is an unfinished configuration, not consent.
+
+    Accepted silently it produces a verdict that narrows itself and cannot say
+    why — the invisible gap this key exists to make visible.
+    """
+    for blank in ("", "   ", None, 3):
+        root = _with_unreachable(blank)
+        code, out = run_setup(root)
+        assert code == 2, f"{blank!r} was accepted:\n{out}"
+        assert "no reason" in out, out
+
+
+def test_declaring_it_unreachable_silences_the_draft_offer():
+    """Two answers to the same question, printed together, is one too many."""
+    root = project(DEPLOYED_PROJECT)
+    run_setup(root)
+    path = root / "cerberus.json"
+    body = json.loads(path.read_text(encoding="utf-8"))
+    body["verification"]["stage2_unreachable"] = "no cluster of any kind"
+    path.write_text(json.dumps(body, indent=2), encoding="utf-8")
+    _, out = run_setup(root)
+    assert "--draft-stage2" not in out, out
 
 
 # ------------------------------------------------- what installing does NOT do

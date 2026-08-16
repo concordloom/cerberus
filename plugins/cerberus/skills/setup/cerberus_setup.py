@@ -29,6 +29,7 @@ import argparse
 import json
 import os
 import pathlib
+import re
 import subprocess
 import sys
 
@@ -99,6 +100,114 @@ STAGE2_HINT_BY_KIND = {
     "migration": "run it against a copy of real shape and scale",
     "model-boundary": "make a real model call through the production entry point",
 }
+
+
+#: Evidence that this project is deployed somewhere, and what each file is
+#: worth knowing for. Ordered from the most specific to the least: a chart says
+#: more about how this ships than a Dockerfile does.
+DEPLOY_EVIDENCE = [
+    ("helm", ["helm", "chart", "charts", "Chart.yaml"]),
+    ("k8s", ["k8s", "kubernetes", "manifests", "deploy"]),
+    ("ci", [".github/workflows", ".gitlab-ci.yml"]),
+    ("compose", ["docker-compose.yml", "docker-compose.yaml", "compose.yaml"]),
+    ("image", ["Dockerfile"]),
+]
+
+#: Returned when the key is present but says nothing. Distinct from None,
+#: which means the project never claimed the boundary was unreachable.
+UNREACHABLE_WITHOUT_REASON = object()
+
+
+def unreachable_reason(body: dict):
+    """The declared reason, None if not declared, or the sentinel if blank."""
+    if "stage2_unreachable" not in body.get("verification", {}):
+        return None
+    reason = body["verification"]["stage2_unreachable"]
+    if not isinstance(reason, str) or not reason.strip():
+        return UNREACHABLE_WITHOUT_REASON
+    return reason.strip()
+
+
+#: Kinds whose boundary is a running instance, and therefore the only ones a
+#: deployment draft can be right for. A repository can hold a Dockerfile for CI
+#: and still ship a library — drafting a deploy for that would be a confident
+#: wrong answer, which this project treats as worse than saying nothing.
+DEPLOYED_KINDS = ("service", "chart")
+
+#: Shapes that cannot return a non-zero exit, and so cannot fail. A stage2
+#: entry built from one of these passes on a broken deploy, which is the
+#: placeholder problem on the stage where it costs the most.
+CANNOT_FAIL = [
+    (r"\bcurl\b(?!.*(?:-f|--fail))", "curl without -f exits 0 on a 500"),
+    (r"^\s*(?:echo|true|:)\b", "always exits 0"),
+    (r"^\s*#", "a comment is not a check"),
+    # The placeholder belongs in this list too: the rule has to cover what this
+    # script itself emits, or the draft can teach a trap while containing one.
+    (r"\b(?:logcli|kubectl logs|YOUR_LOG_QUERY)\b(?!.*(?:grep|jq|rg|\bawk\b))",
+     "a log query usually exits 0 when it finds nothing"),
+]
+
+
+def deploy_evidence(root: pathlib.Path) -> list[tuple[str, str]]:
+    """What in this repository says it gets deployed, and which file said so."""
+    found = []
+    for name, paths in DEPLOY_EVIDENCE:
+        for relative in paths:
+            target = root / relative
+            if not target.exists():
+                continue
+            if name == "ci" and target.is_dir():
+                # A workflows directory proves nothing on its own; the word
+                # that matters is in the files.
+                hits = [f for f in sorted(target.glob("*.y*ml"))
+                        if re.search(r"deploy|kubectl|helm|rollout",
+                                     f.read_text(encoding="utf-8", errors="ignore"), re.I)]
+                if not hits:
+                    continue
+                found.append((name, str(hits[0].relative_to(root))))
+                break
+            found.append((name, relative + ("/" if target.is_dir() else "")))
+            break
+    return found
+
+
+def draft_stage2(kind: str, evidence: list[tuple[str, str]]) -> list[str]:
+    """Propose commands. Never write them — this cannot run a deploy.
+
+    Proposing is not writing: the rule that setup never records a check it has
+    not executed is what keeps its output trustworthy, and a draft printed for
+    a person to read, edit and paste does not touch it.
+    """
+    if kind not in DEPLOYED_KINDS or not evidence:
+        return []
+    names = {name for name, _ in evidence}
+    tag = "$(git rev-parse --short HEAD)"
+    lines = []
+    if "image" in names or "helm" in names or "k8s" in names:
+        lines.append(f"docker build -t YOUR_REGISTRY/YOUR_APP:{tag} . "
+                     f"&& docker push YOUR_REGISTRY/YOUR_APP:{tag}")
+    if "helm" in names:
+        lines.append(f"helm upgrade --install YOUR_APP ./helm --namespace YOUR_NS "
+                     f"--set image.tag={tag} --wait --atomic")
+    elif "k8s" in names:
+        lines.append(f"kubectl -n YOUR_NS set image deploy/YOUR_APP "
+                     f"YOUR_APP=YOUR_REGISTRY/YOUR_APP:{tag}")
+    if "helm" in names or "k8s" in names:
+        lines.append("kubectl -n YOUR_NS rollout status deploy/YOUR_APP --timeout=120s")
+    if not lines and "compose" in names:
+        lines.append("docker compose up -d --build --wait")
+    lines.append("curl -fsS -H \"X-Request-Id: $RID\" YOUR_URL/YOUR_ENDPOINT "
+                 "| jq -e 'YOUR_ASSERTION_ON_THE_VALUE'")
+    lines.append("YOUR_LOG_QUERY --since=5m | grep -q \"$RID\"")
+    return lines
+
+
+def unfailable(command: str) -> str | None:
+    """Why this command could never report a failure, or None if it could."""
+    for shape, why in CANNOT_FAIL:
+        if re.search(shape, command):
+            return why
+    return None
 
 
 def run(cmd: str, cwd: pathlib.Path, timeout: int = 120) -> tuple[int, str]:
@@ -300,12 +409,86 @@ def report_state(root: pathlib.Path, kind: str = "library", first_run: bool = Tr
         print()
         print("No hook was installed — ask for the cerberus skill by name when it matters.")
     try:
-        stage2 = json.loads(config.read_text(encoding="utf-8"))["verification"]["stage2"]
+        body = json.loads(config.read_text(encoding="utf-8"))
+        stage2 = body["verification"]["stage2"]
     except Exception:
-        stage2 = []
-    if not stage2:
-        hint = STAGE2_HINT_BY_KIND.get(kind, STAGE2_HINT_BY_KIND["library"])
+        body, stage2 = {}, []
+    if stage2:
+        return 0
+
+    declared = unreachable_reason(body)
+    if declared is UNREACHABLE_WITHOUT_REASON:
+        # Not consent. An empty reason produces a verdict that narrows itself
+        # and cannot say why, which is the invisible gap this key exists to
+        # make visible.
+        print(f'"stage2_unreachable" in {where} has no reason. Write why the '
+              "boundary cannot be crossed, or remove the key.")
+        return 2
+    if declared:
+        print(f"Stage 2 is declared unreachable: {declared}")
+        print("Verdicts will say so and narrow themselves to Stage 1.")
+        return 0
+
+    hint = STAGE2_HINT_BY_KIND.get(kind, STAGE2_HINT_BY_KIND["library"])
+    evidence = deploy_evidence(root)
+    if draft_stage2(kind, evidence):
+        seen = ", ".join(sorted({found for _, found in evidence}))
+        print(f"Still missing — stage2 in {where}: {hint}. "
+              f"I can draft it from {seen} — run this again with --draft-stage2.")
+    else:
         print(f"Still missing — stage2 in {where}: {hint}.")
+    return 0
+
+
+def print_draft(root: pathlib.Path, config: pathlib.Path, detected: str | None) -> int:
+    """Print a stage2 draft and the traps in it. Writes nothing, by design.
+
+    Behind a flag rather than in the default output because the draft does not
+    fit in a glance, and the run that reports what was set up has to. The
+    default output offers it in one line; this is the reader taking it up.
+    """
+    kind = detected or "library"
+    if config.exists():
+        try:
+            kind = json.loads(config.read_text(encoding="utf-8"))[
+                "verification"].get("artifact_kind") or kind
+        except Exception:
+            pass
+
+    evidence = deploy_evidence(root)
+    draft = draft_stage2(kind, evidence)
+    if not draft:
+        if kind not in DEPLOYED_KINDS:
+            print(f"This is a {kind}, so stage2 is not a deploy: "
+                  f"{STAGE2_HINT_BY_KIND.get(kind, STAGE2_HINT_BY_KIND['library'])}.")
+        else:
+            print("Nothing here says how this gets deployed — no chart, no manifests,")
+            print("no compose file, no deploy job. I will not invent one.")
+        print("Whatever you write, every line has to be able to exit non-zero.")
+        return 0
+
+    print("A draft, from " + ", ".join(f"{w}" for _, w in evidence) + ".")
+    if not any(n in {"helm", "k8s", "compose", "image"} for n, _ in evidence):
+        # All that was found is a CI job. What it runs is knowable only from
+        # the job, and a comment standing in for a command exits 0 — the trap
+        # this draft exists to teach. So it is said in prose, not proposed.
+        print("Your deploy lives in CI, so the deploy line is yours to fill in:")
+        print("whatever that job runs, against the image built from THIS commit.")
+    print("Nothing was written. Read it, fix the CAPITALS, then paste it into")
+    print(f"{config.name} under verification.stage2:")
+    print()
+    for line in draft:
+        print(f"  {line}")
+    print()
+    print("Why each line is shaped that way — these are the ways a stage 2")
+    print("passes while checking nothing:")
+    print("  -f on curl        without it, curl exits 0 on a 500")
+    print("  jq -e on the body asserting a reply arrived passes on any reply")
+    print("  grep -q on logs   a log query exits 0 when it finds nothing")
+    print("  rollout status    fails when the pod never came up")
+    print()
+    print("Then prove the whole thing can fail: run it against the version")
+    print("before your change and check that it does.")
     return 0
 
 
@@ -316,6 +499,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="run the checks and print them, but write no configuration",
     )
+    parser.add_argument(
+        "--draft-stage2",
+        action="store_true",
+        help="print a stage2 draft derived from this repository, and write nothing",
+    )
     parser.add_argument("--dir", default=".", help="project directory")
     args = parser.parse_args(argv)
 
@@ -323,6 +511,9 @@ def main(argv: list[str] | None = None) -> int:
     config = resolve_config(root)
 
     runners, kind = detect(root)
+
+    if args.draft_stage2:
+        return print_draft(root, config, kind)
 
     existing = None
     if config.exists():

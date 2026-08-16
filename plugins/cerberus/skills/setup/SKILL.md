@@ -59,6 +59,36 @@ The same applies when the checks it found do not pass here. That is a fact
 about the project, and it is reported rather than quietly dropped so the
 configuration can look tidy.
 
+## Finish by talking, not by exiting
+
+The script does what a script can: find the toolchain, run the checks, write
+`stage1`. It cannot ask anything — under `curl … | sh` its stdin is the install
+script itself, in CI there is nobody there, and to an agent a prompt is a hang.
+So the questions are yours, and this is the half of setup that decides whether
+the configuration is any good.
+
+Walk them through the three stages, in their own language, and ask what the
+repository cannot answer:
+
+- **Stage 0** — before anything is tested, the behaviour space gets enumerated.
+  Ask what varies here that would not be visible in the code: tenants,
+  currencies, clock, permissions, a partner API that behaves differently in
+  staging.
+- **Stage 1** — show what was written. Ask if that is all of it, or whether
+  something is missing that everyone here knows to run by hand.
+- **Stage 2** — the one that finds the defects, and the one nothing can derive.
+  Run `--draft-stage2` if there is deployment evidence, show the draft, and ask
+  what only they know: which cluster and namespace, which URL, what must never
+  be touched, and how they would prove the changed path actually executed —
+  a log query, a trace id, a row in a table. Their answers go into `stage2`,
+  and everything about the environment goes into `notes`, which is otherwise
+  always empty.
+
+If they have nowhere to deploy, do not leave `stage2` blank and move on. Write
+`stage2_unreachable` with the reason they gave you. Blank reads as "nobody got
+round to it"; a reason reads as a decision, and the gate quotes it in every
+verdict from then on.
+
 ## Say it in ordinary words
 
 Whoever is being set up did not ask for vocabulary. Tell them what was written,
@@ -74,5 +104,10 @@ belongs in the other two skills.
       keys this script would never produce?
 - [ ] Is `stage2` either genuinely filled in or reported as still missing,
       rather than padded with something that exits 0?
+- [ ] Were the three stages explained and the questions asked, rather than the
+      script's output handed over as if it finished the job?
+- [ ] Does `notes` carry what only they could tell you, or is it still empty?
+- [ ] If there is nowhere to deploy, is `stage2_unreachable` written with their
+      reason, rather than `stage2` left blank?
 - [ ] Does the closing message say what was written, what is missing, and that
       invoking the skills is the reader's own call?
