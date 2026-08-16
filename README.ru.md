@@ -15,7 +15,7 @@
 что она работает.** Три навыка, которые он читает и выполняет. Ни хука, ни
 демона: они работают, когда их зовут.
 
-[English version](README.md) · [Сам навык](plugins/cerberus/skills/cerberus/SKILL.ru.md) ([en](plugins/cerberus/skills/cerberus/SKILL.md))
+[English version](README.md) · [Инструкции навыка cerberus](plugins/cerberus/skills/cerberus/SKILL.ru.md) ([en](plugins/cerberus/skills/cerberus/SKILL.md))
 
 ## Установка
 
@@ -39,9 +39,10 @@ codex plugin add cerberus@concordloom
 
 ### В репозиторий
 
-Копирует навыки в проект, чтобы они пришли из гита команде и сборке. Нужны
-`curl` или `wget`, `tar` и `sh`. Кладёт в `.claude/skills/`, а если в проекте
-уже есть каталог `.agents/` — то в `.agents/skills/`.
+Копирует навыки в проект, чтобы команда получила их из гита, ничего не
+устанавливая. Нужны `python3` 3.10+, `curl` или `wget`, `tar` и `sh`. Кладёт в
+`.claude/skills/`, а если в проекте уже есть каталог `.agents/` — то в
+`.agents/skills/`.
 
 ```console
 curl -fsSL https://raw.githubusercontent.com/concordloom/cerberus/main/install.sh | sh -s -- --setup
@@ -100,32 +101,46 @@ Not proven: behaviour at exactly 0.5 — no rule was agreed.
 Verdict: READY
 ```
 
-`NOT READY` приходит так же — с тем, что сломалось, и как это воспроизвести.
+`NOT READY` приходит так же — с приложенным воспроизведением:
+
+```text
+BLOCKER — rounding is applied twice for orders with a discount.
+  Reproduce: POST /orders with {"items":[…],"discount":0.1} gives total 23.94,
+  expected 23.95. Introduced by the change; old HEAD returns 23.95.
+Stage 2 not reached: Stage 1 has a blocker.
+
+Verdict: NOT READY
+```
 
 ## cerberus.json
 
-Один файл в корне проекта, и читают его только навыки. Вот он целиком:
+Один файл, и читают его только навыки. Новые проекты получают его в корне;
+установки до 2.1 держат свой в `.claude/cerberus.json` или
+`.codex/cerberus.json`, и оттуда он тоже читается. Целиком:
 
 ```json
 {
   "verification": {
     "artifact_kind": "service",
-    "stage1": ["pytest -q", "ruff check ."],
+    "stage1": ["go build ./...", "go test ./... -race", "golangci-lint run"],
     "stage2": [
-      "docker compose up -d --wait",
-      "curl -fsS localhost:8080/orders -d @fixtures/order.json | jq -e '.status == \"accepted\"'"
+      "gh workflow run deploy.yml --ref $(git branch --show-current) && gh run watch --exit-status $(gh run list --workflow deploy.yml --limit 1 --json databaseId --jq '.[0].databaseId')",
+      "kubectl -n dev rollout status deploy/orders --timeout=5m",
+      "curl -fsS https://orders.dev.internal/version | jq -e --arg sha \"$(git rev-parse HEAD)\" '.commit == $sha'",
+      "curl -fsS https://orders.dev.internal/orders -d @testdata/order.json | jq -e '.status == \"accepted\"'"
     ],
-    "notes": "только dev-кластер, прод не трогать. Доступы в .envrc."
+    "notes": "только контекст dev-eu1, прод не трогать. Деплой идёт ~8 минут."
   }
 }
 ```
 
+Каждая запись — команда шелла, выполняется из корня репозитория, по порядку, и
+ненулевой код возврата валит стадию — поэтому каждая строка выше заканчивается
+чем-то, что **умеет** его вернуть. На первом падении стадия останавливается.
+
 `setup` записывает `artifact_kind` и `stage1`, предварительно прогнав команды.
 `stage2` — за вами, про него ниже. `notes` — всё, что агенту стоит знать и чего
 он не прочитает с диска.
-
-У старых установок файл лежит в `.claude/cerberus.json` или
-`.codex/cerberus.json`; оба пути по-прежнему читаются.
 
 ## Три головы
 
@@ -157,11 +172,24 @@ Verdict: READY
 | `model-boundary` — промпт или парсер | до реального вызова модели через боевую точку входа |
 | `plugin` — плагин или кодоген | до настоящего проекта, который собирают с его помощью |
 
-**Если раскатывает CI**, стадия 2 такая: запушить, дождаться пайплайна командой,
-которая падает вместе с ним, и доказать, что отвечает **именно этот** коммит —
-эндпоинтом `/version` с sha или дайджестом образа на живом деплойменте. Ожидание
-проверкой не является: без такой сверки вы зазеленеете против сборки, которая
-там уже стояла.
+**Если раскатывает CI**, у стадии 2 три части, и третью обычно пропускают:
+
+```
+gh run watch --exit-status $(gh run list --commit $(git rev-parse HEAD) --limit 1 --json databaseId --jq '.[0].databaseId')
+kubectl -n dev rollout status deploy/orders --timeout=5m
+curl -fsS https://orders.dev.internal/version | jq -e --arg sha "$(git rev-parse HEAD)" '.commit == $sha'
+```
+
+Дождаться пайплайна **именно этого коммита** командой, которая краснеет вместе
+с ним; дождаться раскатки; и доказать, что отвечает этот коммит. Без третьей
+строки вы зазеленеете против сборки, которая там уже стояла. Ожидание проверкой
+не является. Если эндпоинта `/version` нет, сверяйте дайджест образа:
+`kubectl -n dev get deploy/orders -o jsonpath='{.spec.template.spec.containers[0].image}'`.
+
+**Если пайплайн катит только с основной ветки**, честной стадии 2 до мержа не
+существует. Выберите одно и запишите: разворачивать ветку в превью-неймспейс,
+выносить вердикт после мержа и до релиза, или объявить `stage2_unreachable`
+ниже.
 
 Для `service` и `chart` скрипт настройки умеет набросать эти команды из ваших
 `helm/`, манифестов, compose или джобы деплоя — попросите агента запустить
@@ -178,8 +206,8 @@ Verdict: READY
 
 Ни хука, ни фонового процесса, ни одного вашего файла, который правился бы при
 установке. Навыки — это текст, который агент читает, когда вы просите; он может
-взяться за них и сам, услышав «готово», — это его суждение, и ему можно сказать
-так не делать.
+взяться за них и сам, услышав «готово», — это его суждение. Сказать ему так не
+делать можно как и всё остальное: «не запускай цербера, пока не попрошу».
 
 Что действительно выполняется: `setup` запускает у вас в проекте команды-кандидаты,
 чтобы выяснить, какие проходят. Стадия 2 запускает те команды, которые **вы**

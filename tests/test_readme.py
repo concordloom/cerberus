@@ -215,9 +215,11 @@ def test_the_quick_start_shows_what_success_looks_like():
 def test_the_quick_start_fits_above_the_fold():
     body = quick_section(README.read_text(encoding="utf-8"))
     lines = [line for line in body.splitlines() if line.strip()]
-    # It carries three install paths now, so the bound is about staying
-    # scannable rather than about fitting a terminal.
-    assert len(lines) <= 35, f"{len(lines)} lines is not a quick start"
+    # Raised in round two of #66: the section now shows both verdicts. A
+    # reader is buying the verdict, and showing only the one where everything
+    # passed was a finding — the failing one is the output they actually care
+    # about. Still bounded, because this section is the one people skim.
+    assert len(lines) <= 40, f"{len(lines)} lines is not a quick start"
 
 
 def test_three_heads_means_one_thing():
@@ -617,8 +619,8 @@ def test_each_install_route_says_who_it_is_for():
     Two of them install for you; the third installs into the repository, where
     it can be committed and the whole team gets it.
     """
-    for path, needles in ((README, ("for yourself", "the team and ci")),
-                          (README_RU, ("себе", "команде и сборке"))):
+    for path, needles in ((README, ("for yourself", "your team gets them from git")),
+                          (README_RU, ("себе", "команда получила их из гита"))):
         where = flat(install_section(path.read_text(encoding="utf-8")))
         for needle in needles:
             assert needle.lower() in where, f"{path.name}: {needle!r}"
@@ -688,8 +690,8 @@ def test_the_page_says_a_filled_stage2_is_no_longer_optional():
 
 def test_someone_who_deploys_from_ci_can_find_the_draft():
     """#58, point 4. The most useful thing here was invisible from the front page."""
-    for path, needles in ((README, ("--draft-stage2", "waiting is not verifying")),
-                          (README_RU, ("--draft-stage2", "ожидание проверкой не является"))):
+    for path, needles in ((README, ("--draft-stage2", "gh run watch --exit-status")),
+                          (README_RU, ("--draft-stage2", "gh run watch --exit-status"))):
         text = flat(path.read_text(encoding="utf-8"))
         for needle in needles:
             assert needle.lower() in text, f"{path.name}: {needle!r}"
@@ -697,8 +699,8 @@ def test_someone_who_deploys_from_ci_can_find_the_draft():
 
 def test_someone_who_deploys_from_ci_can_find_the_draft():
     """#58, point 4. The most useful thing here was invisible from the front page."""
-    for path, needles in ((README, ("--draft-stage2", "waiting is not verifying")),
-                          (README_RU, ("--draft-stage2", "ожидание проверкой не является"))):
+    for path, needles in ((README, ("--draft-stage2", "gh run watch --exit-status")),
+                          (README_RU, ("--draft-stage2", "gh run watch --exit-status"))):
         text = flat(path.read_text(encoding="utf-8"))
         for needle in needles:
             assert needle.lower() in text, f"{path.name}: {needle!r}"
@@ -706,8 +708,8 @@ def test_someone_who_deploys_from_ci_can_find_the_draft():
 
 def test_someone_who_deploys_from_ci_can_find_the_draft():
     """#58, point 4. The most useful thing here was invisible from the front page."""
-    for path, needles in ((README, ("--draft-stage2", "waiting is not verifying")),
-                          (README_RU, ("--draft-stage2", "ожидание проверкой не является"))):
+    for path, needles in ((README, ("--draft-stage2", "gh run watch --exit-status")),
+                          (README_RU, ("--draft-stage2", "gh run watch --exit-status"))):
         text = flat(path.read_text(encoding="utf-8"))
         for needle in needles:
             assert needle.lower() in text, f"{path.name}: {needle!r}"
@@ -715,8 +717,8 @@ def test_someone_who_deploys_from_ci_can_find_the_draft():
 
 def test_someone_who_deploys_from_ci_can_find_the_draft():
     """#58, point 4. The most useful thing here was invisible from the front page."""
-    for path, needles in ((README, ("--draft-stage2", "waiting is not verifying")),
-                          (README_RU, ("--draft-stage2", "ожидание проверкой не является"))):
+    for path, needles in ((README, ("--draft-stage2", "gh run watch --exit-status")),
+                          (README_RU, ("--draft-stage2", "gh run watch --exit-status"))):
         text = flat(path.read_text(encoding="utf-8"))
         for needle in needles:
             assert needle.lower() in text, f"{path.name}: {needle!r}"
@@ -768,9 +770,11 @@ def test_the_install_section_contains_only_installing():
             if in_fence or not line.strip() or line.startswith(("#", "**", "|")):
                 continue
             prose.append(line)
-        # Two destinations, two lines each at most: what lands where, and how
-        # to undo it.
-        assert len(prose) <= 6, (
+        # Two destinations, two lines each at most: what lands where, and what
+        # it needs. Raised by one when the Python requirement moved up here
+        # from line 216 of 225, where a Go engineer called it a disqualifying
+        # fact hidden at the bottom.
+        assert len(prose) <= 8, (
             f"{path.name}: {len(prose)} lines of prose in the install section:\n"
             + "\n".join(prose))
 
@@ -802,10 +806,13 @@ def test_the_quick_start_holds_no_install_commands():
 #: Uninstall as its own block. On #66, a `cerberus.json` example and a verdict
 #: example: three cold readers independently stopped at the same two places,
 #: and both gaps were content the page had never had rather than prose that
-#: had swollen. Two bounds had accumulated by #64, from #58 and #62, checking
-#: the same thing with different numbers; this is the one.
+#: had swollen. Raised again in round two of #66: a fresh reader could write
+#: the config but not the commands, so the CI case got three real ones, the
+#: example became the Kubernetes one it had always described, and `NOT READY`
+#: got shown instead of promised. Two bounds had accumulated by #64, from #58
+#: and #62, checking the same thing with different numbers; this is the one.
 MAX_SECTIONS = 11
-MAX_LINES = {"README.md": 172, "README.ru.md": 176}
+MAX_LINES = {"README.md": 195, "README.ru.md": 199}
 
 
 def test_the_page_does_not_grow_on_its_own():
@@ -929,6 +936,20 @@ def test_uninstalling_names_both_places_the_installer_writes():
             assert where in body, f"{path.name}: uninstall never mentions {where}"
 
 
+def test_what_the_install_needs_is_stated_where_the_command_is():
+    """Round two of #66. A Go engineer found the Python requirement at line 216
+    of 225 and called it a disqualifying fact hidden at the bottom.
+
+    Checking only the Requirements section passed while the reader had already
+    left, so the tools are asserted beside the command that needs them.
+    """
+    for path, heading in ((README, "## Install"), (README_RU, "## Установка")):
+        body = flat(section(path.read_text(encoding="utf-8"), heading))
+        for tool in ("python3", "curl", "tar"):
+            assert tool in body, (
+                f"{path.name}: the install section never says it needs {tool}")
+
+
 def test_requirements_names_everything_the_documented_install_needs():
     """#66. "Python 3.10+ and nothing else" — the installer also needs curl, tar, sh."""
     for path, heading in ((README, "## Requirements"), (README_RU, "## Требования")):
@@ -993,6 +1014,73 @@ def test_the_page_says_whose_credentials_stage_two_runs_with():
         body = flat(section(path.read_text(encoding="utf-8"), heading))
         for needle in needles:
             assert needle in body, f"{path.name}: {heading} never mentions {needle!r}"
+
+
+def test_the_page_shows_the_commands_for_the_case_it_calls_the_main_one():
+    """Round two of #66. The paragraph a reader with a deployed service needs,
+    and it contained no commands — description where instruction was due.
+
+    A fresh reader wrote the whole config and had to invent `gh run watch` and
+    `kubectl rollout status` himself, on a page that hands out `curl … | jq -e`
+    elsewhere.
+    """
+    for path, heading in ((README, "## Stage 2 and the delivery boundary"),
+                          (README_RU, "## Стадия 2 и граница поставки")):
+        body = section(path.read_text(encoding="utf-8"), heading)
+        blocks = "\n".join(b for _, b in fenced(body))
+        for command in ("gh run watch --exit-status", "kubectl", "rollout status",
+                        "git rev-parse HEAD"):
+            assert command in blocks, f"{path.name}: no {command!r} in the CI paragraph"
+
+
+def test_the_page_answers_deploy_on_merge_only():
+    """Half the industry deploys from the default branch, and for them the page's
+    own instruction is only possible after the merge — which defeats it."""
+    for path, needle in ((README, "only deploys from the default branch"),
+                         (README_RU, "катит только с основной ветки")):
+        assert needle in flat(path.read_text(encoding="utf-8")), f"{path.name}: {needle!r}"
+
+
+def test_the_config_example_does_not_contradict_the_boundary_table():
+    """The one full example showed `docker compose up` for `artifact_kind: service`,
+    whose row in the same page's table demands a deployed instance."""
+    for path in (README, README_RU):
+        text = path.read_text(encoding="utf-8")
+        body = json.loads([b for lang, b in fenced(text) if lang == "json"][0])
+        v = body["verification"]
+        if v["artifact_kind"] in ("service", "chart"):
+            joined = " ".join(v["stage2"])
+            assert "localhost" not in joined and "docker compose" not in joined, (
+                f"{path.name}: a service's example reaches no further than this machine")
+
+
+def test_the_page_states_the_execution_contract_for_stage2():
+    """A fresh reader inferred the exit-code rule from a sample instead of reading it."""
+    for path, needles in ((README, ("non-zero exit fails the stage", "from the repository root")),
+                          (README_RU, ("ненулевой код возврата валит стадию",
+                                       "из корня репозитория"))):
+        text = flat(path.read_text(encoding="utf-8"))
+        for needle in needles:
+            assert needle in text, f"{path.name}: {needle!r}"
+
+
+def test_the_page_shows_a_not_ready_verdict_too():
+    """It promised one comes back the same way and showed only the happy one.
+
+    That is the output a reader is actually buying.
+    """
+    for path in (README, README_RU):
+        samples = [b for lang, b in fenced(path.read_text(encoding="utf-8")) if lang == "text"]
+        assert any("NOT READY" in b and "BLOCKER" in b for b in samples), (
+            f"{path.name}: no failing verdict shown")
+
+
+def test_telling_the_agent_to_stop_has_a_method():
+    """"you can tell it not to" named no mechanism, and that is the question
+    that gets tools uninstalled."""
+    for path, needle in ((README, "don't run cerberus unless i ask"),
+                         (README_RU, "не запускай цербера, пока не попрошу")):
+        assert needle in flat(path.read_text(encoding="utf-8")), f"{path.name}: {needle!r}"
 
 
 def _main() -> int:

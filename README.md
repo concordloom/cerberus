@@ -15,7 +15,7 @@
 works.** Three skills it reads and follows. No hook, no daemon: they run when
 asked.
 
-[Русская версия](README.ru.md) · [The skill itself](plugins/cerberus/skills/cerberus/SKILL.md) ([ru](plugins/cerberus/skills/cerberus/SKILL.ru.md))
+[Русская версия](README.ru.md) · [The gate's own instructions](plugins/cerberus/skills/cerberus/SKILL.md) ([ru](plugins/cerberus/skills/cerberus/SKILL.ru.md))
 
 ## Install
 
@@ -39,8 +39,8 @@ codex plugin add cerberus@concordloom
 
 ### Into the repository
 
-Copies the skills into the project, so the team and CI get them from git.
-Needs `curl` or `wget`, `tar` and `sh`. It lands in `.claude/skills/`, or
+Copies the skills into the project, so your team gets them from git without
+installing anything. Needs `python3` 3.10+, `curl` or `wget`, `tar` and `sh`. It lands in `.claude/skills/`, or
 `.agents/skills/` if the project already has an `.agents/` directory.
 
 ```console
@@ -100,33 +100,46 @@ Not proven: behaviour at exactly 0.5 — no rule was agreed.
 Verdict: READY
 ```
 
-`NOT READY` comes back the same way, with what broke and how to reproduce it.
+`NOT READY` comes back the same way, with the reproduction attached:
+
+```text
+BLOCKER — rounding is applied twice for orders with a discount.
+  Reproduce: POST /orders with {"items":[…],"discount":0.1} gives total 23.94,
+  expected 23.95. Introduced by the change; old HEAD returns 23.95.
+Stage 2 not reached: Stage 1 has a blocker.
+
+Verdict: NOT READY
+```
 
 ## cerberus.json
 
-One file, in your project root, and the skills are its only readers. This is all
-of it:
+One file, and the skills are its only readers. New projects get it in the root;
+installs from before 2.1 keep theirs in `.claude/cerberus.json` or
+`.codex/cerberus.json` and are still read there. All of it:
 
 ```json
 {
   "verification": {
     "artifact_kind": "service",
-    "stage1": ["pytest -q", "ruff check ."],
+    "stage1": ["go build ./...", "go test ./... -race", "golangci-lint run"],
     "stage2": [
-      "docker compose up -d --wait",
-      "curl -fsS localhost:8080/orders -d @fixtures/order.json | jq -e '.status == \"accepted\"'"
+      "gh workflow run deploy.yml --ref $(git branch --show-current) && gh run watch --exit-status $(gh run list --workflow deploy.yml --limit 1 --json databaseId --jq '.[0].databaseId')",
+      "kubectl -n dev rollout status deploy/orders --timeout=5m",
+      "curl -fsS https://orders.dev.internal/version | jq -e --arg sha \"$(git rev-parse HEAD)\" '.commit == $sha'",
+      "curl -fsS https://orders.dev.internal/orders -d @testdata/order.json | jq -e '.status == \"accepted\"'"
     ],
-    "notes": "dev cluster only, never touch prod. Credentials in .envrc."
+    "notes": "kube context dev-eu1 only, never prod. Deploy workflow takes ~8 min."
   }
 }
 ```
 
+Every entry is a shell command run from the repository root, in order, and a
+non-zero exit fails the stage — which is why each line above ends in something
+that *can* return non-zero. A stage stops at its first failure.
+
 `setup` writes `artifact_kind` and `stage1` after running the commands. `stage2`
 is yours — see below. `notes` is anything the agent should know and cannot read
 off the disk.
-
-Older installs keep the file in `.claude/cerberus.json` or `.codex/cerberus.json`;
-both are still read.
 
 ## The three heads
 
@@ -157,11 +170,25 @@ once the change ships:
 | `model-boundary` — a prompt or parser | a real model call through the production entry point |
 | `plugin` — a plugin or codegen | a real downstream project built with it |
 
-**If CI deploys for you**, Stage 2 is: push, wait for the pipeline with a command
-that fails when the pipeline does, then prove the instance answering you is
-*this* commit — a `/version` endpoint returning the sha, or the image digest on
-the running deployment. Waiting is not verifying: without that check you can pass
-against the build that was already there.
+**If CI deploys for you**, Stage 2 has three parts, and the third is the one
+people skip:
+
+```
+gh run watch --exit-status $(gh run list --commit $(git rev-parse HEAD) --limit 1 --json databaseId --jq '.[0].databaseId')
+kubectl -n dev rollout status deploy/orders --timeout=5m
+curl -fsS https://orders.dev.internal/version | jq -e --arg sha "$(git rev-parse HEAD)" '.commit == $sha'
+```
+
+Wait for the pipeline *for this commit* with a command that goes red when it
+does; wait for the rollout; then prove the instance answering you is this
+commit. Without the third line you can go green against the build that was
+already running. If there is no `/version` endpoint, compare the image digest:
+`kubectl -n dev get deploy/orders -o jsonpath='{.spec.template.spec.containers[0].image}'`.
+
+**If your pipeline only deploys from the default branch**, there is no honest
+Stage 2 before the merge. Pick one and write it down: deploy the branch to a
+preview namespace, run the verdict after the merge and before the release, or
+declare `stage2_unreachable` below.
 
 For `service` and `chart` the setup script can draft those commands from your
 `helm/`, manifests, compose file or deploy job — ask the agent to run `setup`
@@ -178,8 +205,8 @@ verdict then narrows to `READY scope: Stage 1` and quotes your reason. Once
 
 No hook, no background process, no file of yours edited by installing. The
 skills are text your agent reads when you ask for them, and it may also reach
-for them when you say "done" — that is the agent's judgement, and you can tell
-it not to.
+for them when you say "done" — that is the agent's judgement. Tell it not to
+the way you tell it anything else: "don't run cerberus unless I ask".
 
 What does execute: `setup` runs candidate check commands in your project to find
 out which pass. Stage 2 runs the commands **you** put in `stage2`, with whatever
