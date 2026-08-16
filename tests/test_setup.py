@@ -86,10 +86,10 @@ def project(files: dict[str, str]) -> pathlib.Path:
     target = tmp / ".claude" / "skills" / "setup"
     target.mkdir(parents=True)
     (target / "cerberus_setup.py").write_text(SETUP.read_text(encoding="utf-8"), encoding="utf-8")
-    for name, text in files.items():
-        path = tmp / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
+    # `_write` rather than a loop here: some fixtures need a directory, which a
+    # signal like `charts` or `k8s` actually is, and writing it as a file made
+    # those kinds untestable through this helper.
+    _write(tmp, files)
     return tmp
 
 
@@ -417,6 +417,139 @@ def test_a_project_with_no_earlier_config_gets_one_in_its_root():
         (root / ".claude").mkdir()  # an agent directory is not a config location
         got = cerberus_setup.resolve_config(root)
         assert got == root / "cerberus.json", got
+
+
+# --------------------------------------------------------- which kind it is
+
+
+def _kind_fixtures() -> list[tuple[str, str, dict]]:
+    """One project per kind the code can return, derived from the code.
+
+    Hand-listing is why a mutant survived once already: the list named Node and
+    Go, the code also supported Rust, and the mutant was wrong only there. Here
+    the denominator is KIND_SIGNALS plus the two branches of
+    _looks_like_a_command, so adding a signal without a fixture fails the test
+    below rather than quietly widening the gap.
+    """
+    sys.path.insert(0, str(SETUP.parent))
+    import cerberus_setup
+
+    base = {"pyproject.toml": '[project]\nname = "d"\nversion = "1"\n'}
+    # A seed per signal file, chosen so the file is the ONLY thing that differs.
+    seeds = {
+        "Chart.yaml": "name: d\nversion: 0.1.0\n",
+        "charts": None,          # a directory
+        "main.tf": 'resource "null_resource" "d" {}\n',
+        "Dockerfile": "FROM scratch\n",
+        "docker-compose.yml": "services: {}\n",
+        "k8s": None,
+        "deploy": None,
+    }
+    out = []
+    for kind, signals in cerberus_setup.KIND_SIGNALS:
+        for signal in signals:
+            assert signal in seeds, f"no fixture seed for KIND_SIGNALS entry {signal!r} — add one"
+            files = dict(base)
+            files[signal] = seeds[signal]
+            out.append((f"{kind} via {signal}", kind, files))
+    # The two branches that make a project a command. Not in KIND_SIGNALS —
+    # its "cli" row is deliberately empty and decided from the manifests.
+    out.append(("cli via [project.scripts]", "cli", {
+        "pyproject.toml": '[project]\nname = "d"\nversion = "1"\n\n[project.scripts]\nd = "d:main"\n'}))
+    out.append(("cli via package.json bin", "cli", {
+        "package.json": json.dumps({"name": "d", "bin": {"d": "cli.js"},
+                                    "scripts": {"test": "exit 0"}})}))
+    out.append(("library, no signal at all", "library", dict(base)))
+    return out
+
+
+def _write(root: pathlib.Path, files: dict) -> None:
+    for name, text in files.items():
+        path = root / name
+        if text is None:
+            path.mkdir(parents=True, exist_ok=True)
+            continue
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+
+
+def test_every_kind_the_code_can_return_is_pinned():
+    """#35. The mutant that started it: CLI detection disabled, 0 failures."""
+    sys.path.insert(0, str(SETUP.parent))
+    import cerberus_setup
+
+    for label, expected, files in _kind_fixtures():
+        with tempfile.TemporaryDirectory() as d:
+            root = pathlib.Path(d)
+            _write(root, files)
+            _, kind = cerberus_setup.detect(root)
+            assert kind == expected, f"{label}: detected {kind!r}, expected {expected!r}"
+
+
+def test_the_kind_reaches_the_configuration_and_the_reader():
+    """A kind that stops at the return value helps nobody.
+
+    It has to reach `artifact_kind` in the file, and the sentence about where
+    the last check has to happen has to be the one for that kind — that
+    sentence is the whole reason the field exists.
+    """
+    sys.path.insert(0, str(SETUP.parent))
+    import cerberus_setup
+
+    for label, expected, files in _kind_fixtures():
+        root = project(files)
+        code, out = run_setup(root)
+        if code != 0:
+            continue  # that toolchain is not installed here; nothing was written
+        got = config_of(root)["verification"]["artifact_kind"]
+        assert got == expected, f"{label}: config says {got!r}, expected {expected!r}"
+        hint = cerberus_setup.STAGE2_HINT_BY_KIND[expected]
+        assert hint in out, f"{label}: the reader was given the wrong advice\n{out}"
+
+
+def test_a_project_that_is_two_things_at_once_resolves_the_documented_way():
+    """A Python CLI in a container is both, and the order decides.
+
+    Pinned rather than argued: KIND_SIGNALS puts `service` ahead of the
+    manifest check, so a Dockerfile wins. That is the current answer and it is
+    defensible — what is not defensible is nothing recording it, so that
+    reordering the table changes somebody's Stage 2 advice in silence.
+    """
+    sys.path.insert(0, str(SETUP.parent))
+    import cerberus_setup
+
+    with tempfile.TemporaryDirectory() as d:
+        root = pathlib.Path(d)
+        _write(root, {
+            "pyproject.toml": '[project]\nname = "d"\nversion = "1"\n\n[project.scripts]\nd = "d:main"\n',
+            "Dockerfile": "FROM scratch\n",
+        })
+        _, kind = cerberus_setup.detect(root)
+        assert kind == "service", f"a containerised CLI resolved as {kind!r}"
+
+    with tempfile.TemporaryDirectory() as d:
+        root = pathlib.Path(d)
+        _write(root, {"pyproject.toml": '[project]\nname = "d"\nversion = "1"\n',
+                      "Dockerfile": "FROM scratch\n", "Chart.yaml": "name: d\n"})
+        _, kind = cerberus_setup.detect(root)
+        assert kind == "chart", f"the more specific signal lost: {kind!r}"
+
+
+def test_a_manifest_that_cannot_be_read_is_not_a_command():
+    """Both branches swallow their exception, so both need a case.
+
+    A malformed manifest reading as a CLI would be a guess dressed as a fact,
+    and the swallowed exception means nothing else would ever say so.
+    """
+    sys.path.insert(0, str(SETUP.parent))
+    import cerberus_setup
+
+    for name, text in (("package.json", "{not json"),
+                       ("pyproject.toml", "[project\nbroken")):
+        with tempfile.TemporaryDirectory() as d:
+            root = pathlib.Path(d)
+            (root / name).write_text(text, encoding="utf-8")
+            assert cerberus_setup._looks_like_a_command(root) is False, name
 
 
 # ------------------------------------------------- what installing does NOT do
