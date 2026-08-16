@@ -562,7 +562,10 @@ def test_no_link_points_at_the_old_repository_name():
 #: Words that are English spelled in Cyrillic. A test for "does this read like
 #: Russian" cannot be written; a test for "did this specific calque come back"
 #: can, and the calque is what actually returns.
-CALQUES = ["адверсариальн", "гейт", "артефакт", "оракул", "контрпример"]
+CALQUES = ["адверсариальн", "гейт", "артефакт", "оракул", "контрпример",
+           # #60: not a transliteration but an invention — `file matcher` taken
+           # apart and reassembled, in the sentence carrying the argument.
+           "сопоставител", "проект-потребител", "реальной формы"]
 
 
 def test_the_russian_page_uses_no_transliterated_english():
@@ -689,6 +692,32 @@ def test_the_fix_did_not_grow_the_page():
         assert len(re.findall(r"^## ", text, re.M)) <= 10, f"{path.name}: a section was added"
         body = [l for l in text.splitlines() if l.strip()]
         assert len(body) <= lines, f"{path.name}: {len(body)} lines, bound {lines}"
+
+
+def test_no_command_on_either_page_has_a_blank_left_in_it():
+    """#60. A placeholder in a line someone will copy is a line that will not run.
+
+    This project refuses that everywhere else — #51 rejects a `stage2` still
+    holding the draft's blanks — and then put one in its own quick start, on
+    both pages, in the fix landed for #58.
+    """
+    for path in (README, README_RU):
+        text = path.read_text(encoding="utf-8")
+        for lang, body in fenced(text):
+            for line in body.splitlines():
+                assert not re.search(r"<[a-zа-я][^>]*>", line, re.I), (
+                    f"{path.name}: a command with a blank in it: {line.strip()!r}")
+        # And inline commands, which is where this one actually was. Fenced
+        # blocks are removed first: scanning the whole document for `…` pairs
+        # walks straight through ``` fences and pairs the wrong backticks, so
+        # the first version of this found zero commands and passed on both
+        # mutants.
+        prose = re.sub(r"```.*?```", "", text, flags=re.S)
+        for inline in re.findall(r"`([^`\n]+)`", prose):
+            if not inline.startswith(("python3 ", "sh ", "curl ", "codex ", "claude ")):
+                continue
+            assert not re.search(r"<[a-zа-я][^>]*>", inline, re.I), (
+                f"{path.name}: a command with a blank in it: {inline!r}")
 
 
 def _main() -> int:
