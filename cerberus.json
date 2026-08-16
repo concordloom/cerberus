@@ -10,7 +10,7 @@
       "python3 scripts/check_parity.py",
       "sh -n install.sh"
     ],
-    "//stage2": "The boundary here is the plugin loader, the installer, and — since #49 — a real agent session. Whether the setup skill's conversation actually happens is a property of an agent, and an agent CLI on this machine is how you find out. Three verdicts called that unreachable while `claude` was installed.",
+    "//stage2": "The boundary here is the plugin loader, the installer, and — since #49 — a real agent session. Whether the cerberus-setup skill's conversation actually happens is a property of an agent, and an agent CLI on this machine is how you find out. Three verdicts called that unreachable while `claude` was installed.",
     "stage2": [
       "export CLAUDE_CONFIG_DIR=$(mktemp -d)",
       "claude plugin marketplace add concordloom/cerberus",

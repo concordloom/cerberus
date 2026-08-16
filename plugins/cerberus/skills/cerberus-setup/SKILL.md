@@ -1,5 +1,5 @@
 ---
-name: setup
+name: cerberus-setup
 description: Work out this project's checks by running them, and write them into cerberus.json so the other two skills stop guessing. Use when asked to install or configure cerberus, or when its config still holds the example placeholders.
 when_to_use: On a first install; when cerberus.json still holds the example placeholders; when the checks it lists no longer match what this project actually runs.
 ---
@@ -22,9 +22,9 @@ front door.
 ## Run it
 
 ```sh
-python3 "$CLAUDE_PLUGIN_ROOT"/skills/setup/cerberus_setup.py   # installed as a plugin
-python3 .claude/skills/setup/cerberus_setup.py                 # installed by install.sh
-python3 .agents/skills/setup/cerberus_setup.py                 # Codex and anything reading .agents
+python3 "$CLAUDE_PLUGIN_ROOT"/skills/cerberus-setup/cerberus_setup.py   # installed as a plugin
+python3 .claude/skills/cerberus-setup/cerberus_setup.py                 # installed by install.sh
+python3 .agents/skills/cerberus-setup/cerberus_setup.py                 # Codex and anything reading .agents
 ```
 
 Whichever exists. `--check` runs the checks and writes nothing. The config it

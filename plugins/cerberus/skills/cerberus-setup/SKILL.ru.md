@@ -1,5 +1,5 @@
 ---
-name: setup
+name: cerberus-setup
 description: Выяснить проверки этого проекта, прогнав их, и записать в cerberus.json, чтобы два других навыка перестали гадать. Использовать при установке или настройке цербера и когда в конфиге остались заглушки из примера.
 when_to_use: При первой установке; когда в `cerberus.json` остались заглушки из примера; когда перечисленные там проверки больше не совпадают с тем, что проект реально гоняет.
 ---
@@ -22,9 +22,9 @@ when_to_use: При первой установке; когда в `cerberus.jso
 ## Как запустить
 
 ```sh
-python3 "$CLAUDE_PLUGIN_ROOT"/skills/setup/cerberus_setup.py   # установлено плагином
-python3 .claude/skills/setup/cerberus_setup.py                 # установлено install.sh
-python3 .agents/skills/setup/cerberus_setup.py                 # Codex и всё, что читает .agents
+python3 "$CLAUDE_PLUGIN_ROOT"/skills/cerberus-setup/cerberus_setup.py   # установлено плагином
+python3 .claude/skills/cerberus-setup/cerberus_setup.py                 # установлено install.sh
+python3 .agents/skills/cerberus-setup/cerberus_setup.py                 # Codex и всё, что читает .agents
 ```
 
 Тот, который существует. `--check` прогоняет проверки и ничего не пишет. Конфиг

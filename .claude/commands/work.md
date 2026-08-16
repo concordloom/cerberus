@@ -22,7 +22,7 @@ replacement for it.
 
 4. **Run the critic if the work produced a claim** — a diagnosis, an explanation
    of a mechanism, a statement about the codebase. Follow
-   `plugins/cerberus/skills/critic/SKILL.md`: an adversary whose mandate is to
+   `plugins/cerberus/skills/cerberus-critic/SKILL.md`: an adversary whose mandate is to
    refute, then verify its load-bearing claim yourself, then have it confirm
    your retelling. A change that asserts nothing beyond "this now behaves as the
    issue asked" skips this.

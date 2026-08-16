@@ -47,7 +47,7 @@ resolve() {
 # of the same cycle, and installing one of them is worse than installing
 # neither, because the missing half is the one nobody notices is missing.
 #
-# Whole directories rather than SKILL.md alone — the setup skill ships a script
+# Whole directories rather than SKILL.md alone — the cerberus-setup skill ships a script
 # beside its text, and copying only the text left it describing a file that was
 # never installed.
 copy_skills() {
@@ -132,13 +132,13 @@ echo "Installing cerberus into $TARGET"
 if [ "$WANT_CLAUDE" -eq 1 ]; then
   mkdir -p "$TARGET/.claude/skills"
   copy_skills "$TARGET/.claude/skills"
-  SETUP_SCRIPT=".claude/skills/setup/cerberus_setup.py"
+  SETUP_SCRIPT=".claude/skills/cerberus-setup/cerberus_setup.py"
 fi
 
 if [ "$WANT_CODEX" -eq 1 ]; then
   mkdir -p "$TARGET/.agents/skills"
   copy_skills "$TARGET/.agents/skills"
-  SETUP_SCRIPT=".agents/skills/setup/cerberus_setup.py"
+  SETUP_SCRIPT=".agents/skills/cerberus-setup/cerberus_setup.py"
 fi
 
 # One config for the project, not one per agent: nothing reads it but whoever is

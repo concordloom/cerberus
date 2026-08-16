@@ -35,7 +35,7 @@ jobs:
         # path is asserted first. This step silently compiled nothing after the
         # scripts moved under plugins/ and stayed green throughout.
         run: |
-          test -f plugins/cerberus/skills/setup/cerberus_setup.py
+          test -f plugins/cerberus/skills/cerberus-setup/cerberus_setup.py
           python3 -m compileall -q plugins scripts tests
 
       # The two slash commands drive the whole working cycle and had no check
@@ -182,8 +182,8 @@ jobs:
           mkdir -p /tmp/proj && cd /tmp/proj
           sh "$GITHUB_WORKSPACE/install.sh" --claude
           test -f .claude/skills/cerberus/SKILL.md
-          test -f .claude/skills/critic/SKILL.md
-          test -f .claude/skills/setup/cerberus_setup.py
+          test -f .claude/skills/cerberus-critic/SKILL.md
+          test -f .claude/skills/cerberus-setup/cerberus_setup.py
           test -f cerberus.json
           python3 -c "import json; json.load(open('cerberus.json'))"
 
