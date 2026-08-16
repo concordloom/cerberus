@@ -1,5 +1,12 @@
 # Changelog
 
+# [2.1.0](https://github.com/concordloom/cerberus/compare/v2.0.3...v2.1.0) (2026-08-16)
+
+
+### Features
+
+* help people write stage2, and let them declare it unreachable ([#46](https://github.com/concordloom/cerberus/issues/46)) ([7b7512e](https://github.com/concordloom/cerberus/commit/7b7512eca43ebdca5cbab21b3b4bc54ec1746f14)), closes [#45](https://github.com/concordloom/cerberus/issues/45)
+
 ## [2.0.3](https://github.com/concordloom/cerberus/compare/v2.0.2...v2.0.3) (2026-08-16)
 
 
