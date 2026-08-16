@@ -173,6 +173,11 @@ def main() -> int:
             pointer = CONFIG_LINE.format(path=relative)
             break
     reason = REASON + pointer + FILES_HEADER + listed
+    if cfg.enforce_malformed:
+        reason += (
+            '\n\n"enforce" in this project\'s cerberus.json is not true or false. '
+            "It is being treated as asked-for; write a boolean to settle it.\n"
+        )
     if cfg.unreadable:
         reason += (
             "\n\nThis project asked for enforcement, and its cerberus.json "

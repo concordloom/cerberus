@@ -110,8 +110,15 @@ class Config:
         # this key, and it would have read as on. Only a real boolean counts;
         # anything else falls back to the default rather than guessing.
         declared = raw.get("enforce", ENFORCE_DEFAULT)
-        self.enforce = declared if isinstance(declared, bool) else ENFORCE_DEFAULT
-        self.enforce_malformed = "enforce" in raw and not isinstance(declared, bool)
+        malformed = "enforce" in raw and not isinstance(declared, bool)
+        # `"true"`, `1` and `"yes"` are somebody asking for enforcement, not
+        # somebody declining it. Falling back to the default there switched the
+        # gate off on the commonest typo for a boolean key — the same defect as
+        # a broken file, one level down. Treat it as asked-for, and say why.
+        self.enforce = True if malformed else (
+            declared if isinstance(declared, bool) else ENFORCE_DEFAULT
+        )
+        self.enforce_malformed = malformed
         #: Set when the config could not be parsed. A project that asked for
         #: enforcement and then broke its config must keep being refused —
         #: falling back to "off" would let a typo switch the gate off, which is

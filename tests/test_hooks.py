@@ -274,18 +274,35 @@ def test_a_config_of_the_wrong_shape_keeps_enforcing():
             assert json.loads(out)["decision"] == "block", raw
 
 
-def test_enforce_must_be_a_boolean_to_count():
-    # `"false"` is a truthy string and the commonest typo for this key; it read
-    # as ON. `null` and `0` read as OFF. The coercion was wrong both ways.
-    for raw, expected in (('{"enforce": "false"}', False), ('{"enforce": "true"}', False),
-                          ('{"enforce": 1}', False), ('{"enforce": null}', False),
-                          ('{"enforce": true}', True)):
+def test_a_non_boolean_enforce_is_read_as_asking_and_says_so():
+    """`"true"`, `1` and `"yes"` are somebody asking, not somebody declining.
+
+    `bool()` made `"false"` read as on while `null` and `0` read as off — wrong
+    in both directions. Falling back to the default instead switched the gate
+    off on the commonest typo for a boolean key, which is the same defect as a
+    broken file one level down. Anything that is not a boolean is treated as
+    asked-for, and the refusal says why.
+    """
+    for raw in ('{"enforce": "true"}', '{"enforce": 1}', '{"enforce": "yes"}',
+                '{"enforce": "false"}', '{"enforce": null}'):
         with tempfile.TemporaryDirectory() as d:
             tmp = pathlib.Path(d)
             (tmp / ".claude").mkdir()
             (tmp / ".claude" / "cerberus.json").write_text(raw, encoding="utf-8")
-            cfg = Config.load(tmp)
-            assert cfg.enforce is expected, f"{raw} → {cfg.enforce}"
+            run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/x.py"}})
+            _, out = run_hook("cerberus_gate.py", {
+                "cwd": str(tmp), "last_assistant_message": "done, it works"})
+            assert out, f"{raw}: a typo switched the gate off"
+            payload = json.loads(out)
+            assert payload["decision"] == "block", raw
+            assert "not true or false" in payload["reason"], raw
+
+    for raw, expected in (('{"enforce": true}', True), ('{"enforce": false}', False)):
+        with tempfile.TemporaryDirectory() as d:
+            tmp = pathlib.Path(d)
+            (tmp / ".claude").mkdir()
+            (tmp / ".claude" / "cerberus.json").write_text(raw, encoding="utf-8")
+            assert Config.load(tmp).enforce is expected, raw
 
 
 def test_a_broken_config_keeps_enforcing_rather_than_switching_off():
