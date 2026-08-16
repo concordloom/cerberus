@@ -59,9 +59,7 @@ codex plugin remove cerberus@concordloom    # Codex
 
 Installed into the repository: delete `cerberus/`, `cerberus-critic/` and
 `cerberus-setup/` from `.claude/skills/` or `.agents/skills/`, and
-`cerberus.json` if you no longer want it. Installs from 2.3.1 and earlier used
-`critic/` and `setup/` — those directories are left behind by an update and are
-yours to delete.
+`cerberus.json` if you no longer want it.
 
 ## Quick start
 

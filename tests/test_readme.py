@@ -1144,19 +1144,6 @@ def test_the_page_says_notes_is_not_a_permission_boundary():
             assert needle in text, f"{path.name}: {needle!r}"
 
 
-def test_the_page_says_what_an_update_leaves_behind_after_the_rename():
-    """#69. The plugin routes replace the directories; the installer route does not.
-
-    Someone updating from 2.3.1 keeps `critic/` and `setup/` on disk, which is
-    exactly the collision the rename was for — with our own old copy.
-    """
-    for path, needles in ((README, ("2.3.1", "left behind")),
-                          (README_RU, ("2.3.1", "обновление их не убирает"))):
-        text = flat(path.read_text(encoding="utf-8"))
-        for needle in needles:
-            assert needle.lower() in text, f"{path.name}: {needle!r}"
-
-
 def _main() -> int:
     failures = 0
     for name, fn in sorted(globals().items()):
