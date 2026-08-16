@@ -367,9 +367,20 @@ def test_installing_is_explained_in_exactly_one_place():
     # and this fails if a second home for it reappears.
     for path in (README, README_RU):
         text = path.read_text(encoding="utf-8")
-        headings = re.findall(r"^## (.+)$", text, re.M)
-        installish = [h for h in headings if re.search(r"[Ii]nstall|[Уу]станов", h)]
-        assert not installish, f"{path.name}: installing has its own section again: {installish}"
+        # By the commands, not by the heading: a section titled "Now what?"
+        # once tripped a word-match and a section titled "Getting going" would
+        # not have. What must not come back is a second place that tells you
+        # how to install.
+        sections = re.split(r"^## ", text, flags=re.M)[1:]
+        # Only fenced commands count. Prose saying "a plugin install keeps its
+        # files under the plugin" is explaining, not instructing, and an
+        # earlier version of this counted it.
+        installing = []
+        for sec in sections:
+            commands = "\n".join(body for _, body in fenced(sec))
+            if re.search(r"/plugin install |skill-installer install|install\.sh \|", commands):
+                installing.append(sec.splitlines()[0])
+        assert len(installing) == 1, f"{path.name}: installing explained in {installing}"
         quick = section(text, "## Quick start") if "## Quick start" in text else section(
             text, "## Быстрый старт"
         )

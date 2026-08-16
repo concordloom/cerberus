@@ -22,14 +22,18 @@ front door.
 ## Run it
 
 ```sh
-python3 .claude/hooks/cerberus_setup.py           # set up, then demonstrate
-python3 .claude/hooks/cerberus_setup.py --check   # run the checks, write nothing
+python3 "$CLAUDE_PLUGIN_ROOT"/hooks/cerberus_setup.py   # installed as a plugin
+python3 .claude/hooks/cerberus_setup.py                 # installed by install.sh
 ```
 
-That path exists after `install.sh`. Installed as a plugin the scripts live
-under the plugin directory instead, and on Codex they are not installed at all
-— there are no hooks there, so there is nothing to set up and the gate is
-advisory. Find the script rather than assuming the path.
+Whichever exists. A plugin install leaves nothing in the project, so the first
+form is the one that works there and it is the route the README lists first —
+running it writes the project's `cerberus.json`, which otherwise never exists
+and leaves every future run guessing the delivery boundary. `--check` runs the
+checks and writes nothing.
+
+On Codex neither exists: there are no hooks, so there is nothing to set up and
+the gate is advisory. Say that rather than sending someone hunting.
 
 It finds the toolchain, runs each candidate check **here** before writing it
 down, saves the ones that pass, and finishes by marking a scratch file,

@@ -55,6 +55,36 @@ project uses `.claude/` or `.agents/`, and is safe to re-run:
 curl -fsSL https://raw.githubusercontent.com/concordloom/cerberus/main/install.sh | sh -s -- --setup
 ```
 
+## Now what?
+
+Nothing, on your side. The three stages are your agent's work, not yours.
+
+Your day goes like this. You ask for a change as usual. The agent makes it. The
+agent goes to tell you it is done — and cannot. So it goes and checks, and comes
+back with a verdict instead of a claim.
+
+Here is a real one, from a session asked to add a function *and report it done*:
+
+```text
+Stage 0 — matrix: type {int, float, bool, Decimal, complex} x ordering x
+  non-numeric x arity x consumption path. All meaningful cells verified live.
+Stage 1 — compileall green, pytest green.
+Stage 2 — config says artifact_kind: library, so the boundary is the built
+  package, not my working tree. Built the wheel, installed it into a clean
+  venv, ran a consumer from /tmp so the source tree could not shadow the
+  import.
+The oracle can return BROKEN. I mutated the installed file to `return b - a`
+  and re-ran: 3 failures, exit 1. Restored: exit 0.
+```
+
+It read `artifact_kind: library` out of `cerberus.json` and worked out for
+itself that the built wheel was the thing to test, not the working tree. That is
+what the file is for.
+
+The cost is real: that took minutes rather than seconds, and it happens every
+time a readiness claim follows a code change. That is the trade, and
+[when it gets in your way](#when-it-gets-in-your-way) is two sections down.
+
 ## What it does to your session
 
 Two hooks and one rule.
@@ -131,6 +161,21 @@ The value goes in `artifact_kind` — `service`, `library`, `cli`, `chart`,
 If you have nothing to deploy, Stage 2 narrows to consuming the artifact you
 built in a clean environment, and everything past that is declared `Not proven`
 rather than assumed.
+
+## What goes in cerberus.json
+
+Two halves, and they are not the same kind of thing.
+
+**`verification`** — `artifact_kind`, `stage1`, `stage2`, `notes`. No program
+reads this. It is a note your agent reads and acts on: `stage1` is the commands
+it runs locally, `stage2` is what it has to reach past your delivery boundary.
+Getting it wrong costs an agent some wasted work.
+
+**Everything else** — `claim_patterns`, `ignore_patterns`, `source_extensions`,
+`watch_paths`, `marker`. The hooks read these on every run, and they ship
+commented out with a `//` in front. Getting one wrong makes the gate quietly
+weaker than you think it is. That asymmetry is why setup writes the first half
+and never the second.
 
 ## When it gets in your way
 
