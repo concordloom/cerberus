@@ -283,21 +283,24 @@ def write_config(
     return path
 
 
-def report_state(root: pathlib.Path, kind: str = "library", failing: bool = False) -> int:
-    """Say what was written, what is still missing, and what to do with it.
+def report_state(root: pathlib.Path, kind: str = "library", first_run: bool = True) -> int:
+    """Say what is still missing, and — the first time only — how to use this.
 
-    Shared by the fresh path and the already-configured one, because a re-run
-    that says nothing leaves the reader guessing whether it did anything.
+    Split by run rather than shared, because the two readers are different
+    people. Someone who has just installed a thing called a verification gate
+    reasonably expects something to start happening, and has to be told nothing
+    will. Someone running it a second time already knows, and printing it again
+    directly under "nothing was changed" left the only paragraph with content
+    followed by one with none.
     """
     config = resolve_config(root)
     where = config.relative_to(root) if config.is_relative_to(root) else config
 
-    print()
-    print("Nothing here runs by itself. The skills are yours to invoke by name —")
-    print("ask for the cerberus skill before saying a change works, and it will")
-    print(f"read the checks from {where} and run them.")
-    if failing:
-        print("Your own tests are failing right now — that is worth a look first.")
+    if first_run:
+        print()
+        print("Nothing here runs by itself. The skills are yours to invoke by name —")
+        print("ask for the cerberus skill before saying a change works, and it will")
+        print(f"read the checks from {where} and run them.")
     try:
         stage2 = json.loads(config.read_text(encoding="utf-8"))["verification"]["stage2"]
     except Exception:
@@ -364,13 +367,20 @@ def main(argv: list[str] | None = None) -> int:
                 print("It lists no checks at all, so there is nothing to run before a")
                 print("claim that the work is done.")
             if runners:
-                found = [c for c, code, _ in build_checks(runners, root) if code == 0]
+                # Only what the configuration does not already have. Offering a
+                # project a check it already lists reads as a suggestion, costs
+                # a second run of the command, and on a project with one check
+                # printed that check twice under two different headings.
+                already = {str(c) for c in listed}
+                found = [c for c, code, _ in build_checks(runners, root)
+                         if code == 0 and c not in already]
                 if found:
                     print()
-                    print("Checks I found here and ran, if you want them:")
+                    print("Checks I found here that it does not list, and ran:")
                     for cmd in found:
                         print(f"  ok       {cmd}")
-            return report_state(root, verification.get("artifact_kind") or kind or "library", still_failing)
+            return report_state(root, verification.get("artifact_kind") or kind or "library",
+                                first_run=False)
 
     # Only now, because a project this cannot recognise may already be
     # configured by hand — and those are exactly the projects that most need
@@ -416,13 +426,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  absent   {cmd} — not installed here, so it was left out")
     for cmd in timed_out:
         print(f"  too slow {cmd} — gave up waiting, so it was left out")
+    if broken:
+        # Beside the FAILING line it refers to, not below the advice. It was
+        # the fourth thing the reader reached, under a paragraph about how to
+        # invoke a skill — the most urgent sentence in the output, buried.
+        print("Your own tests are failing right now — that is worth a look first.")
 
     if args.check:
         print()
         print(f"Nothing was written. Drop --check to save this to {written}.")
         return 0
 
-    return report_state(root, kind, bool(broken))
+    return report_state(root, kind, first_run=True)
 
 
 if __name__ == "__main__":
