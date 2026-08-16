@@ -53,7 +53,7 @@ IGNORE_PATTERNS_DEFAULT = [
     "/tests/", "/test/", "/testing/", "/__tests__/", "/spec/",
     "_test.", ".test.", ".spec.", "test_",
     "/docs/", "/doc/", "/examples/", "/example/",
-    "/.claude/", "/.github/", "/vendor/", "/node_modules/",
+    "/.claude/", "/.codex/", "/.agents/", "/.github/", "/vendor/", "/node_modules/",
     "/migrations/versions/",
 ]
 

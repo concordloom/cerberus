@@ -3,10 +3,11 @@
   "hooks": {
     "PostToolUse": [
       {
+        "matcher": "apply_patch|Edit|Write",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$(git rev-parse --show-toplevel)\"/.codex/hooks/cerberus_mark.py",
+            "command": "python3 \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\"/.codex/hooks/cerberus_mark.py",
             "timeout": 20
           }
         ]
@@ -17,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$(git rev-parse --show-toplevel)\"/.codex/hooks/cerberus_gate.py",
+            "command": "python3 \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\"/.codex/hooks/cerberus_gate.py",
             "timeout": 20,
             "statusMessage": "Checking the work was verified"
           }

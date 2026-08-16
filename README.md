@@ -43,11 +43,12 @@ Checks I ran here, and will run before anyone says the work is done:
 Tried it: saying the work was done was refused, and it named the edited file
 ```
 
-Both enforce it. Codex has the same two events and the same block protocol, so
-the installer wires `.codex/hooks.json` the way it wires `.claude/settings.json`
-— the difference is only where the file lives. Installing the skill *without*
-the hooks, on either agent, leaves the gate advisory: followed when invoked,
-not enforced on every turn.
+Both enforce it: the same two events, and the same shape of refusal. The
+details differ — Codex will not run a project's hooks until you trust them with
+`/hooks`, and a refused turn there is fed back as a new prompt rather than
+simply ending — so the installer writes a different file and prints a different
+next step. Installing the skill *without* the hooks, on either agent, leaves
+the gate advisory: followed when invoked, not enforced on every turn.
 
 **Or put the files in your own repository** — the skill, the hooks and a
 `cerberus.json` you can commit. Nothing to clone; it detects whether the

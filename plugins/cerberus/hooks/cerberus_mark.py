@@ -58,7 +58,16 @@ def main() -> int:
 # a source file that was *executed*, and a read tool names one that was *read*;
 # marking either arms the gate for work nobody did.
 NOT_AN_EDITOR = re.compile(
-    r"bash|shell|terminal|exec|run_command|container\.exec|read|view|grep|search|list",
+    r"bash|shell|terminal|exec|run_command|container\.exec|read|view|grep|search"
+    r"|list|get_|head_|tail_|stat|info|find|glob|fetch|open",
+    re.I,
+)
+
+# A named tool has to look like one that writes before a bare `path` is taken
+# as an edit. Without this, any unrecognised read tool sending `path` armed the
+# gate — `mcp__filesystem__get_file_info` did, and so would anything new.
+AN_EDITOR = re.compile(
+    r"write|edit|patch|create|update|modify|replace|move|rename|delete|remove|apply|insert",
     re.I,
 )
 
@@ -93,6 +102,13 @@ def edited_paths(data: dict) -> list[str]:
         return [named]
 
     found = []
+    for key in ("source", "destination", "old_path", "new_path"):
+        value = tool_input.get(key)
+        if isinstance(value, str) and value and value not in found:
+            found.append(value)
+    if found:
+        return found
+
     for value in tool_input.values():
         if not isinstance(value, str):
             continue

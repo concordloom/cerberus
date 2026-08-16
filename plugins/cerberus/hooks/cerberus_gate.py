@@ -62,6 +62,31 @@ REASON = (
 
 FILES_HEADER = "\nUnverified files:\n"
 
+#: How many times to refuse before ending the turn instead of asking again.
+#: Enough for an agent that intends to verify; short of a loop for one that
+#: does not.
+REFUSAL_LIMIT = 3
+
+
+def _bump_refusals(cfg) -> int:
+    """Count this hook's own refusals for the current marker.
+
+    Kept beside the marker and removed with it, so clearing on a READY verdict
+    resets the count too. The alternative — reading `stop_hook_active` — asks a
+    different question: whether *any* Stop hook continued the turn.
+    """
+    path = cfg.marker_path().with_name(cfg.marker_path().name + ".refusals")
+    try:
+        count = int(path.read_text(encoding="utf-8").strip() or 0)
+    except Exception:
+        count = 0
+    count += 1
+    try:
+        path.write_text(str(count), encoding="utf-8")
+    except Exception:
+        pass
+    return count
+
 # Naming the file is the difference between an agent inventing its stages and
 # an agent running this project's. The pointer used to live at SKILL.md:257,
 # of 530 lines, and the refusal never mentioned it.
@@ -119,10 +144,10 @@ def main() -> int:
     if not marker.exists():
         return 0  # nothing unverified — let the turn end
 
-    # Codex hands the message to the Stop hook directly; Claude Code does not,
-    # so the transcript is parsed only when it has to be. Reading a field beats
-    # parsing a file, and the transcript format is the likelier of the two to
-    # differ between agents.
+    # Both agents hand the last assistant message to the Stop hook, and both
+    # recommend it over the transcript: the transcript is written asynchronously
+    # and may not yet carry the final message when the hook fires. The parse is
+    # the fallback, not the other way round.
     text = data.get("last_assistant_message")
     if not isinstance(text, str) or not text:
         text = _last_assistant_text(data.get("transcript_path", ""))
@@ -147,19 +172,24 @@ def main() -> int:
             break
     reason = REASON + pointer + FILES_HEADER + listed
 
-    # A blocked Stop does not always end the turn: on some agents it feeds the
-    # reason back as a new prompt and the turn continues, and `stop_hook_active`
-    # says that already happened. Blocking again from there loops forever.
+    # A blocked Stop does not always end the turn: on some agents the reason is
+    # fed back as a new prompt and the turn continues, with no documented cap.
+    # Refusing forever would be a loop; going silent was worse and shipped once
+    # — the claim went through on the second attempt.
     #
-    # Going silent instead was worse, and shipped: the claim went through on the
-    # second attempt. Refuse, then refuse a second time, then *end the turn*
-    # rather than continue it — the refusal stays visible either way, and the
-    # only thing that changes is that it stops asking.
-    if data.get("stop_hook_active"):
+    # So it counts its own refusals. `stop_hook_active` cannot do this: it means
+    # *some* Stop hook already continued the turn, not this one, so any other
+    # hook — `/goal`, for instance — made cerberus's very first refusal a hard
+    # stop and the agent never got the continuation it needs to go and verify.
+    refusals = _bump_refusals(cfg)
+    if refusals > REFUSAL_LIMIT:
         print(json.dumps({
             "continue": False,
             "stopReason": reason,
-            "systemMessage": "Cerberus: the work is still unverified. Ending the turn rather than asking again.",
+            "systemMessage": (
+                f"Cerberus refused {refusals - 1} times and the work is still "
+                "unverified. Ending the turn rather than asking again."
+            ),
         }))
         return 0
 

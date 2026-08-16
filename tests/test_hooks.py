@@ -266,26 +266,26 @@ def test_the_claim_can_come_from_the_payload():
         assert json.loads(out)["decision"] == "block"
 
 
-def test_a_continued_turn_ends_rather_than_looping_or_passing():
-    # A blocked Stop can feed the reason back as a new prompt, and blocking
-    # again from there loops forever. The first attempt at this went silent
-    # instead — which shipped a bypass: claim, get refused, claim again, and
-    # the second one went through. It has to do neither: refuse, and end the
-    # turn.
+def test_it_refuses_a_few_times_and_then_stops_asking():
+    # Neither of the two failure modes tried before: refusing forever is a loop
+    # on an agent that turns a block into a continuation, and going silent was
+    # a bypass — claim, refused, claim again, through. It refuses, and after a
+    # few attempts ends the turn instead of asking again.
     with tempfile.TemporaryDirectory() as d:
         tmp = pathlib.Path(d)
         run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/x.py"}})
-        rc, out = run_hook("cerberus_gate.py", {
-            "cwd": str(tmp),
-            "hook_event_name": "Stop",
-            "last_assistant_message": "done, it works",
-            "stop_hook_active": True,
-        })
-        assert out, "a continued turn was let through — that is the bypass"
-        payload = json.loads(out)
-        assert payload.get("continue") is False, payload
-        assert "has not been verified" in payload.get("stopReason", ""), payload
-        assert payload.get("decision") != "block", "blocking again is the loop"
+        seen = []
+        for _ in range(8):
+            _, out = run_hook("cerberus_gate.py", {
+                "cwd": str(tmp), "last_assistant_message": "done, it works"})
+            assert out, "it went quiet — the claim would have gone through"
+            payload = json.loads(out)
+            seen.append(payload)
+            if payload.get("continue") is False:
+                break
+        assert len(seen) > 1, "it stopped asking on the very first refusal"
+        assert seen[0]["decision"] == "block"
+        assert seen[-1].get("continue") is False, "it never stopped asking"
 
 
 def test_the_first_turn_blocks_even_though_the_flag_is_present():
@@ -331,6 +331,93 @@ def test_reading_a_file_does_not_arm_the_gate():
             "tool_input": {"path": "app/service.py"},
         })
         assert not (tmp / ".claude" / ".cerberus-pending").exists()
+
+
+def test_a_header_quoted_inside_a_patch_body_is_not_a_header():
+    # M1: without the ^ anchor, a patch whose body *quotes* a header records
+    # the path in the quote. Both earlier guard tests used prose bodies with no
+    # header text at all, so neither could see it.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = pathlib.Path(d)
+        body = (
+            "*** Add File: app/examples.py\n"
+            "+SAMPLE = \"\"\"\n"
+            "+*** Update File: app/service.py\n"
+            "+\"\"\"\n"
+        )
+        run_hook("cerberus_mark.py", {
+            "cwd": str(tmp), "tool_name": "apply_patch",
+            "tool_input": {"command": body},
+        })
+        recorded = (tmp / ".claude" / ".cerberus-pending").read_text(encoding="utf-8")
+        assert "app/examples.py" in recorded, recorded
+        assert "app/service.py" not in recorded, recorded
+
+
+def test_an_mcp_editor_sending_path_is_recorded():
+    # M2: dropping the `path` fallback disarmed the gate for every MCP editor
+    # and no test noticed, because the only `path` test asserted the negative.
+    for tool in ("mcp__filesystem__write_file", "mcp__jetbrains__replace_text_in_file"):
+        with tempfile.TemporaryDirectory() as d:
+            tmp = pathlib.Path(d)
+            run_hook("cerberus_mark.py", {
+                "cwd": str(tmp), "tool_name": tool,
+                "tool_input": {"path": "app/service.py"},
+            })
+            marker = tmp / ".claude" / ".cerberus-pending"
+            assert marker.exists(), tool
+            assert "app/service.py" in marker.read_text(encoding="utf-8"), tool
+
+
+def test_read_only_tools_are_excluded_by_more_than_two_names():
+    # M4: shrinking the exclusion list to the two names the tests happened to
+    # use passed the suite. These are real tools from the filesystem MCP server.
+    for tool in ("mcp__filesystem__get_file_info", "mcp__filesystem__head_file",
+                 "mcp__filesystem__list_directory", "local_shell", "container.exec",
+                 "mcp__repo__search_files", "view_image"):
+        with tempfile.TemporaryDirectory() as d:
+            tmp = pathlib.Path(d)
+            run_hook("cerberus_mark.py", {
+                "cwd": str(tmp), "tool_name": tool,
+                "tool_input": {"path": "app/service.py", "command": "python3 app/service.py"},
+            })
+            assert not (tmp / ".claude" / ".cerberus-pending").exists(), tool
+
+
+def test_the_final_refusal_still_names_the_files():
+    # M3: the hard stop kept refusing but stopped naming what was unverified,
+    # because the test asserted only a phrase from the constant preamble.
+    # Naming the file is the README's headline demonstration.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = pathlib.Path(d)
+        run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/payments.py"}})
+        payload = {}
+        for _ in range(6):
+            _, out = run_hook("cerberus_gate.py", {
+                "cwd": str(tmp), "last_assistant_message": "done, it works"})
+            assert out, "the gate went quiet instead of refusing or stopping"
+            payload = json.loads(out)
+            if payload.get("continue") is False:
+                break
+        assert payload.get("continue") is False, "it never stopped asking"
+        assert "app/payments.py" in payload["stopReason"], payload["stopReason"]
+        assert payload.get("systemMessage"), "the only user-visible signal was dropped"
+
+
+def test_another_hooks_continuation_does_not_end_our_first_refusal():
+    # stop_hook_active means *some* Stop hook already continued the turn, not
+    # this one. Reading it as ours turned cerberus's first refusal into a hard
+    # stop whenever anything else was active — so the agent never got the
+    # continuation it needs to go and verify.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = pathlib.Path(d)
+        run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/x.py"}})
+        _, out = run_hook("cerberus_gate.py", {
+            "cwd": str(tmp),
+            "last_assistant_message": "done, it works",
+            "stop_hook_active": True,
+        })
+        assert json.loads(out)["decision"] == "block", "somebody else's flag ended our first refusal"
 
 
 def test_a_delete_and_a_rename_are_both_recorded():
