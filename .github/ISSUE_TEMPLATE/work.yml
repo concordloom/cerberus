@@ -17,7 +17,7 @@ body:
       label: What is wrong
       description: The symptom, and how it shows up. Sources beat adjectives.
       placeholder: |
-        Installing on a fresh machine leaves the hooks unwired, so the gate
+        Installing on a fresh machine leaves the checks unwritten, so the skill
         never fires. Seen on 1.2.0, macOS, no prior .claude/ directory.
     validations:
       required: true

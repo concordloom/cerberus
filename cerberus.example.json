@@ -1,10 +1,7 @@
 {
-  "//": "Copy to .claude/cerberus.json. Safe to use as-is: enforce is off, and the only other key set is the one with no sensible default. Everything else keeps the built-in defaults, so copying this verbatim never narrows the gate by accident.",
+  "//": "Copy to cerberus.json in your project root. Safe to use as-is: the only key set is the one with no sensible default, and the checks below are placeholders until setup runs.",
 
-  "//enforce": "Off until you ask. With it off the skills are yours to invoke and the hooks stay quiet — nothing recorded, nothing refused. Set it to true when you want a readiness claim refused while an edited file is unverified.",
-  "enforce": false,
-
-  "//verification": "Declares the delivery boundary, so Stage 2 is a fact about this project rather than a guess each time. artifact_kind: service | library | cli | chart | migration | model-boundary | plugin.",
+  "//verification": "The one thing this repository cannot work out for you: what checks this project has, and where the change stops being under your control once it ships. artifact_kind: service | library | cli | chart | migration | model-boundary | plugin.",
   "verification": {
     "artifact_kind": "service",
     "stage1": [
@@ -16,13 +13,5 @@
       "echo 'library: build the package, install it into a fresh venv, import it as a consumer'"
     ],
     "notes": "Free text the agent should know: where the environment is, which account to use, what must never be touched."
-  },
-
-  "//tuning": "The keys below are OPTIONAL and shown for reference only — they are not set here on purpose. Uncomment one only when you mean to change it, and note that claim_patterns REPLACES the defaults rather than extending them, so a short list silently makes the gate weaker.",
-
-  "//watch_paths": ["src/", "backend/"],
-  "//source_extensions": [".py", ".ts", ".tsx", ".go"],
-  "//ignore_patterns": ["/tests/", ".test.", "/docs/", "/.claude/"],
-  "//claim_patterns": ["\\bit works\\b", "\\ball green\\b", "\\bdone\\b"],
-  "//marker": ".claude/.cerberus-pending"
+  }
 }

@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
-"""Tests for cerberus_setup.py.
+"""Tests for cerberus_setup.py and for what install.sh leaves behind.
 
-Two kinds of assertion here, and the second is the unusual one.
+Three kinds of assertion here, and the last two are the unusual ones.
 
-The ordinary kind: it detects what it should, writes only what it may, refuses
-when it cannot tell, and demonstrates the refusal rather than reporting it.
+The ordinary kind: it detects what it should, writes only what it may, and
+refuses when it cannot tell.
 
-The unusual kind: **what the user reads is tested**. "Friendly" is normally a
+The second kind: **what the installer does NOT do**. Since #33 the whole
+argument for this tool is that it takes no decisions on the user's behalf, and
+"takes no decisions" is only a requirement if something fails when it does. So
+the tests assert the absence of wiring, of hook files, and of any edit to a file
+the project owns.
+
+The third kind: **what the user reads is tested**. "Friendly" is normally a
 matter of taste and therefore un-gateable, so it is pinned to things a machine
-can check — a list of words that must not appear, a line count, and the three
+can check — a list of words that must not appear, a line count, and the
 statements the closing message owes the reader. A requirement that cannot fail
 is not a requirement.
 
@@ -26,9 +32,9 @@ import sys
 import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-HOOKS = ROOT / "plugins" / "cerberus" / "hooks"
-SETUP = HOOKS / "cerberus_setup.py"
-EXAMPLES = ROOT / "examples" / "settings.json"
+SKILLS = ROOT / "plugins" / "cerberus" / "skills"
+SETUP = SKILLS / "setup" / "cerberus_setup.py"
+INSTALL = ROOT / "install.sh"
 
 # Load-bearing internally, meaningless to someone being set up. The whole point
 # of the amendment on #13 is that this list is checked rather than intended.
@@ -52,7 +58,7 @@ def jargon_in(text: str) -> list[str]:
     defeated by a hyphen, the second by an `s`, and a third evasion certainly
     exists. It catches the drift that happens by accident, which is the drift
     that actually happens. The requirement is carried by the line count, the
-    three closing statements, and by somebody reading it.
+    closing statements, and by somebody reading it.
     """
     flat = re.sub(r"[-_/]+", " ", text.lower())
     flat = re.sub(r"\s+", " ", flat)
@@ -65,23 +71,21 @@ def jargon_in(text: str) -> list[str]:
             found.append(term)
     return found
 
-# The four keys that REPLACE the built-in lists. A machine must never write
-# them: a short guess makes the gate quietly narrower than advertised.
-REPLACING_KEYS = ["claim_patterns", "ignore_patterns", "source_extensions", "watch_paths"]
+
+# Keys that no longer have any reader. A config key nobody reads is a lie with a
+# schema, so writing one is a failure rather than a harmless leftover.
+DEAD_KEYS = [
+    "enforce", "claim_patterns", "ignore_patterns", "source_extensions",
+    "watch_paths", "marker",
+]
 
 
-def project(files: dict[str, str], wired: bool = True) -> pathlib.Path:
-    """Build a throwaway project with the hooks installed."""
+def project(files: dict[str, str]) -> pathlib.Path:
+    """Build a throwaway project with the setup script beside its skill."""
     tmp = pathlib.Path(tempfile.mkdtemp())
-    (tmp / ".claude" / "hooks").mkdir(parents=True)
-    for script in HOOKS.glob("*.py"):
-        (tmp / ".claude" / "hooks" / script.name).write_text(
-            script.read_text(encoding="utf-8"), encoding="utf-8"
-        )
-    if wired:
-        (tmp / ".claude" / "settings.json").write_text(
-            EXAMPLES.read_text(encoding="utf-8"), encoding="utf-8"
-        )
+    target = tmp / ".claude" / "skills" / "setup"
+    target.mkdir(parents=True)
+    (target / "cerberus_setup.py").write_text(SETUP.read_text(encoding="utf-8"), encoding="utf-8")
     for name, text in files.items():
         path = tmp / name
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -91,13 +95,30 @@ def project(files: dict[str, str], wired: bool = True) -> pathlib.Path:
 
 def run_setup(root: pathlib.Path, *args: str) -> tuple[int, str]:
     proc = subprocess.run(
-        [sys.executable, str(root / ".claude" / "hooks" / "cerberus_setup.py"), *args],
+        [sys.executable, str(root / ".claude" / "skills" / "setup" / "cerberus_setup.py"), *args],
         cwd=str(root),
         capture_output=True,
         text=True,
         env={k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"},
     )
     return proc.returncode, proc.stdout + proc.stderr
+
+
+def run_install(target: pathlib.Path, *args: str) -> tuple[int, str]:
+    proc = subprocess.run(
+        ["sh", str(INSTALL), *args],
+        cwd=str(target),
+        capture_output=True,
+        text=True,
+    )
+    return proc.returncode, proc.stdout + proc.stderr
+
+
+def config_of(root: pathlib.Path) -> dict:
+    for relative in (".claude/cerberus.json", ".codex/cerberus.json", "cerberus.json"):
+        if (root / relative).exists():
+            return json.loads((root / relative).read_text(encoding="utf-8"))
+    raise AssertionError(f"no configuration anywhere under {root}")
 
 
 PY_PROJECT = {
@@ -119,7 +140,7 @@ def _every_runner() -> dict:
     wrong only there. Deriving the fixtures from the code means adding a runner
     cannot leave a hole.
     """
-    sys.path.insert(0, str(HOOKS))
+    sys.path.insert(0, str(SETUP.parent))
     import cerberus_setup
 
     seeds = {
@@ -142,822 +163,416 @@ OTHER_PROJECTS = {k: v for k, v in _every_runner().items() if k != "Python"}
 # --------------------------------------------------------------- behaviour
 
 
-def test_sets_up_a_python_project_and_shows_the_refusal():
-    # Deliberately not asserting *which* command: the runner CI uses has no
-    # pytest, so the script correctly falls back — and an earlier version of
-    # this test pinned "pytest -q" and went red for the right behaviour. The
-    # property is that something real was found and the refusal was shown.
+def test_sets_up_a_python_project():
     root = project(PY_PROJECT)
-    rc, out = run_setup(root)
-    assert rc == 0, out
-    assert "refused" in out, "the demonstration must appear in the output: " + out
-    config = json.loads((root / ".claude" / "cerberus.json").read_text(encoding="utf-8"))
-    assert config["verification"]["stage1"], "nothing was written to check"
-    assert config["verification"]["artifact_kind"] == "library", config
+    code, out = run_setup(root)
+    assert code == 0, out
+    cfg = config_of(root)["verification"]
+    assert cfg["artifact_kind"] == "library", cfg
+    assert cfg["stage1"], "no checks were written at all"
+    assert not any("replace with" in c for c in cfg["stage1"]), cfg["stage1"]
 
 
 def test_never_writes_a_check_it_did_not_run():
-    # The failing command must not reach the file, and must be reported.
-    root = project({**PY_PROJECT, ".ruff.toml": "line-length = 100\n"})
-    rc, out = run_setup(root)
-    config = json.loads((root / ".claude" / "cerberus.json").read_text(encoding="utf-8"))
-    for cmd in config["verification"]["stage1"]:
-        assert not cmd.startswith("echo "), "a placeholder reached the config: " + cmd
+    root = project(PY_PROJECT)
+    run_setup(root)
+    for cmd in config_of(root)["verification"]["stage1"]:
         assert subprocess.run(cmd, shell=True, cwd=str(root), capture_output=True).returncode == 0, cmd
-
-
-def test_never_writes_the_keys_that_replace_defaults():
-    for name, files in {"Python": PY_PROJECT, **OTHER_PROJECTS}.items():
-        root = project(files)
-        run_setup(root)
-        config = root / ".claude" / "cerberus.json"
-        if not config.exists():
-            continue  # it refused, which is its own kind of correct
-        raw = config.read_text(encoding="utf-8")
-        for key in REPLACING_KEYS:
-            assert key not in raw, f"{key} written for a {name} project"
-
-
-def test_write_config_never_emits_the_replacing_keys_for_any_kind():
-    """The rule at the function, not through a project.
-
-    Going through a project skips whenever the toolchain is absent — cargo and
-    go are not installed on the CI runner — and "skipped" is exactly where a
-    mutant hides. This calls the writer directly for every kind it can produce.
-    """
-    sys.path.insert(0, str(HOOKS))
-    import cerberus_setup
-
-    for kind in sorted(set(cerberus_setup.STAGE2_HINT_BY_KIND) | {"library", "service"}):
-        for seed in ({}, {"//": "note"}, {"verification": {"stage1": ["echo x"]}}):
-            with tempfile.TemporaryDirectory() as d:
-                root = pathlib.Path(d)
-                (root / "Cargo.toml").write_text("[package]\nname='d'\n", encoding="utf-8")
-                (root / "go.mod").write_text("module d\n", encoding="utf-8")
-                (root / "package.json").write_text("{}", encoding="utf-8")
-                cerberus_setup.write_config(root, kind, ["true"], False, dict(seed))
-                written = json.loads(
-                    (root / ".claude" / "cerberus.json").read_text(encoding="utf-8")
-                )
-                for key in REPLACING_KEYS:
-                    assert key not in written, f"{key} written for kind {kind}"
 
 
 def test_never_writes_a_check_it_did_not_run_in_any_language():
     for name, files in OTHER_PROJECTS.items():
         root = project(files)
-        run_setup(root)
-        config = root / ".claude" / "cerberus.json"
-        if not config.exists():
-            continue
-        for cmd in json.loads(config.read_text(encoding="utf-8"))["verification"]["stage1"]:
-            code = subprocess.run(cmd, shell=True, cwd=str(root), capture_output=True).returncode
-            assert code == 0, f"{name}: wrote a check that does not pass here: {cmd}"
+        code, _ = run_setup(root)
+        if code != 0:
+            continue  # the toolchain is absent here; nothing was written
+        for cmd in config_of(root)["verification"]["stage1"]:
+            got = subprocess.run(cmd, shell=True, cwd=str(root), capture_output=True)
+            assert got.returncode == 0, f"{name}: wrote {cmd!r}, which exits {got.returncode}"
+
+
+def test_never_writes_a_key_that_nothing_reads():
+    """#33: the hooks are gone, so their keys are no longer configuration.
+
+    Asserted at write_config rather than end-to-end, because a project where
+    detection fails writes nothing at all and would pass this vacuously.
+    """
+    sys.path.insert(0, str(SETUP.parent))
+    import cerberus_setup
+
+    with tempfile.TemporaryDirectory() as d:
+        root = pathlib.Path(d)
+        for kind in list(cerberus_setup.STAGE2_HINT_BY_KIND) + ["library"]:
+            path = cerberus_setup.write_config(root, kind, ["true"], dry=False)
+            body = json.loads(path.read_text(encoding="utf-8"))
+            for key in DEAD_KEYS:
+                assert key not in body, f"{kind}: wrote dead key {key}"
+                assert key not in body["verification"], f"{kind}: wrote dead key {key}"
 
 
 def test_refuses_every_unsupported_build_system_rather_than_guessing():
-    # A Makefile is a build system and a Dockerfile is a delivery detail;
-    # neither says what the checks are. The Makefile half had a test and the
-    # Dockerfile half did not, which is where the fifth mutant lived.
-    for name, files in (("Makefile", MAKE_PROJECT), ("Dockerfile", DOCKER_PROJECT)):
+    for files in (MAKE_PROJECT, DOCKER_PROJECT):
         root = project(files)
-        rc, out = run_setup(root)
-        assert rc == 2, f"{name}: {out}"
-        assert "could not tell" in out, out
-
-
-def test_a_configured_project_reachable_only_by_hand_still_gets_an_answer():
-    # Detection does not support Gradle, which is exactly why such a project is
-    # configured by hand — and it was the population most needing "is it on?"
-    # and the one refused before the question was asked.
-    root = project({"build.gradle": "plugins { id 'java' }\n",
-                    ".claude/cerberus.json": json.dumps(
-                        {"enforce": True,
-                         "verification": {"artifact_kind": "service", "stage1": ["true"]}})})
-    rc, out = run_setup(root)
-    assert rc == 0, out
-    assert "Tried it:" in out, "it never demonstrated:\n" + out
-
-
-def test_a_configured_project_runs_its_own_checks():
-    # Certifying that the gate fires while the check it points at cannot pass
-    # is this issue's split, living in the re-run path.
-    root = project({**PY_PROJECT,
-                    "tests/test_demo.py": "def test_bad():\n    assert False\n",
-                    ".claude/cerberus.json": json.dumps(
-                        {"verification": {"artifact_kind": "library", "stage1": ["pytest -q"]}})})
-    rc, out = run_setup(root)
-    assert "FAILING" in out or "absent" in out, out
-
-
-def test_a_hand_written_step_is_not_mistaken_for_the_placeholder():
-    root = project({**PY_PROJECT, ".claude/cerberus.json": json.dumps(
-        {"verification": {"artifact_kind": "library",
-                          "stage1": ["echo 'running the suite' && pytest -q --maxfail=1"]}})})
-    run_setup(root)
-    after = json.loads((root / ".claude" / "cerberus.json").read_text(encoding="utf-8"))
-    assert "--maxfail=1" in after["verification"]["stage1"][0], after
+        code, out = run_setup(root)
+        assert code == 2, out
+        assert "could not tell" in out.lower(), out
+        assert not (root / "cerberus.json").exists(), "wrote a config for a project it did not recognise"
 
 
 def test_refuses_a_project_it_cannot_recognise():
-    root = project({"notes.txt": "hello\n"})
-    rc, out = run_setup(root)
-    assert rc == 2, out
-    assert "could not tell" in out, out
-    assert not (root / ".claude" / "cerberus.json").exists(), "it guessed anyway"
+    root = project({"README.md": "hello\n"})
+    code, out = run_setup(root)
+    assert code == 2, out
+    assert "Nothing was changed" in out, out
 
 
-def test_a_settings_file_that_only_mentions_the_names_is_not_wiring():
-    # A substring check passed this: no hook object at all, just a comment.
-    root = project(PY_PROJECT, wired=False)
-    (root / ".claude" / "settings.json").write_text(
-        json.dumps({"//": "TODO wire up cerberus_mark.py and cerberus_gate.py", "hooks": {}}),
-        encoding="utf-8",
-    )
-    rc, out = run_setup(root)
-    assert rc == 1, out
-    assert "nothing here is calling it" in out, out
+def test_a_configured_project_runs_its_own_checks():
+    root = project({**PY_PROJECT, "cerberus.json": json.dumps(
+        {"verification": {"artifact_kind": "service", "stage1": ["true"], "stage2": ["true"]}})})
+    code, out = run_setup(root)
+    assert code == 0, out
+    assert "ok       true" in out, out
 
 
-def test_a_plugin_install_is_not_called_broken():
-    # No scripts in the project and no wiring in its settings is what a plugin
-    # install looks like from inside, and it cannot be told apart from here.
-    # Earlier attempts got this wrong in both directions: first denying it
-    # (exit 1 on the install the README puts first), then asserting it from a
-    # hooks.json next to the *script*, which certified projects with no hooks
-    # at all whenever setup was run from a clone with --dir.
-    #
-    # So it is neither denied nor asserted: it is named, and the run does not
-    # fail on it.
-    # The scripts live outside the project, exactly as a plugin install has
-    # them, so this runs the repository's own copy against the project.
-    root = project(PY_PROJECT, wired=False)
-    for stray in (root / ".claude" / "hooks").glob("*.py"):
-        stray.unlink()
-    proc = subprocess.run(
-        [sys.executable, str(SETUP), "--dir", str(root)],
-        cwd=str(root),
-        capture_output=True,
-        text=True,
-        env={k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"},
-    )
-    rc, out = proc.returncode, proc.stdout + proc.stderr
-    assert rc == 3, out
-    assert "as a plugin" in out, out
-    # And it must not then say the opposite: the caveat used to be followed by
-    # the closing "from now on, claims are refused", which is the sentence the
-    # user takes away and was false.
-    assert "From now on" not in out, "it said it could not tell, then said it was on:\n" + out
+def test_a_configured_project_reachable_only_by_hand_still_gets_an_answer():
+    root = project({**MAKE_PROJECT, "cerberus.json": json.dumps(
+        {"verification": {"artifact_kind": "cli", "stage1": ["true"], "stage2": ["true"]}})})
+    code, out = run_setup(root)
+    assert code == 0, out
+    assert "already has its own configuration" in out, out
 
 
-def test_scripts_copied_here_but_unwired_is_a_failure():
-    # The other half: the files are in this project and nothing runs them.
-    # That is not the plugin case and must not be excused as one.
-    root = project(PY_PROJECT, wired=False)
-    rc, out = run_setup(root)
-    assert rc == 1, out
-    assert "nothing here is calling it" in out, out
-
-
-def test_a_prompt_hook_is_not_wiring():
-    root = project(PY_PROJECT, wired=False)
-    (root / ".claude" / "settings.json").write_text(json.dumps({"hooks": {
-        "PostToolUse": [{"matcher": "Write|Edit", "hooks": [{"type": "prompt",
-            "command": 'python3 "$CLAUDE_PROJECT_DIR"/.claude/hooks/cerberus_mark.py'}]}],
-        "Stop": [{"hooks": [{"type": "command",
-            "command": 'python3 "$CLAUDE_PROJECT_DIR"/.claude/hooks/cerberus_gate.py'}]}],
-    }}), encoding="utf-8")
-    rc, out = run_setup(root)
-    assert rc == 1, out
-
-
-def test_a_cd_prefixed_command_is_still_wiring():
-    root = project(PY_PROJECT, wired=False)
-    (root / ".claude" / "settings.json").write_text(json.dumps({"hooks": {
-        "PostToolUse": [{"matcher": "Write|Edit", "hooks": [{"type": "command",
-            "command": f"cd {root} && python3 .claude/hooks/cerberus_mark.py"}]}],
-        "Stop": [{"hooks": [{"type": "command",
-            "command": f"cd {root} && python3 .claude/hooks/cerberus_gate.py"}]}],
-    }}), encoding="utf-8")
-    rc, out = run_setup(root)
-    assert rc == 0, "a cd-prefixed wiring read as unwired:\n" + out
-
-
-def test_an_edit_lookalike_matcher_is_not_wiring():
-    # MultiEdit and NotebookEdit contain "Edit" and never fire on an ordinary
-    # Write or Edit.
-    for matcher in ("MultiEdit", "NotebookEdit"):
-        root = project(PY_PROJECT, wired=False)
-        (root / ".claude" / "settings.json").write_text(json.dumps({"hooks": {
-            "PostToolUse": [{"matcher": matcher, "hooks": [{"type": "command",
-                "command": 'python3 "$CLAUDE_PROJECT_DIR"/.claude/hooks/cerberus_mark.py'}]}],
-            "Stop": [{"hooks": [{"type": "command",
-                "command": 'python3 "$CLAUDE_PROJECT_DIR"/.claude/hooks/cerberus_gate.py'}]}],
-        }}), encoding="utf-8")
-        rc, out = run_setup(root)
-        assert rc == 1, f"{matcher}: {out}"
-
-
-def test_settings_local_json_is_read():
-    root = project(PY_PROJECT, wired=False)
-    (root / ".claude" / "settings.local.json").write_text(
-        (ROOT / "examples" / "settings.json").read_text(encoding="utf-8"), encoding="utf-8"
-    )
-    rc, out = run_setup(root)
-    assert rc == 0, "wiring in settings.local.json was ignored:\n" + out
-
-
-def test_a_commented_out_entry_is_not_wiring():
-    # How a person disables a hook, since JSON has no comments.
-    root = project(PY_PROJECT, wired=False)
-    (root / ".claude" / "settings.json").write_text(json.dumps({"hooks": {
-        "PostToolUse": [{"matcher": "Write|Edit", "hooks": [{"type": "command",
-            "command": '# python3 "$CLAUDE_PROJECT_DIR"/.claude/hooks/cerberus_mark.py'}]}],
-        "Stop": [{"hooks": [{"type": "command",
-            "command": 'python3 "$CLAUDE_PROJECT_DIR"/.claude/hooks/cerberus_gate.py'}]}],
-    }}), encoding="utf-8")
-    rc, out = run_setup(root)
-    assert rc == 1, out
-
-
-def test_an_entry_under_the_wrong_matcher_is_not_wiring():
-    # Well formed, points at the real file, and fires on Bash — so nothing is
-    # ever recorded and the gate never has anything to hold.
-    root = project(PY_PROJECT, wired=False)
-    (root / ".claude" / "settings.json").write_text(json.dumps({"hooks": {
-        "PostToolUse": [{"matcher": "Bash", "hooks": [{"type": "command",
-            "command": 'python3 "$CLAUDE_PROJECT_DIR"/.claude/hooks/cerberus_mark.py'}]}],
-        "Stop": [{"hooks": [{"type": "command",
-            "command": 'python3 "$CLAUDE_PROJECT_DIR"/.claude/hooks/cerberus_gate.py'}]}],
-    }}), encoding="utf-8")
-    rc, out = run_setup(root)
-    assert rc == 1, out
-
-
-def test_an_entry_pointing_at_a_path_that_does_not_exist_is_not_wiring():
-    # The check exists and nothing asserted it, so a mutant dropping it passed.
-    root = project(PY_PROJECT, wired=False)
-    (root / ".claude" / "settings.json").write_text(json.dumps({"hooks": {
-        "PostToolUse": [{"matcher": "Write|Edit", "hooks": [{"type": "command",
-            "command": "python3 /nonexistent/elsewhere/cerberus_mark.py"}]}],
-        "Stop": [{"hooks": [{"type": "command",
-            "command": "python3 /nonexistent/elsewhere/cerberus_gate.py"}]}],
-    }}), encoding="utf-8")
-    rc, out = run_setup(root)
-    assert rc == 1, out
-
-
-def test_a_project_path_with_a_space_is_still_recognised():
-    root = project(PY_PROJECT)
-    spaced = root.parent / (root.name + " with space")
-    root.rename(spaced)
-    rc, out = run_setup(spaced)
-    assert rc == 0, "a space in the path read as unwired:\n" + out
-
-
-def test_says_so_when_nothing_is_calling_it():
-    # Scripts installed, settings not naming them: the state that looks
-    # installed and guards nothing.
-    root = project(PY_PROJECT, wired=False)
-    rc, out = run_setup(root)
-    assert rc == 1, out
-    assert "nothing here is calling it" in out, out
+def test_a_hand_written_step_is_not_mistaken_for_the_placeholder():
+    hand = {"//": "mine", "verification": {"artifact_kind": "migration", "stage1": ["true"], "stage2": ["true"],
+                                           "notes": "prod account 1234"}}
+    root = project({**PY_PROJECT, "cerberus.json": json.dumps(hand)})
+    run_setup(root)
+    assert config_of(root) == hand, "rewrote a hand-written configuration"
 
 
 def test_leaves_a_hand_written_configuration_alone():
-    root = project({**PY_PROJECT, ".claude/cerberus.json": json.dumps(
-        {"verification": {"artifact_kind": "service", "stage1": ["make test"]}}
-    )})
-    rc, out = run_setup(root)
-    assert rc == 0, out
-    config = json.loads((root / ".claude" / "cerberus.json").read_text(encoding="utf-8"))
-    assert config["verification"]["stage1"] == ["make test"], "it overwrote real configuration"
-
-
-def test_never_deletes_settings_it_cannot_write():
-    # It writes only the verification block — but an earlier version replaced
-    # the whole document, so a config that merely tuned the gate was deleted,
-    # custom marker and all, silently, and the gate reverted to defaults.
-    root = project({**PY_PROJECT, ".claude/cerberus.json": json.dumps({
-        "//": "hand tuned",
-        "claim_patterns": ["\\bshipped\\b"],
-        "watch_paths": ["src/"],
-        "marker": ".claude/mine-pending",
-    })})
-    rc, out = run_setup(root)
-    after = json.loads((root / ".claude" / "cerberus.json").read_text(encoding="utf-8"))
-    for key in ("claim_patterns", "watch_paths", "marker"):
-        assert key in after, f"{key} was deleted:\n{out}"
-
-
-def test_a_failing_check_is_called_failing_not_absent():
-    # It ran and did not pass. Reporting that as "did not run here" is false,
-    # and it is the difference between a project with a broken suite and a
-    # project without the tool installed.
-    #
-    # Driven through build_checks with synthetic commands rather than through a
-    # real runner: CI has no pytest, so an earlier version of this asserted on
-    # a suite that was absent rather than failing, and went red for the wrong
-    # reason. Exit codes are the rule; the toolchain is not.
-    sys.path.insert(0, str(HOOKS))
-    import cerberus_setup
-
-    runner = {
-        "name": "Synthetic",
-        "files": [],
-        "checks": [
-            ("sh -c 'exit 0'", None),
-            ("sh -c 'exit 1'", None),
-            ("definitely-not-a-real-command-here", None),
-        ],
-        "fallback": None,
-    }
-    with tempfile.TemporaryDirectory() as d:
-        results = cerberus_setup.build_checks([runner], pathlib.Path(d))
-    codes = {cmd: code for cmd, code, _ in results}
-    assert codes["sh -c 'exit 0'"] == 0
-    assert codes["sh -c 'exit 1'"] == 1, "a check that ran and failed must not be 0 or 127"
-    assert codes["definitely-not-a-real-command-here"] == 127, codes
-
-
-def test_a_failing_check_is_reported_as_failing_end_to_end():
-    # The same rule through the whole script, using a command that cannot be
-    # missing: a Python file that does not compile makes the fallback fail.
-    # Both, so the assertion holds whether or not pytest exists here: with it,
-    # the suite runs and fails; without it, the compile fallback runs and fails
-    # on the unparseable file.
-    root = project({"pyproject.toml": '[project]\nname = "d"\nversion = "1"\n',
-                    "tests/test_demo.py": "def test_bad():\n    assert False\n",
-                    "broken.py": "def (\n"})
-    rc, out = run_setup(root)
-    assert "FAILING" in out or "none of its checks pass" in out, out
-    assert "did not run here" not in out, out
-
-
-def test_stage2_never_holds_something_that_was_not_run():
-    # Comment lines in a list of commands exit 0 unconditionally — the
-    # placeholder this whole issue is about, one field over.
-    root = project(PY_PROJECT)
+    hand = {"verification": {"artifact_kind": "migration", "stage1": ["true"], "stage2": ["true"]},
+            "something_else": {"kept": True}}
+    root = project({**PY_PROJECT, "cerberus.json": json.dumps(hand)})
+    before = (root / "cerberus.json").read_bytes()
     run_setup(root)
-    config = json.loads((root / ".claude" / "cerberus.json").read_text(encoding="utf-8"))
-    assert config["verification"]["stage2"] == [], config
-    assert "still empty" in config["verification"]["notes"], config
+    assert (root / "cerberus.json").read_bytes() == before
 
 
 def test_replaces_the_example_placeholders():
-    # The population #13 exists for. Loads the *shipped* example rather than a
-    # stand-in: a synthetic `{"verification": {...}}` missed that the real file
-    # carries seven `//` reference keys, and a guard counting those as
-    # hand-tuning made the documented one-liner leave the placeholders in place
-    # and report success — this issue's own title, caused by its own fix.
     example = (ROOT / "cerberus.example.json").read_text(encoding="utf-8")
-    root = project({**PY_PROJECT, ".claude/cerberus.json": example})
-    rc, out = run_setup(root)
-    assert rc == 0, out
-    config = json.loads((root / ".claude" / "cerberus.json").read_text(encoding="utf-8"))
-    stage1 = config["verification"]["stage1"]
-    assert stage1 and not any(str(c).startswith("echo ") for c in stage1), stage1
+    root = project({**PY_PROJECT, "cerberus.json": example})
+    code, out = run_setup(root)
+    assert code == 0, out
+    stage1 = config_of(root)["verification"]["stage1"]
+    assert not any("replace with" in c for c in stage1), stage1
+
+
+def test_the_example_markers_still_match_the_shipped_file():
+    sys.path.insert(0, str(SETUP.parent))
+    import cerberus_setup
+
+    example = json.loads((ROOT / "cerberus.example.json").read_text(encoding="utf-8"))
+    assert cerberus_setup.is_the_installers_copy(example), (
+        "cerberus.example.json drifted from the strings setup recognises it by, "
+        "so a fresh install would be treated as hand-configured and left with placeholders"
+    )
+
+
+def test_an_existing_configuration_is_never_modified_where_it_was_not_asked():
+    example = json.loads((ROOT / "cerberus.example.json").read_text(encoding="utf-8"))
+    example["mine"] = {"keep": "this"}
+    root = project({**PY_PROJECT, "cerberus.json": json.dumps(example)})
+    run_setup(root)
+    assert config_of(root)["mine"] == {"keep": "this"}
+
+
+def test_stage2_never_holds_something_that_was_not_run():
+    root = project(PY_PROJECT)
+    run_setup(root)
+    assert config_of(root)["verification"]["stage2"] == []
 
 
 def test_check_mode_changes_nothing():
     root = project(PY_PROJECT)
-    rc, out = run_setup(root, "--check")
-    assert rc == 0, out
-    assert not (root / ".claude" / "cerberus.json").exists(), "--check wrote a file"
-
-
-def test_a_broken_gate_is_not_reported_as_working():
-    # THE test. An earlier version of this greped the source for a string, so
-    # replacing the whole demonstration with `return True, "...refused..."`
-    # passed every test in this file — the one thing #13 declares must be
-    # impossible, for the price of one line.
-    #
-    # This breaks the gate instead and demands that setup notice. Nothing that
-    # returns a constant can survive it.
-    root = project(PY_PROJECT)
-    (root / ".claude" / "hooks" / "cerberus_gate.py").write_text(
-        "import sys\nsys.exit(0)\n", encoding="utf-8"
-    )
-    rc, out = run_setup(root)
-    assert rc != 0, "a gate that refuses nothing was reported as working:\n" + out
-    assert "not guarding" in out, out
-
-
-def test_a_gate_that_refuses_everything_is_not_reported_as_working():
-    # The other half, and the reason the demonstration checks both directions:
-    # a hook that blocks unconditionally would pass a block-only proof and
-    # would be just as broken — it makes ordinary work impossible.
-    root = project(PY_PROJECT)
-    (root / ".claude" / "hooks" / "cerberus_gate.py").write_text(
-        "import json, sys\n"
-        "sys.stdin.read()\n"
-        "print(json.dumps({'decision': 'block', 'reason': 'no'}))\n",
-        encoding="utf-8",
-    )
-    rc, out = run_setup(root)
-    assert rc != 0, "a gate that refuses everything was reported as working:\n" + out
-
-
-def test_a_missing_mark_hook_is_not_reported_as_working():
-    root = project(PY_PROJECT)
-    (root / ".claude" / "hooks" / "cerberus_mark.py").unlink()
-    rc, out = run_setup(root)
-    assert rc != 0, "a missing hook was reported as working:\n" + out
-
-
-def test_the_demonstration_requires_the_block_to_name_the_file():
-    # M3's evidence row. A gate that refuses but cannot say what for is broken,
-    # and a mutant dropping this check was invisible to the whole suite.
-    # The fixture has to behave correctly in every other respect, or it fails
-    # for the wrong reason: quiet when nothing is outstanding, blocking when
-    # something is — and blocking with a reason that names nothing. A first
-    # version blocked unconditionally and so was caught by the other test
-    # instead, which made this one pass against a mutant that removed the
-    # check it is named after.
-    root = project(PY_PROJECT)
-    (root / ".claude" / "hooks" / "cerberus_gate.py").write_text(
-        "import json, os, pathlib, sys\n"
-        "data = json.loads(sys.stdin.read() or '{}')\n"
-        "root = pathlib.Path(os.environ.get('CLAUDE_PROJECT_DIR') or data.get('cwd') or '.')\n"
-        "if (root / '.claude' / '.cerberus-pending').exists():\n"
-        "    print(json.dumps({'decision': 'block', 'reason': 'something is unverified'}))\n",
-        encoding="utf-8",
-    )
-    rc, out = run_setup(root)
-    assert rc != 0, "a gate that cannot name what it blocked was reported as working:\n" + out
-
-
-def test_the_demonstration_leaves_the_project_as_it_found_it():
-    # M3's cleanup row. Setup runs while somebody is working: their pending
-    # list must survive, and the probe must not be left behind.
-    root = project(PY_PROJECT)
-    marker = root / ".claude" / ".cerberus-pending"
-    marker.write_text("src/payments.py\nsrc/ledger.py\n", encoding="utf-8")
-    run_setup(root)
-    assert marker.read_text(encoding="utf-8") == "src/payments.py\nsrc/ledger.py\n", (
-        "the user's pending work was replaced by the probe"
-    )
-    leftovers = [p.name for p in (root / ".claude").glob("*probe*")]
-    assert not leftovers, leftovers
-
-
-def test_the_documented_one_liner_leaves_a_complete_configuration():
-    """Run install.sh --claude --setup and assert the WHOLE resulting file.
-
-    Three rounds of blockers shipped because each fix was checked against a
-    fixture narrower than the artifact: a synthetic config instead of the
-    shipped example, a path without a space, a test asserting only stage1. Each
-    one would have failed here on the first run.
-    """
-    with tempfile.TemporaryDirectory() as d:
-        root = pathlib.Path(d) / "a project with a space"
-        (root / "tests").mkdir(parents=True)
-        (root / "pyproject.toml").write_text(
-            '[project]\nname = "d"\nversion = "1"\n', encoding="utf-8"
-        )
-        (root / "tests" / "test_demo.py").write_text(
-            "def test_ok():\n    assert True\n", encoding="utf-8"
-        )
-        proc = subprocess.run(
-            ["sh", str(ROOT / "install.sh"), "--claude", "--setup"],
-            cwd=str(root), capture_output=True, text=True,
-            env={k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"},
-        )
-        assert proc.returncode == 0, proc.stdout + proc.stderr
-        config = json.loads((root / ".claude" / "cerberus.json").read_text(encoding="utf-8"))
-        v = config["verification"]
-
-        assert v["stage1"], "no checks were written"
-        assert not is_placeholder_text(v["stage1"]), v["stage1"]
-        assert v["stage2"] == [], v["stage2"]
-        assert v["artifact_kind"] == "library", (
-            "the example ships artifact_kind 'service'; a Python library is not one"
-        )
-        assert not str(v["notes"]).startswith("Free text"), (
-            "the example's own notes survived: " + str(v["notes"])
-        )
-        for key in REPLACING_KEYS:
-            assert key not in config, key
-        # and the closing advice must match the label in the file it points at
-        assert "import it from there" in proc.stdout, proc.stdout
-
-
-def is_placeholder_text(commands) -> bool:
-    return all(str(c).startswith("echo ") for c in commands)
-
-
-def test_the_example_markers_still_match_the_shipped_file():
-    # The one decidable member of the existing-config population is identified
-    # by two strings copied out of cerberus.example.json. If that file changes
-    # and these do not, the installer's own copy stops being recognised and the
-    # one-liner silently stops finishing. This is the drift guard.
-    sys.path.insert(0, str(HOOKS))
-    import cerberus_setup
-
-    example = json.loads((ROOT / "cerberus.example.json").read_text(encoding="utf-8"))
-    assert cerberus_setup.EXAMPLE_MARKER_COMMENT == example["//"]
-    assert cerberus_setup.EXAMPLE_MARKER_STAGE1 == example["verification"]["stage1"]
-
-
-def test_an_existing_configuration_is_never_modified():
-    # Whatever is in it. Three rounds tried to tell "the user chose this" from
-    # "the installer wrote it" and each proxy destroyed somebody's work, so the
-    # question is no longer asked of anything but the installer's exact copy.
-    original = {
-        "verification": {
-            "artifact_kind": "migration",
-            "stage1": [],
-            "stage2": [],
-            "notes": "Prod creds in vault/eu-prod. NEVER run stage2 against eu.",
-        }
-    }
-    root = project({**PY_PROJECT, ".claude/cerberus.json": json.dumps(original)})
-    run_setup(root)
-    after = json.loads((root / ".claude" / "cerberus.json").read_text(encoding="utf-8"))
-    assert after == original, after
-
-
-def test_a_timed_out_check_is_never_written():
-    # Round two hardened run() and nothing asserted any of it: a mutant that
-    # counted 124 as success wrote a hanging command into the config and
-    # printed "ok" and "too slow" about it in adjacent lines.
-    sys.path.insert(0, str(HOOKS))
-    import cerberus_setup
-
-    runner = {"name": "Synthetic", "files": [], "checks": [("sleep 30", None)], "fallback": None}
-    with tempfile.TemporaryDirectory() as d:
-        original = cerberus_setup.run
-        cerberus_setup.run = lambda cmd, cwd, timeout=1: original(cmd, cwd, timeout=1)
-        try:
-            results = cerberus_setup.build_checks([runner], pathlib.Path(d))
-        finally:
-            cerberus_setup.run = original
-    assert results and results[0][1] == 124, results
-
-
-def test_only_a_passing_check_is_ever_written():
-    # The rule the config depends on, at the function. A timeout, a missing
-    # command and a failure are each their own outcome and none of them is
-    # writable — a mutant treating 124 as success wrote a hanging command into
-    # stage1 and nothing noticed.
-    sys.path.insert(0, str(HOOKS))
-    import cerberus_setup
-
-    results = [("green", 0, ""), ("slow", 124, "timed out"), ("gone", 127, ""), ("red", 1, "boom")]
-    passing, missing, timed_out, broken = cerberus_setup.sort_results(results)
-    assert passing == ["green"], passing
-    assert missing == ["gone"] and timed_out == ["slow"], (missing, timed_out)
-    assert [c for c, _ in broken] == ["red"], broken
-
-
-def test_a_check_never_inherits_stdin():
-    # Under `curl … | sh` the parent's stdin is the install script itself, and a
-    # check that reads it blocked for its whole budget.
-    sys.path.insert(0, str(HOOKS))
-    import cerberus_setup
-
-    read, write = os.pipe()
-    try:
-        proc = subprocess.run(
-            [sys.executable, "-c",
-             "import sys, pathlib; sys.path.insert(0, %r); import cerberus_setup as c;"
-             "print(c.run('read x', pathlib.Path('.'), timeout=8)[0])" % str(HOOKS)],
-            stdin=read, capture_output=True, text=True, timeout=30,
-        )
-    finally:
-        os.close(read)
-        os.close(write)
-    # The point is that it returns at once rather than blocking for its whole
-    # budget; `read` with no input exits non-zero, which is fine.
-    assert proc.stdout.strip() != "124", proc.stdout + proc.stderr
-
-
-def test_a_timed_out_check_does_not_leave_the_tree_running():
-    sys.path.insert(0, str(HOOKS))
-    import cerberus_setup
-
-    with tempfile.TemporaryDirectory() as d:
-        root = pathlib.Path(d)
-        stamp = root / "still-running"
-        code, _ = cerberus_setup.run(
-            f"(sleep 4; touch {stamp}) & sleep 30", root, timeout=1
-        )
-    assert code == 124, code
-    import time
-
-    time.sleep(5)
-    assert not stamp.exists(), "the process group outlived the timeout"
-
-
-def test_installing_for_codex_wires_the_hooks():
-    """Nothing tested this route, so a mutant deleting the whole wiring block —
-    and one emptying the wiring file — both passed the suite."""
-    with tempfile.TemporaryDirectory() as d:
-        root = pathlib.Path(d)
-        proc = subprocess.run(
-            ["sh", str(ROOT / "install.sh"), "--codex"],
-            cwd=str(root), capture_output=True, text=True,
-            env={k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"},
-        )
-        assert proc.returncode == 0, proc.stdout + proc.stderr
-
-        wiring = json.loads((root / ".codex" / "hooks.json").read_text(encoding="utf-8"))
-        events = wiring["hooks"]
-        assert set(events) == {"PostToolUse", "Stop"}, events
-        commands = [h["command"] for e in events.values() for entry in e for h in entry["hooks"]]
-        assert any("cerberus_mark.py" in c for c in commands), commands
-        assert any("cerberus_gate.py" in c for c in commands), commands
-        # Codex may be started from a subdirectory, and a relative path fails
-        # there — which on a Stop hook means exit 2, which *is* the block
-        # signal, so the failure becomes a continuation loop whose prompt is a
-        # Python traceback.
-        for command in commands:
-            assert "git rev-parse" in command, f"relative hook path: {command}"
-
-        for name in ("cerberus_mark.py", "cerberus_gate.py", "cerberus_config.py"):
-            assert (root / ".codex" / "hooks" / name).exists(), name
-        assert (root / ".codex" / "cerberus.json").exists()
-        assert ".codex/.cerberus-pending" in (root / ".gitignore").read_text(encoding="utf-8")
-
-
-def test_the_codex_install_says_the_hooks_need_trusting():
-    # Codex skips a project's hooks until the user trusts them, and again after
-    # any change. An installer that prints "hooks wired" and stops has told the
-    # user something that is not yet true.
-    with tempfile.TemporaryDirectory() as d:
-        root = pathlib.Path(d)
-        proc = subprocess.run(
-            ["sh", str(ROOT / "install.sh"), "--codex"],
-            cwd=str(root), capture_output=True, text=True,
-        )
-        assert "/hooks" in proc.stdout, proc.stdout
-
-
-def test_the_codex_hooks_actually_fire_in_the_layout_the_installer_writes():
-    # The wiring file is JSON nobody here can make Codex read, so the closest
-    # available check is that the scripts work where the installer puts them.
-    with tempfile.TemporaryDirectory() as d:
-        root = pathlib.Path(d)
-        (root / "app").mkdir()
-        (root / "app" / "x.py").write_text("x = 1\n", encoding="utf-8")
-        subprocess.run(["sh", str(ROOT / "install.sh"), "--codex"],
-                       cwd=str(root), capture_output=True, text=True)
-        # A real project switches this on; the installer ships it off.
-        config = root / ".codex" / "cerberus.json"
-        config.write_text(json.dumps({"enforce": True}), encoding="utf-8")
-        hooks = root / ".codex" / "hooks"
-        env = {k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"}
-        subprocess.run(
-            [sys.executable, str(hooks / "cerberus_mark.py")],
-            input=json.dumps({"cwd": str(root), "tool_name": "apply_patch",
-                              "tool_input": {"command": "*** Update File: app/x.py\n"}}),
-            capture_output=True, text=True, env=env,
-        )
-        assert (root / ".codex" / ".cerberus-pending").exists(), "the edit was not recorded"
-        out = subprocess.run(
-            [sys.executable, str(hooks / "cerberus_gate.py")],
-            input=json.dumps({"cwd": str(root), "hook_event_name": "Stop",
-                              "last_assistant_message": "done, it works"}),
-            capture_output=True, text=True, env=env,
-        ).stdout
-        assert out, "the claim was not refused"
-        payload = json.loads(out)
-        assert payload["decision"] == "block"
-        assert ".codex/cerberus.json" in payload["reason"], (
-            "the refusal named the wrong project's config: " + payload["reason"]
-        )
-
-
-def test_the_codex_install_is_finished_by_the_step_it_prints():
-    """N1/the round-two regression: the whole `--codex` population got nothing.
-
-    The installer rewrites the path inside the example's `//` comment, so the
-    byte-identity check stopped recognising its own copy — setup then read it as
-    somebody's deliberate configuration, wrote nothing, and reported the
-    placeholder `echo` as a passing check.
-    """
-    with tempfile.TemporaryDirectory() as d:
-        root = pathlib.Path(d)
-        (root / "tests").mkdir()
-        (root / "pyproject.toml").write_text('[project]\nname = "d"\nversion = "1"\n', encoding="utf-8")
-        (root / "tests" / "test_d.py").write_text("def test_ok():\n    assert True\n", encoding="utf-8")
-        subprocess.run(["sh", str(ROOT / "install.sh"), "--codex"],
-                       cwd=str(root), capture_output=True, text=True)
-        proc = subprocess.run(
-            [sys.executable, str(root / ".codex" / "hooks" / "cerberus_setup.py")],
-            cwd=str(root), capture_output=True, text=True,
-            env={k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"},
-        )
-        assert proc.returncode == 0, proc.stdout + proc.stderr
-        assert not (root / ".claude").exists(), "a .claude directory was invented for a Codex project"
-        config = json.loads((root / ".codex" / "cerberus.json").read_text(encoding="utf-8"))
-        assert config["enforce"] is True, config
-        stage1 = config["verification"]["stage1"]
-        assert stage1 and not any(str(c).startswith("echo ") for c in stage1), stage1
-        assert "was refused" in proc.stdout, proc.stdout
+    code, out = run_setup(root, "--check")
+    assert code == 0, out
+    assert not (root / "cerberus.json").exists(), "wrote a config in --check mode"
 
 
 def test_check_names_the_file_the_real_run_would_write():
-    # The write path hardcoded .claude while the read path had been generalised,
-    # so --check named one file and the real run wrote another.
-    with tempfile.TemporaryDirectory() as d:
-        root = pathlib.Path(d)
-        (root / ".codex").mkdir()
-        (root / "tests").mkdir()
-        (root / "pyproject.toml").write_text('[project]\nname = "d"\nversion = "1"\n', encoding="utf-8")
-        (root / "tests" / "test_d.py").write_text("def test_ok():\n    assert True\n", encoding="utf-8")
-        for name in ("cerberus_setup.py", "cerberus_config.py", "cerberus_mark.py", "cerberus_gate.py"):
-            (root / ".codex" / "hooks").mkdir(exist_ok=True)
-            (root / ".codex" / "hooks" / name).write_text(
-                (HOOKS / name).read_text(encoding="utf-8"), encoding="utf-8")
-        env = {k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"}
-        dry = subprocess.run(
-            [sys.executable, str(root / ".codex" / "hooks" / "cerberus_setup.py"), "--check"],
-            cwd=str(root), capture_output=True, text=True, env=env).stdout
-        assert ".codex" in dry, dry
-        subprocess.run([sys.executable, str(root / ".codex" / "hooks" / "cerberus_setup.py")],
-                       cwd=str(root), capture_output=True, text=True, env=env)
-        assert (root / ".codex" / "cerberus.json").exists(), "written somewhere else"
-        assert not (root / ".claude" / "cerberus.json").exists()
+    root = project(PY_PROJECT)
+    _, out = run_setup(root, "--check")
+    assert "cerberus.json" in out, out
+    _, _ = run_setup(root)
+    assert (root / "cerberus.json").exists(), "the real run wrote somewhere else"
 
 
-def test_both_configs_present_resolves_the_way_the_hooks_do():
-    # N8: reversing the search order passed the whole suite, because nothing
-    # built a project with both. Setup has to agree with Config.load or it
-    # writes to a file the hooks will not read.
-    sys.path.insert(0, str(HOOKS))
+def test_a_failing_check_is_called_failing_not_absent():
+    sys.path.insert(0, str(SETUP.parent))
     import cerberus_setup
-    from cerberus_config import Config
+
+    passing, missing, timed_out, broken = cerberus_setup.sort_results(
+        [("a", 0, ""), ("b", 1, "boom"), ("c", 127, ""), ("d", 124, "")])
+    assert passing == ["a"] and missing == ["c"] and timed_out == ["d"]
+    assert broken == [("b", "boom")]
+
+
+def test_a_failing_check_is_reported_as_failing_end_to_end():
+    root = project({**PY_PROJECT, "tests/test_demo.py": "def test_bad():\n    assert False\n"})
+    code, out = run_setup(root)
+    written = config_of(root)["verification"]["stage1"] if code == 0 else []
+    assert "pytest -q" not in written, "wrote a check that fails here"
+
+
+def test_only_a_passing_check_is_ever_written():
+    sys.path.insert(0, str(SETUP.parent))
+    import cerberus_setup
 
     with tempfile.TemporaryDirectory() as d:
         root = pathlib.Path(d)
-        for agent in (".claude", ".codex"):
-            (root / agent).mkdir()
-            (root / agent / "cerberus.json").write_text(
-                json.dumps({"enforce": True, "marker": f"{agent}/.cerberus-pending"}),
-                encoding="utf-8")
-        resolved = cerberus_setup.resolve_config(root)
-        loaded = Config.load(root)
-        assert resolved.parent.name == pathlib.Path(loaded.marker).parent.name, (
-            f"setup would write {resolved}, the hooks read {loaded.marker}"
-        )
+        passing, _, _, _ = cerberus_setup.sort_results(
+            [("ok", 0, ""), ("fails", 1, ""), ("slow", 124, ""), ("gone", 127, "")])
+        path = cerberus_setup.write_config(root, "library", passing, dry=False)
+        assert json.loads(path.read_text(encoding="utf-8"))["verification"]["stage1"] == ["ok"]
 
 
-def test_the_codex_wiring_is_recognised_as_wiring():
-    # `_hooked` could not resolve the command substitution the Codex wiring uses
-    # for the project root, so the installer's own file read as wiring nothing.
+def test_a_timed_out_check_is_never_written():
+    sys.path.insert(0, str(SETUP.parent))
+    import cerberus_setup
+
+    with tempfile.TemporaryDirectory() as d:
+        code, _ = cerberus_setup.run("sleep 5", pathlib.Path(d), timeout=1)
+        assert code == 124
+
+
+def test_a_timed_out_check_does_not_leave_the_tree_running():
+    sys.path.insert(0, str(SETUP.parent))
+    import cerberus_setup
+
     with tempfile.TemporaryDirectory() as d:
         root = pathlib.Path(d)
-        subprocess.run(["sh", str(ROOT / "install.sh"), "--codex"],
-                       cwd=str(root), capture_output=True, text=True)
-        sys.path.insert(0, str(HOOKS))
-        import cerberus_setup
-        connected, why = cerberus_setup.wiring(root)
-        assert connected, why
+        stamp = root / "still-alive"
+        cerberus_setup.run(f"sh -c 'sleep 3; touch {stamp}' &  sleep 5", root, timeout=1)
+        subprocess.run(["sleep", "4"])
+        assert not stamp.exists(), "a grandchild outlived the timeout"
 
 
-# ------------------------------------------------------- what the user reads
+def test_a_check_never_inherits_stdin():
+    sys.path.insert(0, str(SETUP.parent))
+    import cerberus_setup
+
+    with tempfile.TemporaryDirectory() as d:
+        code, out = cerberus_setup.run("cat", pathlib.Path(d), timeout=5)
+        assert code == 0 and out == "", f"a check read from stdin: {code} {out!r}"
+
+
+def test_a_project_path_with_a_space_is_still_recognised():
+    tmp = pathlib.Path(tempfile.mkdtemp()) / "a project"
+    tmp.mkdir()
+    target = tmp / ".claude" / "skills" / "setup"
+    target.mkdir(parents=True)
+    (target / "cerberus_setup.py").write_text(SETUP.read_text(encoding="utf-8"), encoding="utf-8")
+    for name, text in PY_PROJECT.items():
+        path = tmp / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    code, out = run_setup(tmp)
+    assert code == 0, out
+    assert (tmp / "cerberus.json").exists(), out
+
+
+# --------------------------------------------------------- where it writes
+
+
+def test_an_earlier_installs_config_is_kept_where_it_is():
+    """Both older locations, and .claude wins when a project has both.
+
+    Reversing the search order passed the whole suite until a project was built
+    with both, because setup then wrote to a file the reader would not find.
+    """
+    sys.path.insert(0, str(SETUP.parent))
+    import cerberus_setup
+
+    for present, expected in (
+        ([".claude"], ".claude"),
+        ([".codex"], ".codex"),
+        ([".claude", ".codex"], ".claude"),
+    ):
+        with tempfile.TemporaryDirectory() as d:
+            root = pathlib.Path(d)
+            for agent in present:
+                (root / agent).mkdir()
+                (root / agent / "cerberus.json").write_text("{}", encoding="utf-8")
+            got = cerberus_setup.resolve_config(root)
+            assert got.parent.name == expected, f"{present} resolved to {got}"
+
+
+def test_a_project_with_no_earlier_config_gets_one_in_its_root():
+    sys.path.insert(0, str(SETUP.parent))
+    import cerberus_setup
+
+    with tempfile.TemporaryDirectory() as d:
+        root = pathlib.Path(d)
+        (root / ".claude").mkdir()  # an agent directory is not a config location
+        got = cerberus_setup.resolve_config(root)
+        assert got == root / "cerberus.json", got
+
+
+# ------------------------------------------------- what installing does NOT do
+
+
+def test_installing_writes_no_file_the_project_owns():
+    """#33, item 1. The absence is the feature, so it is the assertion."""
+    for flag in ("--claude", "--codex"):
+        with tempfile.TemporaryDirectory() as d:
+            root = pathlib.Path(d)
+            (root / ".claude").mkdir()
+            settings = root / ".claude" / "settings.json"
+            mine = json.dumps({"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "mine"}]}]}})
+            settings.write_text(mine, encoding="utf-8")
+            code, out = run_install(root, flag)
+            assert code == 0, out
+            assert settings.read_text(encoding="utf-8") == mine, f"{flag} edited settings.json"
+            assert not (root / ".codex" / "hooks.json").exists(), f"{flag} wrote codex wiring"
+            for stray in (".claude/hooks", ".codex/hooks"):
+                assert not (root / stray).exists(), f"{flag} installed {stray}"
+
+
+def test_installing_leaves_no_hook_script_anywhere():
+    with tempfile.TemporaryDirectory() as d:
+        root = pathlib.Path(d)
+        code, out = run_install(root, "--claude")
+        assert code == 0, out
+        strays = [p for p in root.rglob("*.py") if p.name in ("cerberus_gate.py", "cerberus_mark.py",
+                                                              "cerberus_config.py")]
+        assert not strays, strays
+
+
+def test_installing_brings_every_skill_and_the_script_beside_its_own():
+    for flag, where in (("--claude", ".claude/skills"), ("--codex", ".agents/skills")):
+        with tempfile.TemporaryDirectory() as d:
+            root = pathlib.Path(d)
+            code, out = run_install(root, flag)
+            assert code == 0, out
+            installed = {p.name for p in (root / where).iterdir()} if (root / where).is_dir() else set()
+            expected = {p.name for p in SKILLS.iterdir() if (p / "SKILL.md").exists()}
+            assert installed == expected, f"{flag}: installed {installed}, expected {expected}"
+            script = root / where / "setup" / "cerberus_setup.py"
+            assert script.exists(), f"{flag}: the setup skill describes a script that was not installed"
+
+
+def test_installing_leaves_a_config_and_setup_completes_it():
+    with tempfile.TemporaryDirectory() as d:
+        root = pathlib.Path(d)
+        for name, text in PY_PROJECT.items():
+            path = root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+        code, out = run_install(root, "--claude", "--setup")
+        assert code == 0, out
+        body = config_of(root)
+        assert body["verification"]["stage1"], out
+        assert not any("replace with" in c for c in body["verification"]["stage1"]), body
+        # An allowlist, because the named list missed `//verification` — a
+        # comment key carried over from the example — and CI caught what this
+        # test did not. Comment keys are allowed; DEAD_KEYS are named too, so a
+        # failure says which one came back rather than only that one did.
+        for key in DEAD_KEYS:
+            assert key not in body, f"install left a dead key: {key}"
+        extra = {k for k in body if k != "verification" and not k.startswith("//")}
+        assert not extra, f"install left keys nothing reads: {extra}"
+
+
+def test_an_existing_config_from_an_earlier_version_is_not_duplicated():
+    with tempfile.TemporaryDirectory() as d:
+        root = pathlib.Path(d)
+        (root / ".claude").mkdir()
+        (root / ".claude" / "cerberus.json").write_text('{"verification": {"stage1": ["true"]}}',
+                                                        encoding="utf-8")
+        code, out = run_install(root, "--claude")
+        assert code == 0, out
+        assert not (root / "cerberus.json").exists(), "wrote a second config beside the existing one"
+
+
+# ------------------------------------------------------------ repository state
+
+
+#: A line naming dead machinery in order to assert it is absent is the opposite
+#: of the failure this looks for, and CI is full of them on purpose. Matched on
+#: the line rather than the file, so a genuine description sitting next to an
+#: assertion is still caught.
+DENIES = re.compile(r"test !|test -z|not in |assert not|must not|no longer|-name '")
+
+
+def test_nothing_in_the_repository_still_describes_the_hooks():
+    """#33, item 4. Documentation that describes machinery that is gone ships.
+
+    "Describes" is the requirement, not "mentions": the check below skips lines
+    that name the machinery in order to assert its absence.
+    """
+    dead = re.compile(r"cerberus_gate|cerberus_mark|cerberus_config|cerberus-pending"
+                      r"|PostToolUse|\benforce\b|claim_patterns|watch_paths")
+    skip_dirs = {".git", "__pycache__", "node_modules", ".venv"}
+    # CHANGELOG is generated history and describes versions where these existed.
+    # tests/ names them on purpose — this test is in it.
+    skip_files = {"CHANGELOG.md"}
+    offenders = []
+    for path in ROOT.rglob("*"):
+        if not path.is_file() or path.suffix not in (".md", ".json", ".py", ".sh", ".yml", ".yaml"):
+            continue
+        if set(path.relative_to(ROOT).parts) & skip_dirs or path.name in skip_files:
+            continue
+        if path.relative_to(ROOT).parts[0] == "tests":
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        # A section telling someone how to remove the old machinery has to name
+        # it. Exempted by section rather than by line, because every line in it
+        # is about removal and none of them describes anything as present.
+        upgrading = False
+        for n, line in enumerate(text.splitlines(), 1):
+            if line.startswith("#"):
+                upgrading = bool(re.search(r"[Uu]pgrad|Обновление", line))
+            if upgrading or DENIES.search(line):
+                continue
+            if dead.search(line):
+                offenders.append(f"{path.relative_to(ROOT)}:{n}: {line.strip()[:70]}")
+    assert not offenders, "still describing machinery that was removed:\n  " + "\n  ".join(offenders)
+
+
+# ------------------------------------------------------------ what it reads like
 
 
 def test_the_output_uses_no_internal_vocabulary():
     root = project(PY_PROJECT)
     _, out = run_setup(root)
     found = jargon_in(out)
-    assert not found, f"{found} means nothing to the reader:\n{out}"
-
-
-def test_the_refusal_message_is_also_plain():
-    # The user meets this text at the moment they are blocked, which is the
-    # least forgiving moment for vocabulary.
-    root = project({"notes.txt": "hi\n"})
-    _, out = run_setup(root)
-    found = jargon_in(out)
-    assert not found, f"{found} in the refusal:\n{out}"
+    assert not found, f"jargon reached the user: {found}\n{out}"
 
 
 def test_the_output_fits_one_screen():
     root = project(PY_PROJECT)
     _, out = run_setup(root)
-    lines = [line for line in out.splitlines() if line.strip()]
-    assert len(lines) <= 25, f"{len(lines)} lines is a wall of text:\n{out}"
+    lines = [l for l in out.splitlines() if l.strip()]
+    assert len(lines) <= 24, f"{len(lines)} lines of output:\n{out}"
 
 
-def test_the_closing_message_says_the_three_things():
+def test_the_closing_message_says_what_it_owes_the_reader():
     root = project(PY_PROJECT)
     _, out = run_setup(root)
-    assert "Set up for this" in out, "what changed"
-    assert "refused until" in out, "what happens next time"
-    assert "switch it off" in out, "how to turn it off"
+    low = out.lower()
+    assert "nothing here runs by itself" in low, out
+    assert "invoke" in low, out
+    assert "cerberus.json" in low, out
 
 
 def test_questions_come_with_concrete_options():
-    # A refusal must ask for specific things, not "describe your project".
-    root = project({"notes.txt": "hi\n"})
+    root = project(MAKE_PROJECT)
     _, out = run_setup(root)
-    assert "1." in out and "2." in out, "the questions must be enumerable: " + out
-    # No assertion about question marks: an earlier one failed on output that
-    # satisfied the requirement *better* — offering options with a question and
-    # a default — which made it an accident rather than a property.
+    assert "1." in out and "2." in out, out
 
 
 def _main() -> int:
@@ -966,18 +581,13 @@ def _main() -> int:
         if name.startswith("test_") and callable(fn):
             try:
                 fn()
-                print(f"  ok   {name}")
             except AssertionError as exc:
-                failures += 1
                 print(f"  FAIL {name}: {exc}")
-            except Exception as exc:
-                # Not just AssertionError: a test that raises anything else
-                # used to crash the whole run, so the remaining tests never
-                # executed and the report was a traceback rather than a list of
-                # failures. One broken test must not hide the others.
                 failures += 1
+            except Exception as exc:  # a broken test is a failing test
                 print(f"  ERROR {name}: {type(exc).__name__}: {exc}")
-    print(f"\n{'FAILED' if failures else 'all tests passed'}")
+                failures += 1
+    print("all tests passed" if not failures else f"{failures} failing")
     return 1 if failures else 0
 
 

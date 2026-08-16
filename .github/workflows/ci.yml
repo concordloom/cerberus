@@ -1,9 +1,9 @@
 # A verification gate that is itself unverified would be self-refuting.
 #
-# The failure mode that matters here is the quiet one: a hook that never fires
-# looks exactly like a project where nothing is ever wrong. The tests below
-# assert both directions — that the gate blocks an over-claim, and that it stays
-# out of the way during ordinary work.
+# Since #33 the product is three skills and nothing that runs by itself, so the
+# failure mode that matters is the quiet one in the other direction: an install
+# that takes a decision on the user's behalf. Several steps below assert an
+# absence — no wiring, no hook scripts, no edit to a file the project owns.
 name: CI
 
 on:
@@ -20,11 +20,11 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # The oldest supported runtime is not a formality: the hooks ship into
-        # other people's projects, and that is where a version-specific syntax
-        # error would surface instead of here.
+        # The oldest supported runtime is not a formality: the setup script
+        # ships into other people's projects, and that is where a
+        # version-specific syntax error would surface instead of here.
         python-version: ["3.10", "3.13"]
-    name: Hooks (py${{ matrix.python-version }})
+    name: Skills (py${{ matrix.python-version }})
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -33,12 +33,10 @@ jobs:
       - name: Compile
         # `compileall` on a missing path prints a complaint and exits 0, so the
         # path is asserted first. This step silently compiled nothing after the
-        # hooks moved under plugins/ and stayed green throughout.
+        # scripts moved under plugins/ and stayed green throughout.
         run: |
-          test -d plugins/cerberus/hooks
-          python3 -m compileall -q plugins/cerberus/hooks scripts tests
-      - name: Test
-        run: python3 tests/test_hooks.py
+          test -f plugins/cerberus/skills/setup/cerberus_setup.py
+          python3 -m compileall -q plugins scripts tests
 
       # The two slash commands drive the whole working cycle and had no check
       # of any kind: check_parity.py globs plugins/*/skills/*, nothing here
@@ -51,9 +49,9 @@ jobs:
           python3 tests/test_commands.py
 
       # Setup is the first thing a new user meets, and two of its properties
-      # are usually untestable: that it proves the gate fires rather than
-      # claiming it, and that what the user reads is free of vocabulary that
-      # means nothing to them. Both are pinned to checks that can fail.
+      # are usually untestable: that it writes down only checks it actually
+      # ran, and that what the user reads is free of vocabulary that means
+      # nothing to them. Both are pinned to checks that can fail.
       - name: Setup works, and reads like something a person would write
         run: python3 tests/test_setup.py
 
@@ -79,9 +77,7 @@ jobs:
       - name: English and Russian describe the same thing
         run: python3 scripts/check_parity.py
       - name: Example configuration is valid JSON
-        run: |
-          python3 -c "import json; json.load(open('cerberus.example.json'))"
-          python3 -c "import json; json.load(open('examples/settings.json'))"
+        run: python3 -c "import json; json.load(open('cerberus.example.json'))"
       # A malformed issue form does not error anywhere — GitHub quietly falls
       # back to a blank issue, and the one field the cycle depends on stops
       # being asked for. Nothing else in this repository would notice.
@@ -145,28 +141,20 @@ jobs:
                   problems.append(f"{entry['name']}: name disagrees with plugin.json ({plugin['name']})")
               if plugin.get("version") != entry.get("version"):
                   problems.append(f"{entry['name']}: version disagrees with plugin.json")
-              # skills/ and hooks/hooks.json are loaded by convention. Naming
-              # them in the manifest registers the same files twice and the
-              # plugin fails to load *after* installing successfully - which
-              # reads as a working install right up until the first hook should
-              # have fired. Caught 2026-08-15.
+              # skills/ is loaded by convention. Naming it in the manifest
+              # registers the same files twice and the plugin fails to load
+              # *after* installing successfully - which reads as a working
+              # install right up until the skill should have appeared.
+              # Caught 2026-08-15.
               for key in ("skills", "hooks"):
                   if key in plugin:
                       problems.append(f"{entry['name']}: plugin.json must not declare {key!r} - it is loaded by convention and declaring it duplicates the load")
-              hooks_file = plugin_dir / "hooks" / "hooks.json"
-              if not hooks_file.exists():
-                  problems.append(f"{entry['name']}: no hooks/hooks.json at the conventional path")
-                  continue
               skills_dir = plugin_dir / "skills"
               if not skills_dir.is_dir():
                   problems.append(f"{entry['name']}: no skills/ directory at the conventional path")
-              hooks = json.load(open(hooks_file))
-              for event, entries in hooks["hooks"].items():
-                  for e in entries:
-                      for h in e["hooks"]:
-                          script = h["command"].split("}")[-1].strip('"').lstrip("/")
-                          if not (plugin_dir / script).exists():
-                              problems.append(f"{entry['name']}: {event} hook missing {script}")
+              for skill in sorted(skills_dir.iterdir()):
+                  if skill.is_dir() and not (skill / "SKILL.md").exists():
+                      problems.append(f"{entry['name']}: {skill.name}/ has no SKILL.md")
 
           if problems:
               print("\n".join("- " + p for p in problems), file=sys.stderr)
@@ -194,62 +182,56 @@ jobs:
           mkdir -p /tmp/proj && cd /tmp/proj
           sh "$GITHUB_WORKSPACE/install.sh" --claude
           test -f .claude/skills/cerberus/SKILL.md
-          test -f .claude/hooks/cerberus_gate.py
-          test -f .claude/cerberus.json
-          python3 -c "import json; json.load(open('.claude/settings.json'))"
+          test -f .claude/skills/critic/SKILL.md
+          test -f .claude/skills/setup/cerberus_setup.py
+          test -f cerberus.json
+          python3 -c "import json; json.load(open('cerberus.json'))"
 
           # It must be idempotent: people re-run installers.
           sh "$GITHUB_WORKSPACE/install.sh" --claude
-          python3 - <<'PY'
-          import json
-          hooks = json.load(open("/tmp/proj/.claude/settings.json"))["hooks"]
-          assert len(hooks["PostToolUse"]) == 1, hooks
-          assert len(hooks["Stop"]) == 1, hooks
-          print("installer is idempotent")
-          PY
+          test -f .claude/skills/cerberus/SKILL.md
 
-          # Refusals ship off, so a fresh install must be silent...
-          echo '{"cwd":"/tmp/proj","tool_input":{"file_path":"app/x.py"}}' \
-            | python3 .claude/hooks/cerberus_mark.py
-          test ! -f /tmp/proj/.claude/.cerberus-pending
-          printf '%s\n' '{"role":"assistant","message":{"content":"done, it works"}}' > /tmp/t0.jsonl
-          test -z "$(echo '{"cwd":"/tmp/proj","transcript_path":"/tmp/t0.jsonl"}' \
-            | python3 .claude/hooks/cerberus_gate.py)"
-          echo "a fresh install does not interrupt anything"
+      # #33: the install takes no decisions for the user. That is an absence,
+      # so it is asserted rather than assumed — a version that quietly wired
+      # itself back in would pass every other step in this file.
+      - name: Installing touches nothing the project owns
+        run: |
+          rm -rf /tmp/quiet && mkdir -p /tmp/quiet/.claude && cd /tmp/quiet
+          printf '%s' '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"mine"}]}]}}' \
+            > .claude/settings.json
+          cp .claude/settings.json /tmp/settings.before
+          sh "$GITHUB_WORKSPACE/install.sh" --claude
+          sh "$GITHUB_WORKSPACE/install.sh" --codex
+          cmp .claude/settings.json /tmp/settings.before
+          test ! -e .codex/hooks.json
+          test ! -e .claude/hooks
+          test ! -e .codex/hooks
+          test -z "$(find . -name 'cerberus_gate.py' -o -name 'cerberus_mark.py')"
+          echo "installing left every file the project owns alone"
 
-          # Both silent cases above are taken with enforcement OFF, which cannot
-          # tell a gate that never fires from one that always does. So the
-          # silent direction is taken again with it ON: a turn that claims
-          # nothing must end freely.
+      # The whole point of setup is that what it writes was run first, and that
+      # what it writes is read by a person rather than by a program. An
+      # end-to-end run is the only place both are true at once.
+      - name: Setup completes a real project end to end
+        run: |
+          rm -rf /tmp/real && mkdir -p /tmp/real && cd /tmp/real
+          printf '[project]\nname = "demo"\nversion = "0.1"\n' > pyproject.toml
+          mkdir -p tests && printf 'def test_ok():\n    assert True\n' > tests/test_demo.py
+          sh "$GITHUB_WORKSPACE/install.sh" --claude --setup
           python3 - <<'PY'
-          import json, pathlib
-          p = pathlib.Path("/tmp/proj/.claude/cerberus.json")
-          d = json.loads(p.read_text(encoding="utf-8"))
-          d["enforce"] = True
-          p.write_text(json.dumps(d, indent=2) + "\n", encoding="utf-8")
+          import json, subprocess
+          body = json.load(open("/tmp/real/cerberus.json"))
+          stage1 = body["verification"]["stage1"]
+          assert stage1, "setup wrote no checks"
+          for cmd in stage1:
+              got = subprocess.run(cmd, shell=True, cwd="/tmp/real", capture_output=True)
+              assert got.returncode == 0, f"wrote a check that fails here: {cmd}"
+          # An allowlist rather than a denylist: a key nobody reads is a lie
+          # with a schema, and naming the ones we happen to remember would not
+          # catch the next one. Keys starting with // are this project's comment
+          # convention and carry no behaviour; their *content* is checked by
+          # tests/test_setup.py, which reads the file as text.
+          extra = {k for k in body if k != "verification" and not k.startswith("//")}
+          assert not extra, f"install left keys nothing reads: {extra}"
+          print("setup wrote only checks that pass, and nothing dead")
           PY
-          echo '{"cwd":"/tmp/proj","tool_input":{"file_path":"app/y.py"}}' \
-            | python3 .claude/hooks/cerberus_mark.py
-          printf '%s\n' '{"role":"assistant","message":{"content":"still working on it"}}' > /tmp/t1.jsonl
-          test -z "$(echo '{"cwd":"/tmp/proj","transcript_path":"/tmp/t1.jsonl"}' \
-            | python3 .claude/hooks/cerberus_gate.py)"
-          rm -f /tmp/proj/.claude/.cerberus-pending
-          printf '%s\n' '{"role":"assistant","message":{"content":"done, it works"}}' > /tmp/t2.jsonl
-          test -z "$(echo '{"cwd":"/tmp/proj","transcript_path":"/tmp/t2.jsonl"}' \
-            | python3 .claude/hooks/cerberus_gate.py)"
-          echo "an enforcing gate still lets ordinary turns end"
-
-          # ...and must refuse once the project asks.
-          python3 - <<'PY'
-          import json, pathlib
-          p = pathlib.Path("/tmp/proj/.claude/cerberus.json")
-          d = json.loads(p.read_text(encoding="utf-8"))
-          d["enforce"] = True
-          p.write_text(json.dumps(d, indent=2) + "\n", encoding="utf-8")
-          PY
-          echo '{"cwd":"/tmp/proj","tool_input":{"file_path":"app/x.py"}}' \
-            | python3 .claude/hooks/cerberus_mark.py
-          printf '%s\n' '{"role":"assistant","message":{"content":"done, it works"}}' > /tmp/t.jsonl
-          echo '{"cwd":"/tmp/proj","transcript_path":"/tmp/t.jsonl"}' \
-            | python3 .claude/hooks/cerberus_gate.py \
-            | python3 -c "import json,sys; assert json.load(sys.stdin)['decision']=='block'; print('installed gate blocks over-claims')"

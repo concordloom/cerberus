@@ -18,7 +18,7 @@ you a change works, it has to seriously try to prove it is broken — and fail.
 
 ## Quick start
 
-**Claude Code** — two commands, and the hooks are wired:
+**Claude Code** — two commands:
 
 ```
 /plugin marketplace add concordloom/cerberus
@@ -33,38 +33,32 @@ $skill-installer install https://github.com/concordloom/cerberus/tree/main/plugi
 
 Swap `cerberus` at the end for `critic` or `setup` to add the other two.
 
-Either way, then ask it to set the project up. It works out what your checks
-are, runs them, and makes the gate refuse a claim in front of you:
-
-```text
-Checks I ran here, and will run before anyone says the work is done:
-  ok       pytest -q
-
-Tried it: saying the work was done was refused, and it named the edited file
-```
-
-Both enforce it: the same two events, and the same shape of refusal. The
-details differ — Codex will not run a project's hooks until you trust them with
-`/hooks`, and a refused turn there is fed back as a new prompt rather than
-simply ending — so the installer writes a different file and prints a different
-next step. Installing the skill *without* the hooks, on either agent, leaves
-the gate advisory: followed when invoked, not enforced on every turn.
-
-**Or put the files in your own repository** — the skill, the hooks and a
-`cerberus.json` you can commit. Nothing to clone; it detects whether the
-project uses `.claude/` or `.agents/`, and is safe to re-run:
+**Or put the files in your own repository** — the three skills and a
+`cerberus.json` you can commit. Nothing to clone, and safe to re-run:
 
 ```console
 curl -fsSL https://raw.githubusercontent.com/concordloom/cerberus/main/install.sh | sh -s -- --setup
 ```
 
+Either way, ask your agent to set the project up. It works out what your checks
+are by running them, and writes down the ones that pass:
+
+```text
+Set up for this Python project.
+
+Checks I ran here, and that the skill will run before anyone says the
+work is done:
+  ok       pytest -q
+```
+
 ## Now what?
 
-Nothing, on your side. The three stages are your agent's work, not yours.
+Nothing happens on its own, and that is deliberate.
 
-Your day goes like this. You ask for a change as usual. The agent makes it. The
-agent goes to tell you it is done — and cannot. So it goes and checks, and comes
-back with a verdict instead of a claim.
+Ask for the cerberus skill when a change deserves it — before a release, after
+a fix you are not sure of, whenever "it works" is about to be said out loud.
+The agent then runs the three stages against your project's own checks and
+comes back with a verdict instead of a claim.
 
 Here is a real one, from a session asked to add a function *and report it done*:
 
@@ -84,56 +78,27 @@ It read `artifact_kind: library` out of `cerberus.json` and worked out for
 itself that the built wheel was the thing to test, not the working tree. That is
 what the file is for.
 
-The cost is real: that took minutes rather than seconds, and it happens every
-time a readiness claim follows a code change. That is the trade, and
-[when it gets in your way](#when-it-gets-in-your-way) is two sections down.
+The cost is real: that took minutes rather than seconds. Which is exactly why
+deciding *when* it is worth paying is left to you.
 
 ## What it does to your session
 
-Two hooks and one rule.
+Nothing, until you ask. There is no hook, no background process, and no file of
+yours that installing edits — the whole delivery is three skill directories and
+one config you own.
 
-**1.** Your agent edits source code — a `.py`, a `.ts`, a `.go`; not a test, not
-a doc. A hook writes the path down.
+That is a change from earlier versions, and a deliberate one. A gate that
+interrupts on its own guess about which turns matter gets switched off, and a
+gate that is off protects nothing. You know which change deserves an hour of
+adversarial verification; nothing shipped here can know that better than you.
 
-**2.** Your agent tries to end the turn with *"done, it works"*. The second hook
-refuses:
-
-```text
-Cerberus gate: this message claims the work is ready, but source code was
-edited and has not been verified.
-
-Run the cerberus skill and complete both stages:
-  Stage 1 — try to break the code locally: …
-  Stage 2 — try to break it on a live environment: …
-
-Clear the marker only on a READY verdict. Nothing here prevents you
-deleting it early — that is on you.
-
-Unverified files:
-  - app/service.py
-```
-
-This is what happens once refusals are switched on — see
-[the one thing to configure](#the-one-thing-to-configure). Until then the hooks
-are installed and quiet.
-
-**3.** The note comes off on a `READY` verdict, and only that: both stages run
-and no blocker left. `NOT READY` leaves it exactly where it was. Nothing
-prevents the agent deleting the file instead — this is a speed bump against
-drift, not a guard against an adversary, and the message says so.
-
-Ordinary work is untouched: *"deployed to dev, running the check now"* ends a
-turn fine. Only readiness claims are refused, and only while something is
-unverified. A gate that interrupts normal work gets switched off, and a gate
-that is off protects nothing.
-
-No model is called and nothing goes over the network — it is two short Python
-scripts and a file.
+No model is called and nothing goes over the network. The setup step runs your
+own checks locally, once, and writes down which ones passed.
 
 ## The three heads
 
-The three heads on the gate are the three stages the agent owes you before that
-note comes off.
+The three heads on the gate are the three stages the agent owes you before it
+says a change works.
 
 | | Stage | What the agent has to do |
 |---|---|---|
@@ -150,7 +115,7 @@ it, at the length an agent needs, is in
 
 Stage 2 has to cross your **delivery boundary** — the first thing that stops
 being under your control once the change ships. Nothing can work that out for
-you, so it is the one field `.claude/cerberus.json` leaves to you:
+you, so it is the one field `cerberus.json` leaves to you:
 
 | what you ship | what Stage 2 has to reach |
 |---|---|
@@ -171,67 +136,48 @@ rather than assumed.
 
 ## What goes in cerberus.json
 
-Two halves, and they are not the same kind of thing.
+One block, and it is a note rather than a program. `artifact_kind` names your
+delivery boundary, `stage1` is the commands to run locally, `stage2` is what has
+to be reached past that boundary, and `notes` is anything the agent should know
+— which account, which environment, what must never be touched.
 
-**`verification`** — `artifact_kind`, `stage1`, `stage2`, `notes`. No program
-reads this. It is a note your agent reads and acts on: `stage1` is the commands
-it runs locally, `stage2` is what it has to reach past your delivery boundary.
-Getting it wrong costs an agent some wasted work.
-
-**Everything else** — `enforce`, `claim_patterns`, `ignore_patterns`,
-`source_extensions`, `watch_paths`, `marker`. The hooks read these on every run, and they ship
-commented out with a `//` in front. Getting one wrong makes the gate quietly
-weaker than you think it is. That asymmetry is why setup writes the first half
-and never the second.
-
-## When it gets in your way
-
-It will. The gate is a regular expression over your agent's last message, and
-the default list includes `\bdone\b` — a word people use for things that are
-not readiness claims.
-
-This section is about the Claude Code install, where the hooks actually run.
-Two of the three answers live in `.claude/cerberus.json`, which the installer
-puts in your project — a plugin install keeps its files under the plugin
-instead:
-
-- **it fired when it shouldn't** — narrow `claim_patterns`. Careful: that key
-  **replaces** the default list rather than adding to it, so a short list makes
-  the gate quietly weaker than it looks. That is the one edit worth making
-  slowly;
-- **it is holding a note you have dealt with** — the file is
-  `.claude/.cerberus-pending`, one path per line, and it survives across
-  sessions;
-- **you want it off** — `"enforce": false`, and it goes quiet without being
-  uninstalled. To remove it entirely, that depends how you installed it. Plugin:
-  `/plugin uninstall cerberus@concordloom`, and nothing is left in your
-  project. Installer: delete the two entries from `.claude/settings.json`. On
-  Codex there is nothing to switch off, because there is nothing running — the
-  skill is advisory there. It is a hook, not a daemon.
+No program reads any of it. The skills do, and getting it wrong costs an agent
+some wasted work rather than silently weakening anything. Setup writes
+`artifact_kind` and `stage1` after running the commands; `stage2` is left empty
+on purpose, because a placeholder that exits 0 is worse than an obvious gap.
 
 ## The critic, which is not the gate
 
-Installing the plugin brings three skills — the gate, the critic and setup; on
-Codex you install each one you want. The gate asks whether the thing does
-what you say it does. The critic asks whether what you *said* is true — a
-diagnosis, a mechanism, a claim about the codebase — by spawning an adversary
-whose mandate is to refute it.
+Three skills ship together. The gate asks whether the thing does what you say it
+does. The critic asks whether what you *said* is true — a diagnosis, a
+mechanism, a claim about the codebase — by spawning an adversary whose mandate
+is to refute it.
 
 Neither covers the other: work can be right while its explanation is wrong, and
 a right explanation proves nothing ever ran.
 
-The third, `setup`, is the install step from the quick start — it works out
-what your checks are by running them, writes them down, and shows you the gate
-refusing something. Run it again any time with
-`python3 .claude/hooks/cerberus_setup.py`, or ask the agent for it by name.
-Everything it cannot verify has a working default — including refusals,
-which are **off** until you ask. Installing changes nothing about your
-sessions; the skills are there to invoke by name. `setup` switches
-enforcement on, or add `"enforce": true` yourself.
+The third, `setup`, is the install step above. It works out what your checks are
+by running them, writes them down, and stops. Run it again any time with
+`python3 .claude/skills/setup/cerberus_setup.py`, or ask the agent for it by
+name.
 
-That is a deliberate reversal. Against it: a gate nobody switches on
-protects nothing. For it: a gate refusing on ordinary words does not get
-tuned, it gets uninstalled — and then it protects even less.
+## Upgrading from 1.7 or earlier
+
+Those versions installed two hooks and wired them into `.claude/settings.json`
+or `.codex/hooks.json`. This one installs neither, and does not touch those
+files — including to clean up after itself, because editing a file you own is
+the thing it stopped doing. Two entries are left pointing at scripts that no
+longer exist, and a command that cannot be found fails on every tool call, so
+delete them by hand:
+
+- **Claude Code** — remove the `PostToolUse` and `Stop` entries naming
+  `cerberus_mark.py` and `cerberus_gate.py` from `.claude/settings.json`;
+- **Codex** — delete `.codex/hooks.json`, or the two entries in it;
+- then delete the leftover `.claude/hooks/` or `.codex/hooks/` directory and the
+  `.cerberus-pending` file beside your config.
+
+Your `cerberus.json` is read exactly as before and needs no change. The keys
+that tuned the hooks are simply ignored.
 
 ## Why
 
@@ -240,13 +186,15 @@ logs, and reported *"works end to end"*. The credential it had written was
 never read by anything at runtime. No real run had ever happened, and a day was
 lost.
 
-Every rule forbidding that already existed and was known. Which is the whole
-argument for a hook rather than one more paragraph of advice.
+The method in SKILL.md is what catches that. Making it fire automatically was a
+second idea, tried for seven versions and dropped: it could tell that code had
+changed, never whether the change mattered, and being wrong about that is how
+tools get uninstalled.
 
 ## Requirements
 
-Python 3.10+ for the hooks, and nothing else. The skill format and hook events
-are [Claude Code](https://claude.com/claude-code)'s; the method in
+Python 3.10+ for the setup script, and nothing else. The skill format is
+[Claude Code](https://claude.com/claude-code)'s and Codex's; the method in
 [SKILL.md](plugins/cerberus/skills/cerberus/SKILL.md) is not specific to any
 agent and can be followed by hand.
 
