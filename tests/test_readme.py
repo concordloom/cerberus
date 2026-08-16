@@ -395,14 +395,32 @@ def test_nothing_claims_an_agent_lacks_hooks():
     events and the same block protocol. Anything asserting a provider cannot
     enforce belongs in a capability the code declares, not in a sentence.
     """
-    phrases = ("has no hook", "no hook mechanism", "нет механизма хуков",
-               "хуков там нет", "has no equivalent")
-    for path in sorted(ROOT.rglob("*.md")) + sorted(ROOT.rglob("*.sh")):
+    # Matched as a shape, not as five literal strings: the first version of
+    # this guard read only .md and .sh — so the original sentence could return
+    # verbatim in a .py comment — and missed "does not have a hook mechanism",
+    # "lacks any hook mechanism" and "there are no hooks in" while claiming to
+    # prevent exactly that.
+    # Anchored on an agent's name, because the claim being banned is about an
+    # agent's capabilities. Without the anchor this fired on a comment about a
+    # *project* that had no hooks installed, which is a different sentence and
+    # a true one.
+    agent = r"(?:codex|claude code|claude|the agent|агент\w*|codex\w*)"
+    denial = r"(?:has no|have no|lacks any|without any|there are no|no)\s+hooks?"
+    shapes = [
+        re.compile(agent + r"[^.\n]{0,60}" + denial, re.I),
+        re.compile(denial + r"[^.\n]{0,60}" + agent, re.I),
+        re.compile(r"(?:нет|не имеет)\s+(?:механизма\s+)?хуков", re.I),
+        re.compile(r"хуков\s+(?:там\s+)?нет", re.I),
+    ]
+    for path in sorted(ROOT.rglob("*.md")) + sorted(ROOT.rglob("*.sh")) + sorted(ROOT.rglob("*.py")):
         if ".git" in path.parts or path.name == "CHANGELOG.md":
             continue
-        text = path.read_text(encoding="utf-8").lower()
-        for phrase in phrases:
-            assert phrase not in text, f"{path.relative_to(ROOT)}: {phrase!r}"
+        if path.name == "test_readme.py":
+            continue  # it has to quote the sentence to say why it is banned
+        text = path.read_text(encoding="utf-8")
+        for shape in shapes:
+            found = shape.search(text)
+            assert not found, f"{path.relative_to(ROOT)}: {found.group(0)!r}"
 
 
 def test_no_link_points_at_the_old_repository_name():

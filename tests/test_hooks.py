@@ -232,7 +232,7 @@ def test_running_a_file_is_not_editing_it():
         (tmp / "app" / "service.py").write_text("x = 1\n", encoding="utf-8")
         run_hook("cerberus_mark.py", {
             "cwd": str(tmp),
-            "tool_name": "Bash",
+            "tool_name": "exec_command",
             "tool_input": {"command": "python3 app/service.py"},
         })
         assert not (tmp / ".claude" / ".cerberus-pending").exists()
@@ -244,7 +244,7 @@ def test_a_path_that_is_only_prose_is_not_recorded():
         run_hook("cerberus_mark.py", {
             "cwd": str(tmp),
             "tool_name": "apply_patch",
-            "tool_input": {"input": "see also legacy/gone.py, removed last year"},
+            "tool_input": {"command": "see also legacy/gone.py, removed last year"},
         })
         assert not (tmp / ".claude" / ".cerberus-pending").exists()
 
@@ -266,10 +266,12 @@ def test_the_claim_can_come_from_the_payload():
         assert json.loads(out)["decision"] == "block"
 
 
-def test_a_continued_turn_is_not_blocked_again():
-    # Blocking a Stop on Codex feeds a continuation prompt back as new user
-    # input. Blocking again from there loops forever, so the flag saying the
-    # turn was already continued has to end it.
+def test_a_continued_turn_ends_rather_than_looping_or_passing():
+    # A blocked Stop can feed the reason back as a new prompt, and blocking
+    # again from there loops forever. The first attempt at this went silent
+    # instead — which shipped a bypass: claim, get refused, claim again, and
+    # the second one went through. It has to do neither: refuse, and end the
+    # turn.
     with tempfile.TemporaryDirectory() as d:
         tmp = pathlib.Path(d)
         run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/x.py"}})
@@ -279,7 +281,75 @@ def test_a_continued_turn_is_not_blocked_again():
             "last_assistant_message": "done, it works",
             "stop_hook_active": True,
         })
-        assert rc == 0 and out == "", "a continued turn was blocked again — that is the loop"
+        assert out, "a continued turn was let through — that is the bypass"
+        payload = json.loads(out)
+        assert payload.get("continue") is False, payload
+        assert "has not been verified" in payload.get("stopReason", ""), payload
+        assert payload.get("decision") != "block", "blocking again is the loop"
+
+
+def test_the_first_turn_blocks_even_though_the_flag_is_present():
+    # Both agents send stop_hook_active on every Stop. A guard testing for the
+    # field's *presence* rather than its value disables the gate completely on
+    # the very first turn, and a one-word mutation does exactly that while the
+    # rest of this file stays green.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = pathlib.Path(d)
+        run_hook("cerberus_mark.py", {"cwd": str(tmp), "tool_input": {"file_path": "app/x.py"}})
+        _, out = run_hook("cerberus_gate.py", {
+            "cwd": str(tmp),
+            "hook_event_name": "Stop",
+            "last_assistant_message": "done, it works",
+            "stop_hook_active": False,
+        })
+        assert out, "the gate went silent on a first turn that carried the flag"
+        assert json.loads(out)["decision"] == "block"
+
+
+def test_a_patch_that_only_mentions_a_file_does_not_arm_the_gate():
+    # Scraping every line of a diff meant a README patch quoting a source path
+    # armed the gate for a file nobody touched — the same trap as marking a
+    # file that was merely run.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = pathlib.Path(d)
+        (tmp / "app").mkdir()
+        (tmp / "app" / "service.py").write_text("x = 1\n", encoding="utf-8")
+        run_hook("cerberus_mark.py", {
+            "cwd": str(tmp),
+            "tool_name": "apply_patch",
+            "tool_input": {"command": "*** Update File: README.md\n@@\n+See app/service.py for details\n"},
+        })
+        assert not (tmp / ".claude" / ".cerberus-pending").exists()
+
+
+def test_reading_a_file_does_not_arm_the_gate():
+    with tempfile.TemporaryDirectory() as d:
+        tmp = pathlib.Path(d)
+        run_hook("cerberus_mark.py", {
+            "cwd": str(tmp),
+            "tool_name": "mcp__filesystem__read_file",
+            "tool_input": {"path": "app/service.py"},
+        })
+        assert not (tmp / ".claude" / ".cerberus-pending").exists()
+
+
+def test_a_delete_and_a_rename_are_both_recorded():
+    # A deleted file is gone from disk, which is exactly why corroborating
+    # scraped paths against disk lost it. A rename has two names and both
+    # matter: one stopped existing, the other did not exist before.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = pathlib.Path(d)
+        run_hook("cerberus_mark.py", {
+            "cwd": str(tmp), "tool_name": "apply_patch",
+            "tool_input": {"command": "*** Delete File: app/gone.py\n"},
+        })
+        run_hook("cerberus_mark.py", {
+            "cwd": str(tmp), "tool_name": "apply_patch",
+            "tool_input": {"command": "*** Update File: app/old.py\n*** Move to: app/new.py\n"},
+        })
+        recorded = (tmp / ".claude" / ".cerberus-pending").read_text(encoding="utf-8")
+        for path in ("app/gone.py", "app/old.py", "app/new.py"):
+            assert path in recorded, (path, recorded)
 
 
 def test_a_codex_project_keeps_its_state_in_codex():

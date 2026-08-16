@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .codex/hooks/cerberus_mark.py",
+            "command": "python3 \"$(git rev-parse --show-toplevel)\"/.codex/hooks/cerberus_mark.py",
             "timeout": 20
           }
         ]
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .codex/hooks/cerberus_gate.py",
+            "command": "python3 \"$(git rev-parse --show-toplevel)\"/.codex/hooks/cerberus_gate.py",
             "timeout": 20,
             "statusMessage": "Checking the work was verified"
           }

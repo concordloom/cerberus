@@ -230,13 +230,33 @@ if [ "$WANT_CODEX" -eq 1 ]; then
     echo
   else
     cp "$SRC/examples/codex-hooks.json" "$TARGET/.codex/hooks.json"
-    say ".codex/hooks.json  (hooks wired)"
+    say ".codex/hooks.json  (hooks declared — see below)"
   fi
 
   if [ ! -f "$TARGET/.claude/cerberus.json" ] && [ ! -f "$TARGET/.codex/cerberus.json" ]; then
     mkdir -p "$TARGET/.codex"
-    cp "$SRC/cerberus.example.json" "$TARGET/.codex/cerberus.json"
+    sed 's|Copy to .claude/cerberus.json|Copy to .codex/cerberus.json|; s|".claude/.cerberus-pending"|".codex/.cerberus-pending"|' \
+      "$SRC/cerberus.example.json" > "$TARGET/.codex/cerberus.json"
     say ".codex/cerberus.json  (edit the verification block to describe this project)"
+  fi
+
+  # The marker is session state on this agent too.
+  if [ ! -f "$TARGET/.gitignore" ] || ! grep -qxF ".codex/.cerberus-pending" "$TARGET/.gitignore"; then
+    if [ -s "$TARGET/.gitignore" ] && [ -n "$(tail -c 1 "$TARGET/.gitignore")" ]; then
+      printf '\n' >> "$TARGET/.gitignore"
+    fi
+    printf '%s\n' ".codex/.cerberus-pending" >> "$TARGET/.gitignore"
+    say ".gitignore  (+ .codex/.cerberus-pending)"
+  fi
+
+  echo
+  echo "One more step, and it is not optional: Codex does not run a project's"
+  echo "hooks until you trust them. Run /hooks in Codex and approve these two."
+  echo "It asks again whenever they change."
+  if [ "$RUN_SETUP" -eq 1 ]; then
+    echo
+    echo "Then set the checks up — --setup does not run for Codex yet:"
+    echo "    python3 .codex/hooks/cerberus_setup.py"
   fi
 fi
 

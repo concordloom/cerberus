@@ -102,11 +102,6 @@ def _last_assistant_text(transcript_path: str) -> str:
 
 
 def main() -> int:
-    # Blocking a Stop on Codex does not end the turn — it feeds a continuation
-    # prompt back as new user input, and `stop_hook_active` says the turn has
-    # already been continued that way. Blocking again from there is a loop:
-    # block, continue, block, forever. Claude Code has no such semantics and
-    # never sends the field, so this is inert there.
     try:
         data = json.load(sys.stdin)
     except Exception:
@@ -128,9 +123,6 @@ def main() -> int:
     # so the transcript is parsed only when it has to be. Reading a field beats
     # parsing a file, and the transcript format is the likelier of the two to
     # differ between agents.
-    if data.get("stop_hook_active"):
-        return 0
-
     text = data.get("last_assistant_message")
     if not isinstance(text, str) or not text:
         text = _last_assistant_text(data.get("transcript_path", ""))
@@ -145,9 +137,33 @@ def main() -> int:
     if len(pending) > 20:
         listed += f"\n  ... and {len(pending) - 20} more"
 
-    config = root / ".claude" / "cerberus.json"
-    pointer = CONFIG_LINE.format(path=".claude/cerberus.json") if config.exists() else ""
-    print(json.dumps({"decision": "block", "reason": REASON + pointer + FILES_HEADER + listed}))
+    # Whichever one this project has. Hardcoding .claude meant a Codex project
+    # was never told where its own commands were — the exact gap this line was
+    # added to close.
+    pointer = ""
+    for relative in Config.CONFIG_PATHS:
+        if (root / relative).exists():
+            pointer = CONFIG_LINE.format(path=relative)
+            break
+    reason = REASON + pointer + FILES_HEADER + listed
+
+    # A blocked Stop does not always end the turn: on some agents it feeds the
+    # reason back as a new prompt and the turn continues, and `stop_hook_active`
+    # says that already happened. Blocking again from there loops forever.
+    #
+    # Going silent instead was worse, and shipped: the claim went through on the
+    # second attempt. Refuse, then refuse a second time, then *end the turn*
+    # rather than continue it — the refusal stays visible either way, and the
+    # only thing that changes is that it stops asking.
+    if data.get("stop_hook_active"):
+        print(json.dumps({
+            "continue": False,
+            "stopReason": reason,
+            "systemMessage": "Cerberus: the work is still unverified. Ending the turn rather than asking again.",
+        }))
+        return 0
+
+    print(json.dumps({"decision": "block", "reason": reason}))
     return 0
 
 
