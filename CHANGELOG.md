@@ -1,5 +1,12 @@
 # Changelog
 
+# [1.5.0](https://github.com/concordloom/cerberus/compare/v1.4.1...v1.5.0) (2026-08-16)
+
+
+### Features
+
+* close the loop after installing ([#26](https://github.com/concordloom/cerberus/issues/26)) ([484c0fe](https://github.com/concordloom/cerberus/commit/484c0fed4c6eb485a70a9694c37c8bcbab465ee3)), closes [#25](https://github.com/concordloom/cerberus/issues/25)
+
 ## [1.4.1](https://github.com/concordloom/cerberus/compare/v1.4.0...v1.4.1) (2026-08-15)
 
 
