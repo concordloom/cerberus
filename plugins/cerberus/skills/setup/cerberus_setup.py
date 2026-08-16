@@ -113,6 +113,20 @@ DEPLOY_EVIDENCE = [
     ("image", ["Dockerfile"]),
 ]
 
+#: The one visible trace of "pasted from the draft rather than agreed". The
+#: draft uses a single prefix so this rule can be exact rather than a guess at
+#: what looks unfinished; an env var or a real host is never matched.
+PLACEHOLDER = re.compile(r"\bYOUR_[A-Z][A-Z_]*\b")
+
+
+def unfinished(stage2: list) -> list[str]:
+    """Placeholders still in the configuration, in the order they appear."""
+    left = []
+    for command in stage2:
+        left += [m for m in PLACEHOLDER.findall(str(command)) if m not in left]
+    return left
+
+
 #: Returned when the key is present but says nothing. Distinct from None,
 #: which means the project never claimed the boundary was unreachable.
 UNREACHABLE_WITHOUT_REASON = object()
@@ -461,6 +475,15 @@ def report_state(root: pathlib.Path, kind: str = "library", first_run: bool = Tr
     except Exception:
         body, stage2 = {}, []
     if stage2:
+        # Non-empty is not the same as ready. A draft pasted verbatim reads as
+        # configuration and fails later on a hostname nobody set, at the moment
+        # a verdict was due.
+        left = unfinished(stage2)
+        if left:
+            print(f"stage2 in {where} still has the draft's blanks in it: "
+                  + ", ".join(left[:4]) + ("…" if len(left) > 4 else ""))
+            print("Fill them in or remove those lines — as it stands it cannot run.")
+            return 2
         return 0
 
     declared = unreachable_reason(body)
