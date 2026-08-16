@@ -77,12 +77,47 @@ repository cannot answer:
 - **Stage 1** — show what was written. Ask if that is all of it, or whether
   something is missing that everyone here knows to run by hand.
 - **Stage 2** — the one that finds the defects, and the one nothing can derive.
-  Run `--draft-stage2` if there is deployment evidence, show the draft, and ask
-  what only they know: which cluster and namespace, which URL, what must never
-  be touched, and how they would prove the changed path actually executed —
-  a log query, a trace id, a row in a table. Their answers go into `stage2`,
-  and everything about the environment goes into `notes`, which is otherwise
-  always empty.
+  It gets a conversation of its own, below.
+
+## Stage 2 is a conversation, not a form
+
+Do not interrogate. Ask one open question and let them answer in their own
+words, in a paragraph:
+
+> How does this change get to where it really runs, and how would you know it
+> arrived?
+
+What comes back is usually everything you need and nothing in the right shape:
+"we merge, the pipeline builds it, argo syncs it to dev, then I look at
+Grafana". That is a deploy path, an environment, and a weak revision proof, in
+one sentence. `--draft-stage2` gives you the skeleton; their answer tells you
+which of its lines are real here.
+
+**Then say back what you understood, as commands, and let them correct it.**
+Not a summary — the actual list you are about to write. This is the same
+discipline the critic runs on a claim, for the same reason: what they said and
+what you understood diverge silently, and the first time anyone notices is a
+verdict about a revision nobody deployed.
+
+Only then ask about the gaps their answer left, and only those:
+
+- **Access, before anything else.** Can whoever runs the cycle actually execute
+  those commands? Credentials, a VPN, a token, permission to deploy at all. A
+  `stage2` nobody can run produces `Not proven` forever for a mechanical
+  reason, and reads like a verification failure rather than a missing secret.
+  If the answer is no, that is worth knowing now: either the commands change to
+  ones they can run, or the reason goes in `stage2_unreachable`.
+- **Revision proof.** How would they know the instance answering them is this
+  commit and not the build that was already there? An endpoint returning the
+  sha, the image tag on the running deployment, a header. If there is nothing,
+  say plainly that Stage 2 will not be able to tell this revision from the
+  previous one, and write that down rather than leaving it to be discovered.
+- **Before the merge.** If the pipeline only deploys from the default branch,
+  there is no honest pre-merge Stage 2. Pick one and record it: a preview
+  environment per pull request, a verdict issued after the merge, or
+  `stage2_unreachable`.
+- **Blast radius.** What must never be touched, which account, which namespace.
+  This goes in `notes`, which is otherwise always empty.
 
 If they have nowhere to deploy, do not leave `stage2` blank and move on. Write
 `stage2_unreachable` with the reason they gave you. Blank reads as "nobody got
@@ -106,6 +141,12 @@ belongs in the other two skills.
       rather than padded with something that exits 0?
 - [ ] Were the three stages explained and the questions asked, rather than the
       script's output handed over as if it finished the job?
+- [ ] Was Stage 2 opened with one open question, and was the resulting command
+      list read back and confirmed before it was written?
+- [ ] Was access asked about — can whoever runs the cycle actually execute what
+      was written?
+- [ ] Is it recorded how anyone would know the instance under test is this
+      commit, or stated plainly that nothing can?
 - [ ] Does `notes` carry what only they could tell you, or is it still empty?
 - [ ] If there is nowhere to deploy, is `stage2_unreachable` written with their
       reason, rather than `stage2` left blank?

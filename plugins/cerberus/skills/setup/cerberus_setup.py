@@ -145,6 +145,27 @@ CANNOT_FAIL = [
     # script itself emits, or the draft can teach a trap while containing one.
     (r"\b(?:logcli|kubectl logs|YOUR_LOG_QUERY)\b(?!.*(?:grep|jq|rg|\bawk\b))",
      "a log query usually exits 0 when it finds nothing"),
+    (r"^\s*sleep\b", "sleeping is not waiting for anything in particular"),
+    (r"\bgh run watch\b(?!.*--exit-status)",
+     "gh run watch exits 0 even when the run it watched went red"),
+    # Only when nothing on the line can go red. `gh run list` picking the run
+    # for `watch --exit-status` is the fix, not the trap — the first version of
+    # this rule condemned the correct form, which is how a guard teaches the
+    # wrong lesson.
+    (r"^(?!.*--exit-status).*\bgh run list\b",
+     "listing runs succeeds whoever's run it lists"),
+]
+
+#: What CI is in use, decided from the file that configures it. The command
+#: that waits for a pipeline is the one thing that cannot be guessed across
+#: forges, and guessing it would produce a line that looks right and waits for
+#: nothing.
+FORGES = [
+    ("github", [".github/workflows"], "gh run watch --exit-status $(gh run list "
+                                      "--commit $(git rev-parse HEAD) --limit 1 "
+                                      "--json databaseId --jq '.[0].databaseId')"),
+    ("gitlab", [".gitlab-ci.yml"], "YOUR_PIPELINE_WAIT  # must exit non-zero when "
+                                   "the pipeline fails"),
 ]
 
 
@@ -171,7 +192,25 @@ def deploy_evidence(root: pathlib.Path) -> list[tuple[str, str]]:
     return found
 
 
-def draft_stage2(kind: str, evidence: list[tuple[str, str]]) -> list[str]:
+def forge_of(root: pathlib.Path) -> tuple[str, str] | None:
+    """Which CI runs here, and the command that waits for it."""
+    for name, paths, wait in FORGES:
+        if any((root / p).exists() for p in paths):
+            return name, wait
+    return None
+
+
+#: Ways to prove the instance answering you is the commit under test. Without
+#: one of these, waiting for a pipeline and calling the URL verifies whichever
+#: build happened to be there — green, and about nothing.
+REVISION_PROOF = (
+    "curl -fsS YOUR_URL/version | jq -e --arg sha \"$(git rev-parse HEAD)\" "
+    "'.revision == $sha'"
+)
+
+
+def draft_stage2(kind: str, evidence: list[tuple[str, str]],
+                 forge: tuple[str, str] | None = None) -> list[str]:
     """Propose commands. Never write them — this cannot run a deploy.
 
     Proposing is not writing: the rule that setup never records a check it has
@@ -196,6 +235,14 @@ def draft_stage2(kind: str, evidence: list[tuple[str, str]]) -> list[str]:
         lines.append("kubectl -n YOUR_NS rollout status deploy/YOUR_APP --timeout=120s")
     if not lines and "compose" in names:
         lines.append("docker compose up -d --build --wait")
+    if not lines and "ci" in names and forge:
+        # Nothing here can deploy, so Stage 2 starts by making the pipeline do
+        # it and then proving it did — for THIS commit, which is the whole
+        # difference between verifying and waiting.
+        lines.append("git push   # the pipeline deploys; this is the trigger")
+        lines.append(forge[1])
+    if lines and ("ci" in names or "helm" in names or "k8s" in names):
+        lines.append(REVISION_PROOF)
     lines.append("curl -fsS -H \"X-Request-Id: $RID\" YOUR_URL/YOUR_ENDPOINT "
                  "| jq -e 'YOUR_ASSERTION_ON_THE_VALUE'")
     lines.append("YOUR_LOG_QUERY --since=5m | grep -q \"$RID\"")
@@ -431,7 +478,7 @@ def report_state(root: pathlib.Path, kind: str = "library", first_run: bool = Tr
 
     hint = STAGE2_HINT_BY_KIND.get(kind, STAGE2_HINT_BY_KIND["library"])
     evidence = deploy_evidence(root)
-    if draft_stage2(kind, evidence):
+    if draft_stage2(kind, evidence, forge_of(root)):
         seen = ", ".join(sorted({found for _, found in evidence}))
         print(f"Still missing — stage2 in {where}: {hint}. "
               f"I can draft it from {seen} — run this again with --draft-stage2.")
@@ -456,7 +503,7 @@ def print_draft(root: pathlib.Path, config: pathlib.Path, detected: str | None) 
             pass
 
     evidence = deploy_evidence(root)
-    draft = draft_stage2(kind, evidence)
+    draft = draft_stage2(kind, evidence, forge_of(root))
     if not draft:
         if kind not in DEPLOYED_KINDS:
             print(f"This is a {kind}, so stage2 is not a deploy: "
@@ -468,12 +515,6 @@ def print_draft(root: pathlib.Path, config: pathlib.Path, detected: str | None) 
         return 0
 
     print("A draft, from " + ", ".join(f"{w}" for _, w in evidence) + ".")
-    if not any(n in {"helm", "k8s", "compose", "image"} for n, _ in evidence):
-        # All that was found is a CI job. What it runs is knowable only from
-        # the job, and a comment standing in for a command exits 0 — the trap
-        # this draft exists to teach. So it is said in prose, not proposed.
-        print("Your deploy lives in CI, so the deploy line is yours to fill in:")
-        print("whatever that job runs, against the image built from THIS commit.")
     print("Nothing was written. Read it, fix the CAPITALS, then paste it into")
     print(f"{config.name} under verification.stage2:")
     print()
@@ -486,6 +527,10 @@ def print_draft(root: pathlib.Path, config: pathlib.Path, detected: str | None) 
     print("  jq -e on the body asserting a reply arrived passes on any reply")
     print("  grep -q on logs   a log query exits 0 when it finds nothing")
     print("  rollout status    fails when the pod never came up")
+    if any(REVISION_PROOF.split()[0] in line and "revision" in line for line in draft):
+        print("  the /version line  the one that stops you verifying yesterday's")
+        print("                    build: waiting for a pipeline proves it ran,")
+        print("                    not that the pod answering you is your commit")
     print()
     print("Then prove the whole thing can fail: run it against the version")
     print("before your change and check that it does.")

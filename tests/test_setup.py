@@ -837,6 +837,118 @@ def test_declaring_it_unreachable_silences_the_draft_offer():
     assert "--draft-stage2" not in out, out
 
 
+# ------------------------------------------------ stage2 when CI does the deploy
+
+
+CI_PROJECT = {
+    **PY_PROJECT,
+    ".github/workflows/deploy.yml":
+        "name: deploy\njobs:\n  deploy:\n    steps:\n      - run: kubectl apply -f k8s/\n",
+    "cerberus.json": json.dumps(
+        {"verification": {"artifact_kind": "service", "stage1": ["true"], "stage2": []}}),
+}
+
+
+def test_a_ci_deployed_project_gets_commands_not_prose():
+    """#47, point 1. The commonest shape used to get a paragraph and no list."""
+    root = project(CI_PROJECT)
+    out = _draft(root)
+    assert "gh run watch" in out, out
+    assert "git push" in out, out
+
+
+def test_the_draft_proves_the_running_instance_is_this_commit():
+    """#47, point 2 — the whole reason this issue exists.
+
+    Waiting for a pipeline proves it ran. It does not prove the pod answering
+    you was replaced, that the run watched was yours, or that the ref deployed
+    was this one. Without this line Stage 2 goes green against yesterday's
+    build.
+    """
+    sys.path.insert(0, str(SETUP.parent))
+    import cerberus_setup
+
+    for evidence, forge in (
+        ([("ci", ".github/workflows/deploy.yml")], ("github", "gh run watch --exit-status X")),
+        ([("helm", "helm/"), ("image", "Dockerfile")], None),
+        ([("k8s", "k8s/")], None),
+    ):
+        draft = cerberus_setup.draft_stage2("service", evidence, forge)
+        assert any("rev-parse HEAD" in line and "version" in line for line in draft), (
+            f"{evidence[0][0]}: nothing ties the running instance to this commit:\n" +
+            "\n".join(draft))
+
+
+def test_waiting_for_a_pipeline_is_a_command_that_can_fail():
+    """#47, point 3. A wait that cannot go red makes the whole stage green."""
+    sys.path.insert(0, str(SETUP.parent))
+    import cerberus_setup
+
+    draft = cerberus_setup.draft_stage2(
+        "service", [("ci", ".github/workflows/deploy.yml")], cerberus_setup.FORGES[0][1:])
+    for line in draft:
+        why = cerberus_setup.unfailable(line)
+        assert why is None, f"{line!r} — {why}"
+    for cannot in ("sleep 120",
+                   "gh run watch 123",
+                   "gh run list --limit 1"):
+        assert cerberus_setup.unfailable(cannot), f"missed: {cannot!r}"
+    assert cerberus_setup.unfailable("gh run watch --exit-status 123") is None
+    # The correct form uses `gh run list` to pick the run for this commit. A
+    # rule that condemns it pushes the reader toward watching whatever ran last.
+    assert cerberus_setup.unfailable(
+        "gh run watch --exit-status $(gh run list --commit $(git rev-parse HEAD) "
+        "--limit 1 --json databaseId --jq '.[0].databaseId')") is None
+
+
+def test_the_forge_decides_the_wait_and_an_unknown_one_says_so():
+    """The one command that cannot be guessed across forges."""
+    sys.path.insert(0, str(SETUP.parent))
+    import cerberus_setup
+
+    with tempfile.TemporaryDirectory() as d:
+        root = pathlib.Path(d)
+        assert cerberus_setup.forge_of(root) is None
+        (root / ".gitlab-ci.yml").write_text("stages: [deploy]\n", encoding="utf-8")
+        name, wait = cerberus_setup.forge_of(root)
+        assert name == "gitlab"
+        assert "YOUR_" in wait, "it invented a gitlab command instead of asking"
+        assert "non-zero" in wait, "the placeholder never says what it must do"
+
+
+def test_the_wrong_revision_trap_is_explained_not_only_avoided():
+    """#47, point 5. The reader edits these lines; a silent guard teaches nothing."""
+    root = project(CI_PROJECT)
+    out = _draft(root)
+    assert "yesterday's" in out or "not that the pod" in out, out
+
+
+def test_the_skill_states_the_three_answers_to_merge_only_deployment():
+    """#47, point 4. Choosing silently is how a verdict covers an undeployed revision."""
+    for path in (SKILLS / "setup" / "SKILL.md", SKILLS / "setup" / "SKILL.ru.md"):
+        text = path.read_text(encoding="utf-8").lower()
+        for needle in ("preview", "stage2_unreachable") if path.name.endswith("ru.md") is False \
+                else ("превью", "stage2_unreachable"):
+            assert needle in text, f"{path.name}: {needle!r}"
+        assert "merge" in text or "мерж" in text, path.name
+
+
+def test_the_skill_asks_about_access_before_writing_commands():
+    """A stage2 nobody can run returns Not proven forever, for a mechanical reason."""
+    for path, needles in ((SKILLS / "setup" / "SKILL.md", ("access", "credentials")),
+                          (SKILLS / "setup" / "SKILL.ru.md", ("доступ", "учётные"))):
+        text = path.read_text(encoding="utf-8").lower()
+        for needle in needles:
+            assert needle in text, f"{path.name}: {needle!r}"
+
+
+def test_the_skill_requires_reading_the_commands_back_before_writing_them():
+    """What they said and what you understood diverge silently."""
+    for path, needle in ((SKILLS / "setup" / "SKILL.md", "say back what you understood"),
+                         (SKILLS / "setup" / "SKILL.ru.md", "перескажи, что ты понял")):
+        assert needle in path.read_text(encoding="utf-8").lower(), path.name
+
+
 # ------------------------------------------------- what installing does NOT do
 
 
