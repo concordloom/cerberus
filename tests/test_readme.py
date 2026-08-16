@@ -363,9 +363,13 @@ def test_the_page_admits_an_agent_may_invoke_it_unasked():
     what broke the promise — it names "done" and "it works" as the moment the
     skill is for, which is exactly what makes an agent reach for it.
     """
+    # Round three of #66: the fact moved into the first paragraph, because a
+    # reader who decided on the headline never reached the caveat two hundred
+    # lines down — and what it cancels is the property that made the tool look
+    # safe. So the check is that it appears early, not merely that it appears.
     for path, phrases in (
-        (README, ("may also reach for them", "judgement")),
-        (README_RU, ("взяться за них и сам", "суждение")),
+        (README, ("may reach for one when you say", "of its own accord")),
+        (README_RU, ("может взяться за них сам", "агент может взяться за них сам")),
     ):
         # Collapsed, because these phrases wrap across lines and a guard that
         # breaks when a paragraph is rewrapped is a guard nobody keeps.
@@ -811,8 +815,11 @@ def test_the_quick_start_holds_no_install_commands():
 #: example became the Kubernetes one it had always described, and `NOT READY`
 #: got shown instead of promised. Two bounds had accumulated by #64, from #58
 #: and #62, checking the same thing with different numbers; this is the one.
+#: Round three added the fifth config key as a shown example and a paragraph on
+#: what `notes` is not — a third reader wrote a wrong config because "All of
+#: it:" preceded four keys and the fifth arrived seventy lines later.
 MAX_SECTIONS = 11
-MAX_LINES = {"README.md": 195, "README.ru.md": 199}
+MAX_LINES = {"README.md": 200, "README.ru.md": 205}
 
 
 def test_the_page_does_not_grow_on_its_own():
@@ -1081,6 +1088,60 @@ def test_telling_the_agent_to_stop_has_a_method():
     for path, needle in ((README, "don't run cerberus unless i ask"),
                          (README_RU, "не запускай цербера, пока не попрошу")):
         assert needle in flat(path.read_text(encoding="utf-8")), f"{path.name}: {needle!r}"
+
+
+def test_the_first_paragraph_does_not_promise_more_than_the_page_delivers():
+    """Round three of #66. "No hook, no daemon: they run when asked" was
+    cancelled two hundred lines later, in a subordinate clause, under a
+    reassuring heading.
+
+    A reader who decides from the headline never gets there, and what is
+    cancelled is the determinism that made running shell commands with their
+    credentials look safe.
+    """
+    for path, needle in ((README, "may reach for one when you say"),
+                         (README_RU, "может взяться за них сам")):
+        text = path.read_text(encoding="utf-8")
+        first = flat(text.split("## ")[0])
+        assert needle.lower() in first, (
+            f"{path.name}: the caveat is not in the opening, where the promise is")
+
+
+def test_the_config_example_does_not_claim_to_be_complete_while_omitting_a_key():
+    """Round three. "All of it:" preceded four keys; the fifth was seventy lines
+    down, and a reader said he no longer knew what else might exist."""
+    for path in (README, README_RU):
+        text = path.read_text(encoding="utf-8")
+        assert "All of it:" not in text and "Целиком:" not in text, (
+            f"{path.name}: claims completeness")
+        assert "stage2_unreachable" in text
+        blocks = [b for lang, b in fenced(text) if lang == "json"]
+        assert any("stage2_unreachable" in b for b in blocks), (
+            f"{path.name}: the fifth key is described but never shown as JSON")
+
+
+def test_nothing_in_the_examples_triggers_a_deployment():
+    """Round three, and it was mine: the round-two example ran
+    `gh workflow run deploy.yml` — verification starting a deploy as a side
+    effect, which a platform engineer called a change-management incident.
+    """
+    for path in (README, README_RU):
+        text = path.read_text(encoding="utf-8")
+        for lang, body in fenced(text):
+            for shape in ("workflow run", "helm upgrade", "kubectl apply",
+                          "git push origin"):
+                assert shape not in body, (
+                    f"{path.name}: an example performs a deployment: {shape!r}")
+
+
+def test_the_page_says_notes_is_not_a_permission_boundary():
+    """Round three. The only stated protection for production was a sentence in
+    a free-text field, addressed to a language model."""
+    for path, needles in ((README, ("not a permission boundary", "keep secrets out")),
+                          (README_RU, ("не граница прав", "секреты в файл не"))):
+        text = flat(path.read_text(encoding="utf-8"))
+        for needle in needles:
+            assert needle in text, f"{path.name}: {needle!r}"
 
 
 def _main() -> int:

@@ -12,8 +12,9 @@
 # cerberus
 
 **Your agent has to try to break its own change before it can tell you it
-works.** Three skills it reads and follows. No hook, no daemon: they run when
-asked.
+works.** Three skills it reads and follows. No hook and no daemon — though an
+agent that has read them may reach for one when you say "done", which you can
+tell it not to.
 
 [Русская версия](README.ru.md) · [The gate's own instructions](plugins/cerberus/skills/cerberus/SKILL.md) ([ru](plugins/cerberus/skills/cerberus/SKILL.ru.md))
 
@@ -115,7 +116,7 @@ Verdict: NOT READY
 
 One file, and the skills are its only readers. New projects get it in the root;
 installs from before 2.1 keep theirs in `.claude/cerberus.json` or
-`.codex/cerberus.json` and are still read there. All of it:
+`.codex/cerberus.json` and are still read there. The four keys, and `stage2_unreachable` below is the fifth and last:
 
 ```json
 {
@@ -123,7 +124,7 @@ installs from before 2.1 keep theirs in `.claude/cerberus.json` or
     "artifact_kind": "service",
     "stage1": ["go build ./...", "go test ./... -race", "golangci-lint run"],
     "stage2": [
-      "gh workflow run deploy.yml --ref $(git branch --show-current) && gh run watch --exit-status $(gh run list --workflow deploy.yml --limit 1 --json databaseId --jq '.[0].databaseId')",
+      "gh run watch --exit-status $(gh run list --commit $(git rev-parse HEAD) --limit 1 --json databaseId --jq '.[0].databaseId')",
       "kubectl -n dev rollout status deploy/orders --timeout=5m",
       "curl -fsS https://orders.dev.internal/version | jq -e --arg sha \"$(git rev-parse HEAD)\" '.commit == $sha'",
       "curl -fsS https://orders.dev.internal/orders -d @testdata/order.json | jq -e '.status == \"accepted\"'"
@@ -196,22 +197,30 @@ with `--draft-stage2`. It prints a draft with blanks to fill in and the traps
 named, and writes nothing. For the other five kinds there is no draft; the table
 above is the specification.
 
-**If there is genuinely nowhere to deploy**, do not leave `stage2` empty — add
-`"stage2_unreachable": "no dev cluster; released by hand"` beside it. Every
-verdict then narrows to `READY scope: Stage 1` and quotes your reason. Once
-`stage2` *is* filled in, running it is no longer optional.
+**If there is genuinely nowhere to deploy**, leave `stage2` as `[]` and add a
+fifth key next to it inside `verification`:
+
+```json
+"stage2": [],
+"stage2_unreachable": "GitLab deploys from the default branch only; no preview namespace yet"
+```
+
+Every verdict then narrows to `READY scope: Stage 1` and quotes your reason.
+Once `stage2` *is* filled in, running it is no longer optional.
 
 ## What it does to your session
 
 No hook, no background process, no file of yours edited by installing. The
-skills are text your agent reads when you ask for them, and it may also reach
-for them when you say "done" — that is the agent's judgement. Tell it not to
-the way you tell it anything else: "don't run cerberus unless I ask".
+skills are text your agent reads when you ask for them, and — as the first
+paragraph says — an agent may reach for them on "done" of its own accord. Tell
+it not to the way you tell it anything else: "don't run cerberus unless I ask".
 
-What does execute: `setup` runs candidate check commands in your project to find
-out which pass. Stage 2 runs the commands **you** put in `stage2`, with whatever
-credentials your shell has — if that reaches a real cluster, say so in `notes`
-and point it at a safe one.
+What does execute: `setup` runs candidate check commands in your project — test
+runners, linters, a build — to find out which pass. Stage 2 runs the commands
+**you** put in `stage2`, with whatever credentials your shell has. `notes` is a
+note to the agent, not a permission boundary: if your kubeconfig can reach
+production, so can a command in `stage2`. Point them at a throwaway environment,
+and keep secrets out of the file — it is committed.
 
 The tooling calls no model and fetches nothing at runtime, though installing
 downloads from GitHub and a Stage 2 for a `model-boundary` artifact is a real
