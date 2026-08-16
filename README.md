@@ -52,12 +52,16 @@ Checks I ran here and wrote down:
 
 ## Now what?
 
-Nothing happens on its own, and that is deliberate.
-
 Ask for the cerberus skill when a change deserves it — before a release, after
 a fix you are not sure of, whenever "it works" is about to be said out loud.
 The agent then runs the three stages against your project's own checks and
 comes back with a verdict instead of a claim.
+
+Your agent may also reach for it unasked. The skill's description names the
+words "done" and "it works" as the moment it is for, and an agent that has read
+that will sometimes act on it — Codex did, on a request that mentioned neither
+verification nor cerberus. That is the agent exercising judgement about your
+work, not something this project switched on, and you can tell it not to.
 
 Here is a real one, from a session asked to add a function *and report it done*:
 
@@ -82,14 +86,15 @@ deciding *when* it is worth paying is left to you.
 
 ## What it does to your session
 
-Nothing, until you ask. There is no hook, no background process, and no file of
-yours that installing edits — the whole delivery is three skill directories and
-one config you own.
+Nothing runs. There is no hook, no background process, and no file of yours
+that installing edits — the whole delivery is three skill directories and one
+config you own. Uninstalling is deleting them.
 
 That is deliberate. A gate that interrupts on its own guess about which turns
-matter gets switched off, and a gate that is off protects nothing. You know
-which change deserves an hour of adversarial verification; nothing shipped here
-can know that better than you.
+matter gets switched off, and a gate that is off protects nothing. So the
+judgement is left where it already lives — with you, and with the agent you are
+working with, which can weigh what it is about to claim in a way no file
+matcher can.
 
 No model is called and nothing goes over the network. The setup step runs your
 own checks locally, once, and writes down which ones passed.

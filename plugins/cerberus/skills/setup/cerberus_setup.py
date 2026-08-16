@@ -288,8 +288,8 @@ def report_state(root: pathlib.Path, kind: str = "library", first_run: bool = Tr
 
     Split by run rather than shared, because the two readers are different
     people. Someone who has just installed a thing called a verification gate
-    reasonably expects something to start happening, and has to be told nothing
-    will. Someone running it a second time already knows, and printing it again
+    reasonably expects something to start happening, and has to be told what
+    was and was not installed — no hook, and a skill to call. Someone running it a second time already knows, and printing it again
     directly under "nothing was changed" left the only paragraph with content
     followed by one with none.
     """
@@ -298,7 +298,7 @@ def report_state(root: pathlib.Path, kind: str = "library", first_run: bool = Tr
 
     if first_run:
         print()
-        print("Nothing runs by itself — ask for the cerberus skill by name.")
+        print("No hook was installed — ask for the cerberus skill by name when it matters.")
     try:
         stage2 = json.loads(config.read_text(encoding="utf-8"))["verification"]["stage2"]
     except Exception:

@@ -62,8 +62,8 @@ configuration can look tidy.
 ## Say it in ordinary words
 
 Whoever is being set up did not ask for vocabulary. Tell them what was written,
-what is still missing, and that nothing runs by itself — the skills are theirs
-to invoke by name, and choosing when is their call, not ours. Everything else
+what is still missing, and that no hook was installed — the skills are theirs
+to invoke by name, and their agent may reach for one too. Everything else
 belongs in the other two skills.
 
 ## Self-check before saying it is set up

@@ -102,7 +102,7 @@ def test_the_installer_command_runs():
         )
         assert proc.returncode == 0, flags + "\n" + proc.stdout + proc.stderr
         assert (root / "cerberus.json").exists(), proc.stdout
-        assert "Nothing runs by itself" in proc.stdout, proc.stdout
+        assert "No hook was installed" in proc.stdout, proc.stdout
 
 
 def test_the_url_the_installer_command_fetches_is_alive():
@@ -287,21 +287,83 @@ def test_every_kind_on_the_page_has_advice_in_the_code():
     assert not missing, f"documented kinds with no advice: {missing}"
 
 
-def test_the_page_says_nothing_runs_by_itself():
-    """The load-bearing sentence since #33, on both pages.
+def test_the_page_says_this_project_installs_nothing_that_runs():
+    """#33's claim, stated as the true one.
 
-    Someone deciding whether to install this needs to know, before installing,
-    whether it will interrupt them. The answer is now "no, ever" — and a page
-    that leaves that implicit is read as the old behaviour by anyone who saw an
-    earlier version.
+    Someone deciding whether to install needs to know what it puts in their
+    session. The answer is: no hook, no process, no edit to their files — which
+    is a fact about this project and stays true regardless of what an agent
+    then chooses to do.
     """
     for path, phrases in (
-        (README, ("nothing happens on its own", "nothing, until you ask")),
-        (README_RU, ("само по себе не происходит ничего", "ничего, пока вы не попросите")),
+        (README, ("no hook", "no background process")),
+        (README_RU, ("ни хука", "ни фонового процесса")),
     ):
         text = path.read_text(encoding="utf-8").lower()
         for phrase in phrases:
             assert phrase in text, f"{path.name}: {phrase!r}"
+
+
+def test_the_page_admits_an_agent_may_invoke_it_unasked():
+    """#43. Codex did, on a prompt that named neither cerberus nor verification.
+
+    The page promised silence three times and the skill's own description is
+    what broke the promise — it names "done" and "it works" as the moment the
+    skill is for, which is exactly what makes an agent reach for it.
+    """
+    for path, phrases in (
+        (README, ("may also reach for it unasked", "judgement")),
+        (README_RU, ("может взяться за него и сам", "суждение")),
+    ):
+        text = path.read_text(encoding="utf-8").lower()
+        for phrase in phrases:
+            assert phrase in text, f"{path.name}: {phrase!r}"
+
+
+def test_nothing_promises_that_the_skill_stays_quiet():
+    """#43, as a shape rather than as the three strings edited that day.
+
+    Pinning the old wording would have pinned the redaction, not the
+    requirement — the same mistake as a line limit set where nothing could
+    reach it. What must not come back is any sentence promising that this will
+    not act until asked.
+    """
+    shapes = [
+        re.compile(r"nothing\s+(?:happens|runs|will happen)\s+(?:on its own|by itself|until)", re.I),
+        re.compile(r"nothing\s+invokes?\s+this", re.I),
+        re.compile(r"(?:stays?|remains?)\s+(?:quiet|silent)\s+until", re.I),
+        re.compile(r"nothing,?\s+until you ask", re.I),
+        re.compile(r"(?:само по себе|сам[оа]?)\s+ничего\s+не\s+(?:происходит|запускается)", re.I),
+        re.compile(r"никто\s+не\s+вызовет", re.I),
+        re.compile(r"ничего,?\s+пока вы не попросите", re.I),
+    ]
+    offenders = []
+    for path in sorted(ROOT.rglob("*.md")):
+        if ".git" in path.parts or path.name in ("CHANGELOG.md",):
+            continue
+        if path.name == "test_readme.py":
+            continue
+        text = path.read_text(encoding="utf-8")
+        for shape in shapes:
+            found = shape.search(text)
+            if found:
+                offenders.append(f"{path.relative_to(ROOT)}: {found.group(0)!r}")
+    assert not offenders, "promising silence again:\n  " + "\n  ".join(offenders)
+
+
+def test_the_skill_does_not_contradict_its_own_description():
+    """#43, point 4. The two lines sat four lines apart and argued.
+
+    `description` names the trigger words that make an agent pick this up;
+    `when_to_use` said nothing would pick it up. Whichever an agent believed,
+    the file was wrong.
+    """
+    for path in (ROOT / "plugins/cerberus/skills/cerberus/SKILL.md",
+                 ROOT / "plugins/cerberus/skills/cerberus/SKILL.ru.md"):
+        head = path.read_text(encoding="utf-8").split("---")[1]
+        assert re.search(r"when_to_use:", head), path.name
+        assert not re.search(r"[Nn]othing invokes|[Нн]икто не вызовет", head), (
+            f"{path.name}: when_to_use denies what description is written to cause")
 
 
 def test_the_page_never_promises_an_automatic_refusal():
