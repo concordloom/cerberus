@@ -102,7 +102,7 @@ def test_the_installer_command_runs():
         )
         assert proc.returncode == 0, flags + "\n" + proc.stdout + proc.stderr
         assert (root / "cerberus.json").exists(), proc.stdout
-        assert "Nothing here runs by itself" in proc.stdout, proc.stdout
+        assert "Nothing runs by itself" in proc.stdout, proc.stdout
 
 
 def test_the_url_the_installer_command_fetches_is_alive():

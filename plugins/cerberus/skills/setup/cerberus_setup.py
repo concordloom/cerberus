@@ -298,18 +298,14 @@ def report_state(root: pathlib.Path, kind: str = "library", first_run: bool = Tr
 
     if first_run:
         print()
-        print("Nothing here runs by itself. The skills are yours to invoke by name —")
-        print("ask for the cerberus skill before saying a change works, and it will")
-        print(f"read the checks from {where} and run them.")
+        print("Nothing runs by itself — ask for the cerberus skill by name.")
     try:
         stage2 = json.loads(config.read_text(encoding="utf-8"))["verification"]["stage2"]
     except Exception:
         stage2 = []
     if not stage2:
-        print()
-        print("One thing is still missing: the last check, the one that runs where")
-        print(f"this really ships. Put it in {where} —")
-        print(f"{STAGE2_HINT_BY_KIND.get(kind, STAGE2_HINT_BY_KIND['library'])}.")
+        hint = STAGE2_HINT_BY_KIND.get(kind, STAGE2_HINT_BY_KIND["library"])
+        print(f"Still missing — stage2 in {where}: {hint}.")
     return 0
 
 
@@ -347,8 +343,7 @@ def main(argv: list[str] | None = None) -> int:
         if not is_the_installers_copy(existing):
             # Never modified. Its checks are run and reported, the ones found
             # here are printed beside them, and the user decides.
-            print("This project already has its own configuration, so nothing was")
-            print("changed. Here is how it stands.")
+            print("Already configured, so nothing was changed. How it stands:")
             print()
             listed = verification.get("stage1") or []
             still_failing = not listed
@@ -364,8 +359,7 @@ def main(argv: list[str] | None = None) -> int:
                         print(f"  {label} {cmd} — {first}")
                         still_failing = True
             else:
-                print("It lists no checks at all, so there is nothing to run before a")
-                print("claim that the work is done.")
+                print("It lists no checks at all, so there is nothing to run.")
             if runners:
                 # Only what the configuration does not already have. Offering a
                 # project a check it already lists reads as a suggestion, costs
@@ -376,7 +370,7 @@ def main(argv: list[str] | None = None) -> int:
                          if code == 0 and c not in already]
                 if found:
                     print()
-                    print("Checks I found here that it does not list, and ran:")
+                    print("Found here and ran, not in its list:")
                     for cmd in found:
                         print(f"  ok       {cmd}")
             return report_state(root, verification.get("artifact_kind") or kind or "library",
@@ -410,28 +404,19 @@ def main(argv: list[str] | None = None) -> int:
 
     if len(runners) > 1:
         others = ", ".join(r["name"] for r in runners[1:])
-        print(f"This project uses several toolchains: {runners[0]['name']}, {others}.")
-        print(f"I took it as a {runners[0]['name']} {kind} — change that if it is wrong.")
+        print(f"Set up: {runners[0]['name']} {kind} (also here: {others}) — change that if it is wrong.")
     else:
-        print(f"Set up for this {runners[0]['name']} project.")
-        print(f"I took it as a {kind} — change that if it is wrong.")
+        print(f"Set up: {runners[0]['name']} {kind} — change that if it is wrong.")
     print()
-    print("Checks I ran here, and that the skill will run before anyone says the")
-    print("work is done:")
+    print("Checks I ran here and wrote down:")
     for cmd in passing:
         print(f"  ok       {cmd}")
     for cmd, _ in broken:
-        print(f"  FAILING  {cmd} — it ran and did not pass, so it was left out")
+        print(f"  FAILING  {cmd} — ran and did not pass, left out")
     for cmd in missing:
-        print(f"  absent   {cmd} — not installed here, so it was left out")
+        print(f"  absent   {cmd} — not installed here, left out")
     for cmd in timed_out:
-        print(f"  too slow {cmd} — gave up waiting, so it was left out")
-    if broken:
-        # Beside the FAILING line it refers to, not below the advice. It was
-        # the fourth thing the reader reached, under a paragraph about how to
-        # invoke a skill — the most urgent sentence in the output, buried.
-        print("Your own tests are failing right now — that is worth a look first.")
-
+        print(f"  too slow {cmd} — gave up waiting, left out")
     if args.check:
         print()
         print(f"Nothing was written. Drop --check to save this to {written}.")

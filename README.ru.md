@@ -45,10 +45,9 @@ curl -fsSL https://raw.githubusercontent.com/concordloom/cerberus/main/install.s
 запуском и записывает те, что прошли:
 
 ```text
-Set up for this Python project.
+Set up: Python library — change that if it is wrong.
 
-Checks I ran here, and that the skill will run before anyone says the
-work is done:
+Checks I ran here and wrote down:
   ok       pytest -q
 ```
 
