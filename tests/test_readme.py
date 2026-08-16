@@ -619,6 +619,78 @@ def test_the_russian_page_explains_why_the_sample_output_is_english():
     assert "пересказ" in text, "it never says the agent retells it"
 
 
+def test_the_badges_describe_the_routes_the_page_actually_gives():
+    """#58. `Codex — skill` outlived the route it named, at the top of the page."""
+    for path in (README, README_RU):
+        text = path.read_text(encoding="utf-8")
+        badges = re.findall(r'shields\.io/badge/([^"]+)', text)
+        assert any("Codex-plugin" in b for b in badges), f"{path.name}: {badges}"
+        assert not any("Codex-skill" in b for b in badges), (
+            f"{path.name}: the badge still names the removed route")
+
+
+def test_no_path_is_handed_out_without_saying_which_install_it_belongs_to():
+    """#58's mixed cell: the recommended route, and the page got it wrong.
+
+    `python3 .claude/skills/setup/cerberus_setup.py` exists only after
+    `install.sh`. A plugin user has it under the plugin's cache, and that was
+    the one sentence telling them how to run setup again.
+    """
+    for path in (README, README_RU):
+        text = path.read_text(encoding="utf-8")
+        lines = text.splitlines()
+        for n, line in enumerate(lines):
+            if ".claude/skills/setup" not in line:
+                continue
+            # The same sentence, not a nearby paragraph: a four-line window
+            # matched the word "install" from "the install step above" and
+            # passed on a bare `Run it again with <path>`.
+            here = (line + " " + (lines[n + 1] if n + 1 < len(lines) else "")).lower()
+            assert "installer" in here or "установщик" in here, (
+                f"{path.name}:{n + 1}: a path given with no word about which route has it")
+
+
+def test_the_page_knows_stage2_can_be_declared_unreachable():
+    """#58, point 3. The page described the world before #51.
+
+    Following it, a reader leaves `stage2` empty and meets a `Not proven` that
+    could have been a recorded decision with a reason.
+    """
+    for path in (README, README_RU):
+        text = path.read_text(encoding="utf-8")
+        assert "stage2_unreachable" in text, f"{path.name}: never mentions the key"
+        assert "READY scope: Stage 1" in text, f"{path.name}: never says what it does to a verdict"
+
+
+def test_the_page_says_a_filled_stage2_is_no_longer_optional():
+    for path, needle in ((README, "no longer optional"),
+                         (README_RU, "уже обязательно")):
+        assert needle in path.read_text(encoding="utf-8").lower(), path.name
+
+
+def test_someone_who_deploys_from_ci_can_find_the_draft():
+    """#58, point 4. The most useful thing here was invisible from the front page."""
+    for path, needles in ((README, ("--draft-stage2", "waiting is not verifying")),
+                          (README_RU, ("--draft-stage2", "ожидание проверкой не является"))):
+        text = path.read_text(encoding="utf-8").lower()
+        for needle in needles:
+            assert needle.lower() in text, f"{path.name}: {needle!r}"
+
+
+def test_the_fix_did_not_grow_the_page():
+    """A correction made by appending is a different failure with the same name.
+
+    Eleven sections already compete for attention; a twelfth beats the ones
+    that work. So the bound is on sections, and on how far the line count may
+    move for four corrections.
+    """
+    for path, lines in ((README, 160), (README_RU, 162)):
+        text = path.read_text(encoding="utf-8")
+        assert len(re.findall(r"^## ", text, re.M)) <= 10, f"{path.name}: a section was added"
+        body = [l for l in text.splitlines() if l.strip()]
+        assert len(body) <= lines, f"{path.name}: {len(body)} lines, bound {lines}"
+
+
 def _main() -> int:
     failures = 0
     for name, fn in sorted(globals().items()):

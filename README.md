@@ -6,7 +6,7 @@
   <a href="https://github.com/concordloom/cerberus/actions/workflows/ci.yml"><img src="https://github.com/concordloom/cerberus/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT">
   <img src="https://img.shields.io/badge/Claude%20Code-plugin-8a6cff" alt="Claude Code plugin">
-  <img src="https://img.shields.io/badge/Codex-skill-10a37f" alt="Codex skill">
+  <img src="https://img.shields.io/badge/Codex-plugin-10a37f" alt="Codex plugin">
 </p>
 
 # cerberus
@@ -135,9 +135,15 @@ you, so it is the one field `cerberus.json` leaves to you:
 The value goes in `artifact_kind` — `service`, `library`, `cli`, `chart`,
 `migration`, `model-boundary`, `plugin` — one row each, in that order.
 
-If you have nothing to deploy, Stage 2 narrows to consuming the artifact you
-built in a clean environment, and everything past that is declared `Not proven`
-rather than assumed.
+If your deploy runs in CI, Stage 2 is push, wait for the pipeline, and then
+prove the instance answering you is *this* commit — waiting is not verifying.
+`python3 <setup> --draft-stage2` reads your `helm/`, manifests, compose file or
+deploy job and prints those commands, with the traps in them named.
+
+If there is genuinely nowhere to deploy, do not leave `stage2` empty: write
+`stage2_unreachable` with the reason. Every verdict then narrows to
+`READY scope: Stage 1` and quotes it. Empty reads as nobody got round to it; a
+reason reads as a decision.
 
 ## What goes in cerberus.json
 
@@ -148,8 +154,13 @@ to be reached past that boundary, and `notes` is anything the agent should know
 
 No program reads any of it. The skills do, and getting it wrong costs an agent
 some wasted work rather than silently weakening anything. Setup writes
-`artifact_kind` and `stage1` after running the commands; `stage2` is left empty
-on purpose, because a placeholder that exits 0 is worse than an obvious gap.
+`artifact_kind` and `stage1` after running the commands; `stage2` it drafts but
+never writes, because a placeholder that exits 0 is worse than an obvious gap.
+Once you do fill it in, running it is no longer optional — that is the point of
+writing it down.
+
+Upgrading and removing are the plugin commands you installed with: `/plugin` or
+`codex plugin`, by name. The installer route is the files themselves.
 
 ## The critic, which is not the gate
 
@@ -162,9 +173,10 @@ Neither covers the other: work can be right while its explanation is wrong, and
 a right explanation proves nothing ever ran.
 
 The third, `setup`, is the install step above. It works out what your checks are
-by running them, writes them down, and stops. Run it again any time with
-`python3 .claude/skills/setup/cerberus_setup.py`, or ask the agent for it by
-name.
+by running them, writes them down, and stops. Ask the agent for it by name to
+run it again — it knows where its own script is, which differs by how you
+installed: inside the plugin, or in `.claude/skills/setup/` if you used the
+installer.
 
 ## Why
 

@@ -6,7 +6,7 @@
   <a href="https://github.com/concordloom/cerberus/actions/workflows/ci.yml"><img src="https://github.com/concordloom/cerberus/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT">
   <img src="https://img.shields.io/badge/Claude%20Code-plugin-8a6cff" alt="Плагин Claude Code">
-  <img src="https://img.shields.io/badge/Codex-skill-10a37f" alt="Навык Codex">
+  <img src="https://img.shields.io/badge/Codex-plugin-10a37f" alt="Плагин Codex">
 </p>
 
 # cerberus
@@ -137,9 +137,15 @@ The oracle can return BROKEN. I mutated the installed file to `return b - a`
 Значение пишется в `artifact_kind` — `service`, `library`, `cli`, `chart`,
 `migration`, `model-boundary`, `plugin` — по строке на каждое, в том же порядке.
 
-Если разворачивать нечего, стадия 2 сужается до одного: взять то, что
-собралось, поставить в чистое окружение и воспользоваться этим со стороны. Всё,
-что дальше, объявляется `Not proven`, а не предполагается.
+Если раскатывает CI, стадия 2 — это запушить, дождаться пайплайна и **доказать,
+что отвечает именно этот коммит**: ожидание проверкой не является.
+`python3 <скрипт setup> --draft-stage2` читает ваши `helm/`, манифесты, compose
+или джобу деплоя и печатает эти команды, называя ловушки в них.
+
+Если разворачивать правда некуда, не оставляйте `stage2` пустым: впишите
+`stage2_unreachable` с причиной. Тогда каждый вердикт сужается до
+`READY scope: Stage 1` и цитирует её. Пустота читается как «руки не дошли»,
+причина — как решение.
 
 ## Что лежит в cerberus.json
 
@@ -150,8 +156,13 @@ The oracle can return BROKEN. I mutated the installed file to `return b - a`
 
 Ни одна программа это не читает — читают навыки, и ошибка стоит агенту
 напрасной работы, а не тихого ослабления чего-либо. Настройка пишет
-`artifact_kind` и `stage1`, предварительно прогнав команды; `stage2` намеренно
-остаётся пустым, потому что заглушка, завершающаяся нулём, хуже явного пробела.
+`artifact_kind` и `stage1`, предварительно прогнав команды; `stage2` она
+набрасывает, но не записывает, потому что заглушка, завершающаяся нулём, хуже
+явного пробела. А когда вы его заполнили, выполнять его уже обязательно — ради
+этого его и записывают.
+
+Обновление и удаление — те же команды плагина, которыми ставили: `/plugin` или
+`codex plugin`, по имени. У маршрута с установщиком это сами файлы.
 
 ## Критик — это про другое
 
@@ -164,8 +175,10 @@ The oracle can return BROKEN. I mutated the installed file to `return b - a`
 верное объяснение не доказывает, что хоть что-то запускалось.
 
 Третий, `setup`, — это шаг установки выше. Он выясняет ваши проверки запуском,
-записывает их и на этом останавливается. Запустить заново можно в любой момент:
-`python3 .claude/skills/setup/cerberus_setup.py` — или попросить агента по имени.
+записывает их и на этом останавливается. Чтобы запустить заново, попросите
+агента по имени: он знает, где лежит его собственный скрипт, а лежит он
+по-разному — внутри плагина или в `.claude/skills/setup/`, если ставили
+установщиком.
 
 ## Зачем
 
