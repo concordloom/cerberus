@@ -1,7 +1,7 @@
 ---
 description: End a discussion by opening the issue it was heading towards.
 argument-hint: [what the discussion was about, optional]
-allowed-tools: Bash(gh issue create:*), Bash(gh issue view:*), Bash(gh label list:*)
+allowed-tools: Bash(gh issue create:*)
 ---
 
 A discussion has produced enough to be worked. Turn it into an issue, in the

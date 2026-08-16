@@ -15,6 +15,7 @@ Run with: python3 tests/test_commands.py
 from __future__ import annotations
 
 import pathlib
+import re
 import subprocess
 import sys
 import tempfile
@@ -212,6 +213,41 @@ def test_arguments_placeholder_is_not_a_positional():
 def test_the_real_commands_pass():
     proc = subprocess.run([sys.executable, str(CHECKER)], capture_output=True, text=True)
     assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def test_no_command_declares_a_tool_its_steps_never_use():
+    """#6, the half that is settled whichever way the field works.
+
+    `issue.md` declared `gh issue view` and `gh label list`; neither appeared in
+    its steps. Under every reading of `allowed-tools` — grant, decoration, or
+    the restriction it demonstrably is not — declaring something unused is
+    either a pointless pre-approval or a lie about what the command does.
+    """
+    for path in sorted((ROOT / ".claude" / "commands").glob("*.md")):
+        text = path.read_text(encoding="utf-8")
+        head, body = text.split("---", 2)[1], text.split("---", 2)[2]
+        line = re.search(r"^allowed-tools:.*$", head, re.M)
+        if not line:
+            continue
+        declared = re.findall(r"Bash\(([a-z][^:)]*)", line.group(0))
+        unused = [d.strip() for d in declared if d.strip() not in body]
+        assert not unused, f"{path.name}: declares but never uses {unused}"
+
+
+def test_a_command_that_spawns_an_adversary_declares_the_tool_for_it():
+    """#6, the other half. `work.md` step 4 requires an adversary and declared no Agent.
+
+    Safe under both open readings: if the field grants, this is required; if it
+    is decoration, it costs nothing. What is not safe is a command whose steps
+    need a tool its own header does not mention.
+    """
+    for path in sorted((ROOT / ".claude" / "commands").glob("*.md")):
+        text = path.read_text(encoding="utf-8")
+        head, body = text.split("---", 2)[1], text.split("---", 2)[2]
+        if not re.search(r"adversary|spawn", body, re.I):
+            continue
+        assert re.search(r"^allowed-tools:.*\bAgent\b", head, re.M), (
+            f"{path.name}: its steps require spawning an adversary, and Agent is not declared")
 
 
 def _main() -> int:
