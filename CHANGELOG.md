@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.1.2](https://github.com/concordloom/cerberus/compare/v3.1.1...v3.1.2) (2026-08-18)
+
+
+### Bug Fixes
+
+* hold onboarding at confirmation gates ([94c55ea](https://github.com/concordloom/cerberus/commit/94c55ea84e8b95bcb511bc6ce91228e7e7d715c3))
+
 ## [3.1.1](https://github.com/concordloom/cerberus/compare/v3.1.0...v3.1.1) (2026-08-18)
 
 
