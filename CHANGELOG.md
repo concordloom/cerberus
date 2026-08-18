@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.1.4](https://github.com/concordloom/cerberus/compare/v3.1.3...v3.1.4) (2026-08-18)
+
+
+### Bug Fixes
+
+* remember the operator language ([28e5d75](https://github.com/concordloom/cerberus/commit/28e5d754c8ba66c38ea50449d82b492f0528b2f8))
+
 ## [3.1.3](https://github.com/concordloom/cerberus/compare/v3.1.2...v3.1.3) (2026-08-18)
 
 
