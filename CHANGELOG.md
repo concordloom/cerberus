@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.1.1](https://github.com/concordloom/cerberus/compare/v3.1.0...v3.1.1) (2026-08-18)
+
+
+### Bug Fixes
+
+* make language selection the first turn ([b445902](https://github.com/concordloom/cerberus/commit/b44590279334ec976695e4c9b2b9b191138de50a))
+
 # [3.1.0](https://github.com/concordloom/cerberus/compare/v3.0.0...v3.1.0) (2026-08-18)
 
 
