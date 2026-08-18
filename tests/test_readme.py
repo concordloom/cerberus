@@ -703,6 +703,7 @@ def test_uninstalling_is_a_single_agent_prompt_and_not_in_the_install_section():
         ), prompts[0]
         assert "Which language would you like me to use" not in prompts[0]
         assert "cerberus.json" in prompts[0]
+        assert "confirmation" in prompts[0] or "подтверждения" in prompts[0]
         for old in ("/plugin", "codex plugin", ".claude/skills", ".agents/skills", "<details>"):
             assert old not in where, f"{path.name}: old uninstall route remains: {old}"
         installing = install_section(text).lower()

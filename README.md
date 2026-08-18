@@ -36,7 +36,9 @@ and leaves a short setup report.
 ```
 Uninstall Cerberus by following this complete raw guide.
 Read it in full; if your web tool summarizes, use curl or an equivalent.
-Use the language saved in cerberus.json:
+Use the language saved in cerberus.json.
+Inspect and show exact targets first; wait for my confirmation before removing anything.
+Then follow:
 https://raw.githubusercontent.com/concordloom/cerberus/main/docs/uninstall.md
 ```
 

@@ -36,7 +36,9 @@ https://raw.githubusercontent.com/concordloom/cerberus/main/docs/install.md
 ```
 Удали Cerberus по этой полной raw-инструкции.
 Прочитай её целиком; если веб-инструмент сокращает текст, используй curl или аналог.
-Используй язык из cerberus.json:
+Используй язык из cerberus.json.
+Сначала покажи точные цели; ничего не удаляй без моего подтверждения.
+Затем выполни:
 https://raw.githubusercontent.com/concordloom/cerberus/main/docs/uninstall.md
 ```
 

@@ -203,6 +203,18 @@ def test_uninstall_is_narrow_and_verifiable():
     assert "docs/install.md" in text
 
 
+def test_uninstall_confirmation_is_a_hard_turn_boundary():
+    text = _flat(UNINSTALL)
+    for phrase in (
+        "initial request to follow this guide authorizes discovery, not deletion",
+        "Confirmation is a hard turn boundary",
+        "end the discovery response with a short question naming the exact targets",
+        "do not run any removal command in that turn",
+        "only after the user explicitly confirms those targets",
+    ):
+        assert phrase in text, phrase
+
+
 def _main() -> int:
     failures = 0
     for name, fn in sorted(globals().items()):

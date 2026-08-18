@@ -34,6 +34,11 @@ paths explicitly. Do not use broad globs, unresolved variables, recursive
 deletion of an agent directory, or deletion of a shared symlink target. If a
 skill path is a symlink, remove only the link.
 
+The initial request to follow this guide authorizes discovery, not deletion.
+Confirmation is a hard turn boundary: end the discovery response with a short
+question naming the exact targets, and do not run any removal command in that
+turn. Continue only after the user explicitly confirms those targets.
+
 Configuration is preserved by default because it contains the project's Stage
 1 and Stage 2 delivery mechanics. Ask for separate explicit confirmation before
 deleting any Cerberus configuration.
