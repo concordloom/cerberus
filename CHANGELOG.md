@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.1.5](https://github.com/concordloom/cerberus/compare/v3.1.4...v3.1.5) (2026-08-18)
+
+
+### Bug Fixes
+
+* require uninstall target confirmation ([5178b9c](https://github.com/concordloom/cerberus/commit/5178b9cf7cffb6cdf82d71694730c0aa212f14e5))
+
 ## [3.1.4](https://github.com/concordloom/cerberus/compare/v3.1.3...v3.1.4) (2026-08-18)
 
 
