@@ -16,7 +16,9 @@
     "stage2": [
       "export CLAUDE_CONFIG_DIR=$(mktemp -d)",
       "claude plugin marketplace add concordloom/cerberus",
+      "claude plugin marketplace update concordloom",
       "claude plugin install cerberus@concordloom",
+      "claude plugin update cerberus@concordloom",
       "claude plugin details cerberus   # must list Skills (3)",
       "git clone https://github.com/concordloom/cerberus /tmp/src && cd /tmp/proj && sh /tmp/src/install.sh --claude",
       "# then check that no file the project owns was written or merged into",

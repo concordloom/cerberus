@@ -47,13 +47,16 @@ every detected agent merely because several CLIs exist.
 
 ```sh
 claude plugin marketplace add concordloom/cerberus
+claude plugin marketplace update concordloom
 claude plugin install cerberus@concordloom
+claude plugin update cerberus@concordloom
 ```
 
 ### Codex
 
 ```sh
 codex plugin marketplace add concordloom/cerberus
+codex plugin marketplace upgrade concordloom
 codex plugin add cerberus@concordloom
 ```
 
@@ -77,9 +80,14 @@ This needs Python 3.10+, `sh`, `tar`, and `curl` or `wget`. It installs under
 `.claude/skills/`, or `.agents/skills/` when that directory already exists.
 Re-running updates the skills and preserves existing configuration.
 
-Verify that `cerberus`, `cerberus-critic`, and `cerberus-setup` are present.
-If the host needs a restart to load them, say so and continue setup by reading
-the installed files. Never pretend the current session loaded a new skill.
+An existing installation is not proof that it is current. Refresh the
+marketplace snapshot, update or reinstall the plugin, and verify that its
+reported version matches the current marketplace entry. Then verify that
+`cerberus`, `cerberus-critic`, and `cerberus-setup` are present.
+
+If the host needs a restart to load an update, say so and continue setup by
+reading the newly installed files directly. Never pretend the current session
+loaded a new skill or keep following the older cached copy.
 
 ## 4. Explain the three stages briefly
 

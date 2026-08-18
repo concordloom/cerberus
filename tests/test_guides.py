@@ -46,13 +46,27 @@ def test_install_is_agent_agnostic_and_brings_the_complete_bundle():
     for skill in ("`cerberus`", "`cerberus-critic`", "`cerberus-setup`"):
         assert skill in text, skill
     for route in (
+        "claude plugin marketplace update concordloom",
         "claude plugin install cerberus@concordloom",
+        "claude plugin update cerberus@concordloom",
+        "codex plugin marketplace upgrade concordloom",
         "codex plugin add cerberus@concordloom",
         "Any other agent",
         "install.sh | sh",
     ):
         assert route in text, route
     assert "Do not install them one at a time" not in text
+
+
+def test_install_refreshes_an_existing_plugin_instead_of_accepting_stale_presence():
+    text = _flat(INSTALL)
+    for phrase in (
+        "existing installation is not proof that it is current",
+        "reported version matches the current marketplace entry",
+        "reading the newly installed files directly",
+        "older cached copy",
+    ):
+        assert phrase in text, phrase
 
 
 def test_install_reads_repository_rules_before_running_checks():
