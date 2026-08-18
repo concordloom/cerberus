@@ -13,13 +13,9 @@ Run with: python3 tests/test_readme.py
 from __future__ import annotations
 
 import json
-import json
-import os
 import pathlib
 import re
-import subprocess
 import sys
-import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 README = ROOT / "README.md"
@@ -75,98 +71,26 @@ def shell_blocks(text: str) -> list[str]:
     return [body for lang, body in fenced(text) if lang == ""]
 
 
-def console_blocks(text: str) -> list[str]:
-    """Blocks a shell can run, and therefore blocks a test can run."""
-    return [body for lang, body in fenced(text) if lang in ("console", "sh")]
-
-
-def documented_install() -> tuple[str, str]:
-    """The page's install command, split into the URL it fetches and its flags."""
-    blocks = console_blocks(install_section(README.read_text(encoding="utf-8")))
-    assert len(blocks) == 1, f"expected one runnable command, found {len(blocks)}"
-    command = blocks[0]
-    assert command.count("\n") == 0, "it must be one line to copy: " + command
-    url = re.search(r"https://\S+", command).group(0)
-    flags = command.split("-s --", 1)[1].strip() if "-s --" in command else ""
-    return url, flags
-
-
-def test_the_installer_command_runs():
-    """The page's command, run against **this** revision rather than main.
-
-    It used to be executed verbatim, fetching over the network. That check was
-    honest while a branch and main installed the same way and dishonest the
-    moment they did not: on a branch it ran main's installer and reported on
-    main. So the URL is checked separately for being alive, and the flags the
-    page documents are run against the script in this tree — which is the thing
-    the change under review can actually break.
-    """
-    _, flags = documented_install()
-    with tempfile.TemporaryDirectory() as d:
-        root = pathlib.Path(d)
-        (root / "tests").mkdir()
-        (root / "pyproject.toml").write_text(
-            '[project]\nname = "d"\nversion = "1"\n', encoding="utf-8"
-        )
-        (root / "tests" / "test_demo.py").write_text(
-            "def test_ok():\n    assert True\n", encoding="utf-8"
-        )
-        proc = subprocess.run(
-            f'sh "{ROOT / "install.sh"}" {flags}',
-            shell=True, cwd=str(root), capture_output=True, text=True, timeout=600,
-            env={k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"},
-        )
-        assert proc.returncode == 0, flags + "\n" + proc.stdout + proc.stderr
-        assert (root / "cerberus.json").exists(), proc.stdout
-        assert "No hook was installed" in proc.stdout, proc.stdout
-
-
-def test_the_url_the_installer_command_fetches_is_alive():
-    """The half of the one-liner the test above no longer executes."""
-    import urllib.request
-
-    url, _ = documented_install()
-    with urllib.request.urlopen(url, timeout=30) as response:
-        assert response.status == 200, url
-        assert b"cerberus" in response.read(2000), url
-
-
-def test_the_agent_commands_are_the_documented_ones():
-    """Neither pair can run here — both need a session and credentials.
-
-    So their text is pinned. The Codex pair used to be a `$skill-installer`
-    line with a long URL; it installed one skill per invocation and had no
-    version to upgrade from. Codex reads the same marketplace, which was true
-    before anyone here checked.
-    """
+def test_the_agent_command_is_the_documented_one():
+    """The first route is one prompt for any coding agent, not a platform choice."""
     blocks = shell_blocks(install_section(README.read_text(encoding="utf-8")))
-    assert len(blocks) == 2, f"expected two install pairs, found {len(blocks)}"
-    plugin = [line.strip() for line in blocks[0].splitlines() if line.strip()]
-    assert plugin == [
-        "/plugin marketplace add concordloom/cerberus",
-        "/plugin install cerberus@concordloom",
-    ], plugin
-    codex = [line.strip() for line in blocks[1].splitlines() if line.strip()]
-    assert codex == [
-        "codex plugin marketplace add concordloom/cerberus",
-        "codex plugin add cerberus@concordloom",
-    ], codex
+    assert len(blocks) == 1, f"expected one agent prompt, found {len(blocks)}"
+    lines = [line.strip() for line in blocks[0].splitlines() if line.strip()]
+    assert lines == [
+        "Install and configure Cerberus for this project by following the instructions here:",
+        "https://raw.githubusercontent.com/concordloom/cerberus/main/docs/install.md",
+    ], lines
+    assert "Claude" not in blocks[0] and "Codex" not in blocks[0], blocks[0]
 
 
-def test_both_agents_install_the_same_way():
-    """The asymmetry was ours, not the tools'.
-
-    A reader comparing two different-looking routes cannot tell whether the
-    difference reflects the agents or our ignorance. It reflected ours.
-    """
+def test_both_languages_send_every_agent_to_the_same_guide():
     for path in (README, README_RU):
         blocks = shell_blocks(install_section(path.read_text(encoding="utf-8")))
-        assert len(blocks) == 2, f"{path.name}: {len(blocks)} agent blocks"
-        for block in blocks:
-            lines = [l for l in block.splitlines() if l.strip()]
-            assert len(lines) == 2, f"{path.name}: an agent gets {len(lines)} commands"
-            assert "marketplace add concordloom/cerberus" in lines[0], lines
-            assert "cerberus@concordloom" in lines[1], lines
+        assert len(blocks) == 1, f"{path.name}: {len(blocks)} agent prompts"
+        assert blocks[0].splitlines()[-1] == (
+            "https://raw.githubusercontent.com/concordloom/cerberus/main/docs/install.md"
+        ), blocks[0]
+        assert "Claude" not in blocks[0] and "Codex" not in blocks[0], blocks[0]
 
 
 def test_no_page_asks_anyone_to_install_the_skills_one_at_a_time():
@@ -209,7 +133,8 @@ def test_nothing_still_sends_codex_somewhere_else():
 def test_the_quick_start_shows_what_success_looks_like():
     body = quick_section(README.read_text(encoding="utf-8"))
     assert "```text" in body, "the reader is told to run something with no idea what it prints"
-    assert "Checks I ran here" in body, body
+    assert "Verdict: READY" in body, body
+    assert "Verdict: NOT READY" in body, body
 
 
 def test_the_quick_start_fits_above_the_fold():
@@ -442,50 +367,6 @@ def test_the_page_never_promises_an_automatic_refusal():
             assert not found, f"{path.name}: {found.group(0)!r}"
 
 
-def test_the_quoted_output_is_what_setup_really_prints():
-    """Every line the page shows must appear in what the script really says.
-
-    The page once showed a four-line refusal with five lines silently cut out
-    and no ellipsis, and the cut portion contradicted the paragraph beneath it.
-    The same rule now applies to the setup output the quick start quotes.
-    """
-    setup = ROOT / "plugins" / "cerberus" / "skills" / "cerberus-setup" / "cerberus_setup.py"
-    with tempfile.TemporaryDirectory() as d:
-        root = pathlib.Path(d)
-        (root / "tests").mkdir()
-        (root / "pyproject.toml").write_text(
-            '[project]\nname = "d"\nversion = "1"\n', encoding="utf-8")
-        (root / "tests" / "test_demo.py").write_text(
-            "def test_ok():\n    assert True\n", encoding="utf-8")
-        real = subprocess.run(
-            [sys.executable, str(setup)], cwd=str(root),
-            capture_output=True, text=True,
-            env={k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"},
-        ).stdout
-    flat = " ".join(real.split())
-
-    for path in (README, README_RU):
-        quoted = [b for lang, b in fenced(path.read_text(encoding="utf-8"))
-                  if lang == "text" and "Checks I ran here" in b]
-        assert quoted, f"{path.name}: the setup output is not shown at all"
-        saw_a_check = False
-        for line in quoted[0].splitlines():
-            stripped = line.strip()
-            if not stripped:
-                continue
-            # Which command passes depends on what is installed on this
-            # machine, so the example command is not pinned — only that the
-            # page shows the shape the script really prints, and that the
-            # script really printed one.
-            if stripped.startswith("ok "):
-                saw_a_check = True
-                continue
-            assert " ".join(stripped.split()) in flat, (
-                f"{path.name}: not in the real output: {stripped!r}")
-        assert saw_a_check, f"{path.name}: the example shows no check at all"
-        assert re.search(r"^  ok ", real, re.M), "setup printed no passing check to compare against"
-
-
 def test_both_languages_have_the_same_sections():
     # Comparing counts alone let a mutant give the Russian page nine sections
     # with different titles and none of the content. The order and the shape of
@@ -513,28 +394,14 @@ def test_the_russian_text_has_no_stray_scripts():
 
 
 def test_installing_is_explained_in_exactly_one_place():
-    # The page had install instructions in two places sixty lines apart, with
-    # the skills described twice between them. There is now no separate install
-    # section at all: everything that installs anything is in the quick start,
-    # and this fails if a second home for it reappears.
+    """The README is one agent prompt; platform mechanics live in the guide."""
     for path in (README, README_RU):
         text = path.read_text(encoding="utf-8")
-        # By the commands, not by the heading: a section titled "Now what?"
-        # once tripped a word-match and a section titled "Getting going" would
-        # not have. What must not come back is a second place that tells you
-        # how to install.
-        sections = re.split(r"^## ", text, flags=re.M)[1:]
-        # Only fenced commands count. Prose saying "a plugin install keeps its
-        # files under the plugin" is explaining, not instructing, and an
-        # earlier version of this counted it.
-        installing = []
-        for sec in sections:
-            commands = "\n".join(body for _, body in fenced(sec))
-            if re.search(r"/plugin install |codex plugin add|install\.sh \|", commands):
-                installing.append(sec.splitlines()[0])
-        assert len(installing) == 1, f"{path.name}: installing explained in {installing}"
         where = install_section(text)
-        assert "plugin install" in where and "codex plugin add" in where, path.name
+        assert len(shell_blocks(where)) == 1, path.name
+        assert "docs/install.md" in where, path.name
+        for old in ("/plugin", "codex plugin", "install.sh", "<details>", ".claude/skills"):
+            assert old not in where, f"{path.name}: old install route remains: {old}"
 
 
 def test_nothing_claims_an_agent_lacks_hooks():
@@ -617,40 +484,13 @@ def test_the_guard_leaves_the_english_page_alone():
         "the English page, where these terms are correct")
 
 
-def test_each_install_route_says_who_it_is_for():
-    """#54, point 6. Three blocks, no word on how they differ, so people pick by length.
-
-    Two of them install for you; the third installs into the repository, where
-    it can be committed and the whole team gets it.
-    """
-    for path, needles in ((README, ("for yourself", "your team gets them from git")),
-                          (README_RU, ("себе", "команда получила их из гита"))):
-        where = flat(install_section(path.read_text(encoding="utf-8")))
-        for needle in needles:
-            assert needle.lower() in where, f"{path.name}: {needle!r}"
-
-
-def test_the_russian_page_explains_why_the_sample_output_is_english():
-    """#54, point 7. Left bare it reads as an unfinished translation.
-
-    The output stays English by the decision on #41 — an agent retells it in
-    the reader's language, which is why string tables were not worth it. That
-    reasoning has to reach the reader, not only the issue tracker.
-    """
-    text = README_RU.read_text(encoding="utf-8").lower()
-    text = flat(README_RU.read_text(encoding="utf-8"))
-    assert "вывод английский" in text, "the English block sits there unexplained"
-    assert "перескажет" in text, "it never says the agent retells it"
-
-
 def test_the_badges_describe_the_routes_the_page_actually_gives():
-    """#58. `Codex — skill` outlived the route it named, at the top of the page."""
+    """The agent-agnostic entry should not advertise a specific host."""
     for path in (README, README_RU):
         text = path.read_text(encoding="utf-8")
         badges = re.findall(r'shields\.io/badge/([^"]+)', text)
-        assert any("Codex-plugin" in b for b in badges), f"{path.name}: {badges}"
-        assert not any("Codex-skill" in b for b in badges), (
-            f"{path.name}: the badge still names the removed route")
+        assert not any("Codex" in badge or "Claude" in badge for badge in badges), (
+            f"{path.name}: host-specific badge remains: {badges}")
 
 
 def test_no_path_is_handed_out_without_saying_which_install_it_belongs_to():
@@ -774,24 +614,11 @@ def test_the_install_section_contains_only_installing():
             if in_fence or not line.strip() or line.startswith(("#", "**", "|")):
                 continue
             prose.append(line)
-        # Two destinations, two lines each at most: what lands where, and what
-        # it needs. Raised by one when the Python requirement moved up here
-        # from line 216 of 225, where a Go engineer called it a disqualifying
-        # fact hidden at the bottom.
-        assert len(prose) <= 8, (
+        # The agent-first route adds a two-line explanation and one collapsed
+        # manual fallback. Keep the section bounded despite the extra route.
+        assert len(prose) <= 12, (
             f"{path.name}: {len(prose)} lines of prose in the install section:\n"
             + "\n".join(prose))
-
-
-def test_the_two_destinations_are_separate_and_labelled():
-    """#62, point 2. A reader must not have to infer which one they want."""
-    for path, needles in ((README, ("### For yourself", "### Into the repository")),
-                          (README_RU, ("### Себе", "### В репозиторий"))):
-        text = path.read_text(encoding="utf-8")
-        for needle in needles:
-            assert needle in text, f"{path.name}: {needle!r}"
-        assert text.index(needles[0]) < text.index(needles[1]), (
-            f"{path.name}: the personal route should come first")
 
 
 def test_the_quick_start_holds_no_install_commands():
@@ -818,8 +645,9 @@ def test_the_quick_start_holds_no_install_commands():
 #: Round three added the fifth config key as a shown example and a paragraph on
 #: what `notes` is not — a third reader wrote a wrong config because "All of
 #: it:" preceded four keys and the fifth arrived seventy lines later.
+#: Agent-led install and uninstall replaced all platform-specific README routes.
 MAX_SECTIONS = 11
-MAX_LINES = {"README.md": 200, "README.ru.md": 205}
+MAX_LINES = {"README.md": 190, "README.ru.md": 195}
 
 
 def test_the_page_does_not_grow_on_its_own():
@@ -837,21 +665,26 @@ def test_the_page_does_not_grow_on_its_own():
         assert len(body) <= lines, f"{path.name}: {len(body)} lines, bound {lines}"
 
 
-def test_uninstalling_is_a_section_and_removing_is_not_mentioned_anywhere_else():
+def test_uninstalling_is_a_single_agent_prompt_and_not_in_the_install_section():
     """#64. Two orphan sentences about removal, one per install route.
 
     They sat in the install section explaining how to undo the thing the reader
     had not done yet, which is the register the whole restructure removed.
     """
-    for path, heading, commands in (
-        (README, "## Uninstall", ("/plugin uninstall", "codex plugin remove")),
-        (README_RU, "## Удаление", ("/plugin uninstall", "codex plugin remove")),
+    for path, heading in (
+        (README, "## Uninstall"),
+        (README_RU, "## Удаление"),
     ):
         text = path.read_text(encoding="utf-8")
         assert heading in text, f"{path.name}: no {heading}"
         where = section(text, heading)
-        for command in commands:
-            assert command in where, f"{path.name}: {command!r} is not in {heading}"
+        prompts = shell_blocks(where)
+        assert len(prompts) == 1, f"{path.name}: expected one uninstall prompt"
+        assert prompts[0].splitlines()[-1] == (
+            "https://raw.githubusercontent.com/concordloom/cerberus/main/docs/uninstall.md"
+        ), prompts[0]
+        for old in ("/plugin", "codex plugin", ".claude/skills", ".agents/skills", "<details>"):
+            assert old not in where, f"{path.name}: old uninstall route remains: {old}"
         installing = install_section(text).lower()
         for word in ("uninstall", "remove", "удал"):
             assert word not in installing, (
@@ -925,46 +758,9 @@ def test_the_page_tells_the_reader_what_to_type():
     for path in (README, README_RU):
         quick = quick_section(path.read_text(encoding="utf-8"))
         prompts = [b for lang, b in fenced(quick) if lang == ""]
-        assert len(prompts) >= 2, f"{path.name}: {len(prompts)} prompts to copy"
+        assert len(prompts) == 1, f"{path.name}: {len(prompts)} prompts to copy"
         joined = " ".join(prompts).lower()
-        assert "setup" in joined and "cerberus" in joined, joined
-
-
-def test_uninstalling_names_both_places_the_installer_writes():
-    """#66. `install.sh` uses `.agents/skills/` when the project has `.agents/`.
-
-    The uninstall instructions named only `.claude/skills/`, so a Codex user
-    who ran the documented command was told to delete a directory they do not
-    have, and left the install in place.
-    """
-    for path, heading in ((README, "## Uninstall"), (README_RU, "## Удаление")):
-        body = section(path.read_text(encoding="utf-8"), heading)
-        for where in (".claude/skills/", ".agents/skills/"):
-            assert where in body, f"{path.name}: uninstall never mentions {where}"
-
-
-def test_what_the_install_needs_is_stated_where_the_command_is():
-    """Round two of #66. A Go engineer found the Python requirement at line 216
-    of 225 and called it a disqualifying fact hidden at the bottom.
-
-    Checking only the Requirements section passed while the reader had already
-    left, so the tools are asserted beside the command that needs them.
-    """
-    for path, heading in ((README, "## Install"), (README_RU, "## Установка")):
-        body = flat(section(path.read_text(encoding="utf-8"), heading))
-        for tool in ("python3", "curl", "tar"):
-            assert tool in body, (
-                f"{path.name}: the install section never says it needs {tool}")
-
-
-def test_requirements_names_everything_the_documented_install_needs():
-    """#66. "Python 3.10+ and nothing else" — the installer also needs curl, tar, sh."""
-    for path, heading in ((README, "## Requirements"), (README_RU, "## Требования")):
-        body = flat(section(path.read_text(encoding="utf-8"), heading))
-        for tool in ("curl", "wget", "tar"):
-            assert tool in body, f"{path.name}: requirements never mention {tool}"
-        assert "nothing else" not in body and "больше ничего" not in body, (
-            f"{path.name}: still claims nothing else is needed")
+        assert "cerberus" in joined, joined
 
 
 def test_the_draft_says_which_kinds_it_works_for():

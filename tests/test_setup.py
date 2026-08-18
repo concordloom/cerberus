@@ -227,6 +227,64 @@ def test_refuses_a_project_it_cannot_recognise():
     assert "Nothing was changed" in out, out
 
 
+def test_project_instructions_block_generic_toolchain_guesses():
+    root = project({
+        "go.mod": "module example.com/loomwatch\n\ngo 1.25\n",
+        "AGENTS.md": (
+            "Always use `app.sh` for build and test - never run `go build` "
+            "or `go test` directly.\n"
+        ),
+        "app.sh": "#!/bin/sh\nprintf 'wrapper ran\\n' >> wrapper.log\n",
+    })
+    code, out = run_setup(root)
+    assert code == 2, out
+    assert "Project instructions found: AGENTS.md" in out, out
+    assert "--stage1 COMMAND" in out, out
+    assert not (root / "wrapper.log").exists(), "ran a command before reading project rules"
+    assert not (root / "cerberus.json").exists(), "configured from a forbidden generic guess"
+
+
+def test_explicit_project_owned_checks_replace_generic_go_commands():
+    root = project({
+        "go.mod": "module example.com/loomwatch\n\ngo 1.25\n",
+        "Dockerfile": "FROM scratch\n",
+        "AGENTS.md": "Always use `app.sh` for build and test.\n",
+        "app.sh": "#!/bin/sh\nprintf '%s\\n' \"$1\" >> wrapper.log\n",
+    })
+    (root / "app.sh").chmod(0o755)
+    code, out = run_setup(
+        root,
+        "--stage1", "./app.sh --smoke",
+        "--artifact-kind", "service",
+    )
+    assert code == 0, out
+    assert (root / "wrapper.log").read_text(encoding="utf-8") == "--smoke\n"
+    stage1 = config_of(root)["verification"]["stage1"]
+    assert stage1 == ["./app.sh --smoke"], stage1
+    assert not any(command.startswith("go ") for command in stage1), stage1
+
+
+def test_one_red_project_owned_check_blocks_setup_instead_of_writing_a_subset():
+    root = project({
+        "go.mod": "module example.com/loomwatch\n\ngo 1.25\n",
+        "Dockerfile": "FROM scratch\n",
+        "AGENTS.md": "Always use `app.sh` for build and test.\n",
+        "app.sh": "#!/bin/sh\n[ \"$1\" = --smoke ]\n",
+    })
+    (root / "app.sh").chmod(0o755)
+    code, out = run_setup(
+        root,
+        "--stage1", "./app.sh --smoke",
+        "--stage1", "./app.sh --test",
+        "--artifact-kind", "service",
+    )
+    assert code == 2, out
+    assert "setup is blocked" in out, out
+    assert "ok       ./app.sh --smoke" in out, out
+    assert "FAILING  ./app.sh --test" in out, out
+    assert not (root / "cerberus.json").exists(), "wrote a partial required baseline"
+
+
 def test_a_configured_project_runs_its_own_checks():
     root = project({**PY_PROJECT, "cerberus.json": json.dumps(
         {"verification": {"artifact_kind": "service", "stage1": ["true"], "stage2": ["true"]}})})

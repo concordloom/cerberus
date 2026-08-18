@@ -1,154 +1,152 @@
 ---
 name: cerberus-setup
-description: Work out this project's checks by running them, and write them into cerberus.json so the other two skills stop guessing. Use when asked to install or configure cerberus, or when its config still holds the example placeholders.
-when_to_use: On a first install; when cerberus.json still holds the example placeholders; when the checks it lists no longer match what this project actually runs.
+description: Discover and verify this project's real Stage 1 and Stage 2 mechanics, then record them in cerberus.json so Cerberus does not guess. Use during installation, when the config still has placeholders, or when delivery changed.
 ---
 
-# Setup — find this project's checks by running them
+# Setup - learn how this project is really verified
 
-The gate checks work and the critic checks claims. Neither can know what
-`pytest -q` means in *this* repository, or where a change stops being under
-your control once it ships. This finds out, by running things, and writes down
-only what actually passed.
+The gate attacks work and the critic attacks claims. Neither should guess how
+this repository is tested or how a revision reaches the place where people use
+it. Discover those mechanics, verify them, and record only what future runs can
+actually execute.
 
-## Why this exists
+## Start with project rules
 
-A fresh install ships a `cerberus.json` whose checks are `echo` placeholders.
-An `echo` exits 0 unconditionally, so a verification that runs one is
-indistinguishable from a verification that ran nothing — and it looks finished.
-That is the same failure the gate exists to catch, arriving through its own
-front door.
+Read `AGENTS.md`, `CLAUDE.md`, contribution docs, package scripts, build
+wrappers, CI workflows, deployment manifests, and any existing
+`cerberus.json`. Repository instructions outrank toolchain conventions.
 
-## Run it
+Never bypass a project-owned wrapper with generic commands. A `go.mod` does not
+authorise `go test ./...` when the repository says to use `app.sh`. If explicit
+project instructions exist, the setup script refuses generic detection; pass
+the commands you read with `--stage1` instead.
+
+During first onboarding, the installation guide already selected the
+conversation language. If setup is invoked on its own and no language has been
+selected, first ask exactly in English:
+
+> Which language would you like me to use: English or Russian?
+
+Do not ask twice. After the answer, speak in that language.
+
+## Run the mechanical part
+
+Use whichever installed path exists:
 
 ```sh
-python3 "$CLAUDE_PLUGIN_ROOT"/skills/cerberus-setup/cerberus_setup.py   # installed as a plugin
-python3 .claude/skills/cerberus-setup/cerberus_setup.py                 # installed by install.sh
-python3 .agents/skills/cerberus-setup/cerberus_setup.py                 # Codex and anything reading .agents
+python3 "$CLAUDE_PLUGIN_ROOT"/skills/cerberus-setup/cerberus_setup.py
+python3 .claude/skills/cerberus-setup/cerberus_setup.py
+python3 .agents/skills/cerberus-setup/cerberus_setup.py
 ```
 
-Whichever exists. `--check` runs the checks and writes nothing. The config it
-writes belongs to the project, not to an agent: an existing
-`.claude/cerberus.json` or `.codex/cerberus.json` is kept where it is, and a
-project with neither gets `cerberus.json` in its root.
+When the project defines its own checks, pass exactly those commands and the
+observed artifact kind:
 
-## What it writes, and what it never touches
+```sh
+python3 PATH/cerberus_setup.py --artifact-kind service \
+  --stage1 './app.sh --smoke' \
+  --stage1 './app.sh --test'
+```
 
-It writes the `verification` block: `artifact_kind`, `stage1`, `stage2`,
-`notes`. Nothing else, and nothing it did not run first — a command that was
-never executed is the placeholder again with better wording.
+Repeat `--stage1` as needed. `--check` runs and reports without writing.
+`--draft-stage2` prints a repository-derived proposal and writes nothing.
 
-It merges rather than replaces, one level down as well as at the top. A
-hand-written `artifact_kind: migration` — a value detection can never produce —
-and notes naming production accounts have both been destroyed by a version that
-rewrote the block wholesale.
+Run fast, read-only checks automatically. Ask before a lengthy suite or a
+command that mutates shared state. If a required fast check is red, do not
+start the long suite without permission and do not execute Stage 2 as a
+verification run. Report `setup blocked`; you may still discuss the future
+Stage 2 route.
 
-`stage2` is left empty on purpose. This script cannot run a deploy or build a
-package during setup, and writing a comment line into a list of commands would
-be the placeholder again, since a `#` line also exits 0. The sentence is handed
-to the reader instead.
+## Preserve the configuration
 
-## When it refuses to guess
+The script writes the `verification` block: `artifact_kind`, `stage1`,
+`stage2`, and `notes`. It merges rather than replaces existing data. A
+hand-written artifact kind, operational note, or legacy config path must
+survive.
 
-A project it cannot recognise gets an honest refusal and two plain questions,
-not a plausible configuration. This is deliberate and it is not a failure mode:
-a confident wrong configuration is worse than the placeholder it replaced,
-because the placeholder is visibly unfinished and the wrong one is not.
+Only Stage 1 commands that were actually run and passed may be written.
+`stage2` stays empty until its real route is inferred and confirmed. A comment,
+`echo`, or another always-green command is not a check.
 
-The same applies when the checks it found do not pass here. That is a fact
-about the project, and it is reported rather than quietly dropped so the
-configuration can look tidy.
+`cerberus.json` stores stable project mechanics: what ships, executable checks,
+the delivery route, and operational notes. Do not put a feature-specific test
+plan there; Cerberus creates that from the task during Stage 0.
 
-## Finish by talking, not by exiting
+## Explain the stages briefly
 
-The script does what a script can: find the toolchain, run the checks, write
-`stage1`. It cannot ask anything — under `curl … | sh` its stdin is the install
-script itself, in CI there is nobody there, and to an agent a prompt is a hang.
-So the questions are yours, and this is the half of setup that decides whether
-the configuration is any good.
+Use three short points, not a lecture:
 
-Walk them through the three stages, in their own language, and ask what the
-repository cannot answer:
+- **Stage 0** maps what can break before testing begins. It is rebuilt for each
+  change.
+- **Stage 1** attacks the code locally: tests, negative cases, and its real
+  consumption path. Most of it is visible in the repository.
+- **Stage 2** attacks the built or deployed result where it is actually used.
+  Repository evidence can propose this route; the operator confirms reality.
 
-- **Stage 0** — before anything is tested, the behaviour space gets enumerated.
-  Ask what varies here that would not be visible in the code: tenants,
-  currencies, clock, permissions, a partner API that behaves differently in
-  staging.
-- **Stage 1** — show what was written. Ask if that is all of it, or whether
-  something is missing that everyone here knows to run by hand.
-- **Stage 2** — the one that finds the defects, and the one nothing can derive.
-  It gets a conversation of its own, below.
+A package smoke test, build, or `--version` call is only a Stage 2 prerequisite
+unless it crosses the actual delivery boundary.
 
-## Stage 2 is a conversation, not a form
+## Infer Stage 2 before asking
 
-Do not interrogate. Ask one open question and let them answer in their own
-words, in a paragraph:
+Inspect CI triggers, deploy jobs, Dockerfiles, charts, manifests, release
+scripts, service URLs, and version metadata. Present the most likely route and
+the evidence behind it, then ask the operator to confirm or correct it. Do not
+make them describe infrastructure the repository already shows.
+
+For a service with binary, Docker, and Helm routes, name those observed routes
+and ask which one is used in reality. Propose the corresponding daemon, API,
+dashboard, rollout, and revision checks. Only when repository evidence is
+insufficient ask:
 
 > How does this change get to where it really runs, and how would you know it
 > arrived?
 
-What comes back is usually everything you need and nothing in the right shape:
-"we merge, the pipeline builds it, argo syncs it to dev, then I look at
-Grafana". That is a deploy path, an environment, and a weak revision proof, in
-one sentence. `--draft-stage2` gives you the skeleton; their answer tells you
-which of its lines are real here.
+Then **say back what you understood as the exact command route** before writing
+it. Ask at most one batched follow-up for gaps that remain:
 
-**Then say back what you understood, as commands, and let them correct it.**
-Not a summary — the actual list you are about to write. This is the same
-discipline the critic runs on a claim, for the same reason: what they said and
-what you understood diverge silently, and the first time anyone notices is a
-verdict about a revision nobody deployed.
+- exact URL, cluster, consumer, or other target;
+- access and credentials needed by the future runner;
+- proof that the running artifact is the exact commit;
+- permission for safe negative checks and never-touch targets.
 
-Only then ask about the gaps their answer left, and only those:
+The route normally has five parts: trigger delivery for the exact revision,
+wait with a command that can fail, prove the deployed revision, exercise a real
+consumer path, and prove the oracle can fail.
 
-- **Access, before anything else.** Can whoever runs the cycle actually execute
-  those commands? Credentials, a VPN, a token, permission to deploy at all. A
-  `stage2` nobody can run produces `Not proven` forever for a mechanical
-  reason, and reads like a verification failure rather than a missing secret.
-  If the answer is no, that is worth knowing now: either the commands change to
-  ones they can run, or the reason goes in `stage2_unreachable`.
-- **Revision proof.** How would they know the instance answering them is this
-  commit and not the build that was already there? An endpoint returning the
-  sha, the image tag on the running deployment, a header. If there is nothing,
-  say plainly that Stage 2 will not be able to tell this revision from the
-  previous one, and write that down rather than leaving it to be discovered.
-- **Before the merge.** If the pipeline only deploys from the default branch,
-  there is no honest pre-merge Stage 2. Pick one and record it: a preview
-  environment per pull request, a verdict issued after the merge, or
-  `stage2_unreachable`.
-- **Blast radius.** What must never be touched, which account, which namespace.
-  This goes in `notes`, which is otherwise always empty.
+If CI deploys only from the default branch, there is no honest pre-merge Stage
+2. Record a preview environment or a post-merge verdict before Done or release.
+Use `stage2_unreachable` only when the project truly has no reachable delivery
+boundary.
 
-If they have nowhere to deploy, do not leave `stage2` blank and move on. Write
-`stage2_unreachable` with the reason they gave you. Blank reads as "nobody got
-round to it"; a reason reads as a decision, and the gate quotes it in every
-verdict from then on.
+Validate read-only prerequisites. Show the exact target and ask before any
+deploy, apply, migration, or other shared write. No access to run it is a setup
+blocker, not a narrowing of future verdicts. Missing credentials, VPN, a URL,
+or revision proof does not justify `stage2_unreachable`.
 
-## Say it in ordinary words
+## Close with setup status, not a verdict
 
-Whoever is being set up did not ask for vocabulary. Tell them what was written,
-what is still missing, and that no hook was installed — the skills are theirs
-to invoke by name, and their agent may reach for one too. Everything else
-belongs in the other two skills.
+Installation has `installed` or `not installed`. Project setup has `configured`
+or `setup blocked`. `READY` and `NOT READY` belong only to a Cerberus run against
+a concrete product change; never use them for installation or setup.
 
-## Self-check before saying it is set up
+Report the config path, artifact kind, Stage 1 commands and results, confirmed
+Stage 2 route, access and revision proof, remaining blockers, and any required
+agent restart. Remind the operator how to invoke `cerberus-setup`, `cerberus`,
+and `cerberus-critic`.
 
-- [ ] Was every check written into the configuration actually run first, with
-      its result shown?
-- [ ] Was an existing configuration merged into rather than replaced, including
-      keys this script would never produce?
-- [ ] Is `stage2` either genuinely filled in or reported as still missing,
-      rather than padded with something that exits 0?
-- [ ] Were the three stages explained and the questions asked, rather than the
-      script's output handed over as if it finished the job?
-- [ ] Was Stage 2 opened with one open question, and was the resulting command
-      list read back and confirmed before it was written?
-- [ ] Was access asked about — can whoever runs the cycle actually execute what
-      was written?
-- [ ] Is it recorded how anyone would know the instance under test is this
-      commit, or stated plainly that nothing can?
-- [ ] Does `notes` carry what only they could tell you, or is it still empty?
-- [ ] If there is nowhere to deploy, is `stage2_unreachable` written with their
-      reason, rather than `stage2` left blank?
-- [ ] Does the closing message say what was written, what is missing, and that
-      invoking the skills is the reader's own call?
+Recommend running `cerberus` against the exact revision before a tracker task
+moves to Done. A `NOT READY` verdict keeps that task open.
+
+## Self-check before saying configured
+
+- [ ] Did I read project instructions before choosing or running commands?
+- [ ] Did I use project-owned wrappers instead of forbidden generic commands?
+- [ ] Was every recorded Stage 1 command run and shown passing?
+- [ ] Did I ask before lengthy or shared-state-changing work?
+- [ ] Did I explain the three stages briefly in the selected language?
+- [ ] Did I infer Stage 2 from repository evidence before asking the operator?
+- [ ] Did I say back the proposed route and get it confirmed?
+- [ ] Can the future runner access the target and prove the exact revision?
+- [ ] Can the Stage 2 oracle fail safely?
+- [ ] Is `stage2_unreachable` reserved for a true project-level absence?
+- [ ] Did I report setup status without issuing a product verdict?

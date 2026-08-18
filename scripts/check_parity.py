@@ -105,6 +105,7 @@ def compare_pages() -> list[str]:
     for token in ("/plugin marketplace add", "/plugin install", "/plugin uninstall",
                   "codex plugin marketplace add", "codex plugin add",
                   "codex plugin remove", "install.sh", "--draft-stage2",
+                  "docs/install.md", "docs/uninstall.md",
                   "stage2_unreachable", "artifact_kind", "verification"):
         in_en = token in en.read_text(encoding="utf-8")
         in_ru = token in ru.read_text(encoding="utf-8")

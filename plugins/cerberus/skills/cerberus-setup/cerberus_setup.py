@@ -65,6 +65,17 @@ RUNNERS = [
     },
 ]
 
+# These files outrank toolchain guesses. If a repository has written agent
+# instructions, a generic `go test`, `npm test`, or equivalent may be forbidden
+# even though the manifest makes it look obvious. The script cannot interpret
+# prose safely, so it stops and lets the agent pass the commands it read via
+# `--stage1` instead of violating the project while trying to configure it.
+PROJECT_INSTRUCTION_FILES = (
+    "AGENTS.md",
+    "CLAUDE.md",
+    ".github/copilot-instructions.md",
+)
+
 # What the project ships decides where the last check has to happen. Ordered by
 # how specific the signal is.
 KIND_SIGNALS = [
@@ -325,6 +336,12 @@ def detect(root: pathlib.Path) -> tuple[list[dict], str | None]:
     return found, kind
 
 
+def project_instructions(root: pathlib.Path) -> list[pathlib.Path]:
+    """Authoritative project instruction files present at this project root."""
+    return [root / relative for relative in PROJECT_INSTRUCTION_FILES
+            if (root / relative).is_file()]
+
+
 def _looks_like_a_command(root: pathlib.Path) -> bool:
     pkg = root / "package.json"
     if pkg.exists():
@@ -364,6 +381,11 @@ def build_checks(runners: list[dict], root: pathlib.Path) -> list[tuple[str, int
             code, out = run(runner["fallback"], root)
             results.append((runner["fallback"], code, out))
     return results
+
+
+def run_explicit_checks(commands: list[str], root: pathlib.Path) -> list[tuple[str, int, str]]:
+    """Run project-owned checks supplied after the agent read local rules."""
+    return [(command, *run(command, root)) for command in commands]
 
 
 def sort_results(results: list) -> tuple[list, list, list, list]:
@@ -572,6 +594,17 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="print a stage2 draft derived from this repository, and write nothing",
     )
+    parser.add_argument(
+        "--stage1",
+        action="append",
+        metavar="COMMAND",
+        help="run this project-owned Stage 1 command; repeat for more commands",
+    )
+    parser.add_argument(
+        "--artifact-kind",
+        choices=sorted(STAGE2_HINT_BY_KIND),
+        help="override artifact detection after inspecting how this project ships",
+    )
     parser.add_argument("--dir", default=".", help="project directory")
     args = parser.parse_args(argv)
 
@@ -579,6 +612,7 @@ def main(argv: list[str] | None = None) -> int:
     config = resolve_config(root)
 
     runners, kind = detect(root)
+    kind = args.artifact_kind or kind
 
     if args.draft_stage2:
         return print_draft(root, config, kind)
@@ -619,7 +653,7 @@ def main(argv: list[str] | None = None) -> int:
                         still_failing = True
             else:
                 print("It lists no checks at all, so there is nothing to run.")
-            if runners:
+            if runners and not project_instructions(root):
                 # Only what the configuration does not already have. Offering a
                 # project a check it already lists reads as a suggestion, costs
                 # a second run of the command, and on a project with one check
@@ -638,7 +672,18 @@ def main(argv: list[str] | None = None) -> int:
     # Only now, because a project this cannot recognise may already be
     # configured by hand — and those are exactly the projects that most need
     # the answer, since detection is why they are hand-configured.
-    if not runners or kind is None:
+    explicit = args.stage1 or []
+    instructions = project_instructions(root)
+
+    if instructions and not explicit:
+        names = ", ".join(str(path.relative_to(root)) for path in instructions)
+        print(f"Project instructions found: {names}.")
+        print("Nothing was run or changed. Read those rules, then pass only their")
+        print("project-owned checks with --stage1 COMMAND (repeat as needed).")
+        print("Use --artifact-kind too if the shipped artifact is still ambiguous.")
+        return 2
+
+    if (not runners and not explicit) or kind is None:
         print("I could not tell what kind of project this is.")
         print("Nothing was changed. Tell me two things and I can finish:")
         print("  1. the command that runs your tests")
@@ -646,11 +691,26 @@ def main(argv: list[str] | None = None) -> int:
         print("     package, a command they type")
         return 2
 
-    results = build_checks(runners, root)
+    results = run_explicit_checks(explicit, root) if explicit else build_checks(runners, root)
     passing, missing, timed_out, broken = sort_results(results)
 
+    if explicit and (missing or timed_out or broken):
+        print("A project-owned Stage 1 command did not pass, so setup is blocked.")
+        for cmd in passing:
+            print(f"  ok       {cmd}")
+        for cmd, out in broken:
+            first = out.splitlines()[0][:60] if out else "no output"
+            print(f"  FAILING  {cmd} — {first}")
+        for cmd in missing:
+            print(f"  absent   {cmd} — not installed here")
+        for cmd in timed_out:
+            print(f"  too slow {cmd} — gave up waiting")
+        print("Nothing was changed. Fix the baseline, or confirm a different command set.")
+        return 2
+
     if not passing:
-        print(f"I found a {runners[0]['name']} project but none of its checks pass here.")
+        found_as = "project-defined" if explicit else runners[0]["name"]
+        print(f"I found a {found_as} project but none of its checks pass here.")
         for cmd, out in broken[:3]:
             first = out.splitlines()[0][:60] if out else "no output"
             print(f"  {cmd} — failed: {first}")
@@ -661,7 +721,9 @@ def main(argv: list[str] | None = None) -> int:
 
     written = write_config(root, kind, passing, args.check, existing)
 
-    if len(runners) > 1:
+    if explicit:
+        print(f"Set up: project-defined {kind} — change that if it is wrong.")
+    elif len(runners) > 1:
         others = ", ".join(r["name"] for r in runners[1:])
         print(f"Set up: {runners[0]['name']} {kind} (also here: {others}) — change that if it is wrong.")
     else:

@@ -7,6 +7,8 @@
       "python3 -m compileall -q plugins scripts tests",
       "python3 tests/test_setup.py",
       "python3 tests/test_commands.py",
+      "python3 tests/test_readme.py",
+      "python3 tests/test_guides.py",
       "python3 scripts/check_parity.py",
       "sh -n install.sh"
     ],

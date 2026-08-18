@@ -55,14 +55,14 @@ jobs:
       - name: Setup works, and reads like something a person would write
         run: python3 tests/test_setup.py
 
-      # The quick start's command is extracted from README.md and run over the
-      # network, because the difference between the script beside the page and
-      # the script the page points at is exactly where an install breaks — and
-      # a front page whose command was never run is this project's own failure
-      # printed on its own door.
-      - name: The README's quick start actually works
+      # The primary agent prompts are checked against their local guides here;
+      # the repository-local fallback is exercised in the installer job below.
+      # That keeps both the one-line entrance and the route behind it executable.
+      - name: README and agent guides agree
         if: matrix.python-version == '3.12' || matrix.python-version == '3.13'
-        run: python3 tests/test_readme.py
+        run: |
+          python3 tests/test_readme.py
+          python3 tests/test_guides.py
 
   docs:
     runs-on: ubuntu-latest
@@ -162,11 +162,11 @@ jobs:
           print("manifests ok")
           PY
 
-      # The one-liner is what the README puts first, and it exercises code the
-      # clone path never reaches: piped through sh there is no source tree beside
-      # the script, so it has to fetch its own payload over the network. Pinned
-      # to this revision rather than main, or the test would pass on someone
-      # else's commit.
+      # The one-liner remains the manual repository fallback, and it exercises
+      # code the clone path never reaches: piped through sh there is no source
+      # tree beside the script, so it has to fetch its own payload over the
+      # network. Pinned to this revision rather than main, or the test would
+      # pass on someone else's commit.
       - name: The one-liner installs without a clone
         env:
           CERBERUS_REF: ${{ github.sha }}

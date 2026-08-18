@@ -5,8 +5,6 @@
 <p align="center">
   <a href="https://github.com/concordloom/cerberus/actions/workflows/ci.yml"><img src="https://github.com/concordloom/cerberus/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT">
-  <img src="https://img.shields.io/badge/Claude%20Code-plugin-8a6cff" alt="Плагин Claude Code">
-  <img src="https://img.shields.io/badge/Codex-plugin-10a37f" alt="Плагин Codex">
 </p>
 
 # cerberus
@@ -20,67 +18,29 @@
 
 ## Установка
 
-### Себе
-
-Ставится лично вам и работает во всех проектах. В репозиторий ничего не пишет.
-
-**Claude Code**
+Вставьте это в диалог с любым агентом, который работает в вашем проекте:
 
 ```
-/plugin marketplace add concordloom/cerberus
-/plugin install cerberus@concordloom
+Установи и настрой Cerberus для этого проекта по инструкции:
+https://raw.githubusercontent.com/concordloom/cerberus/main/docs/install.md
 ```
 
-**Codex**
-
-```
-codex plugin marketplace add concordloom/cerberus
-codex plugin add cerberus@concordloom
-```
-
-### В репозиторий
-
-Копирует навыки в проект, чтобы команда получила их из гита, ничего не
-устанавливая. Нужны `python3` 3.10+, `curl` или `wget`, `tar` и `sh`. Кладёт в
-`.claude/skills/`, а если в проекте уже есть каталог `.agents/` — то в
-`.agents/skills/`.
-
-```console
-curl -fsSL https://raw.githubusercontent.com/concordloom/cerberus/main/install.sh | sh -s -- --setup
-```
-
-Повторный запуск безопасен, и обновляются этим же способом.
+Он установит все три навыка, разберётся с проверками и поставкой проекта и
+оставит короткий отчёт о настройке.
 
 ## Удаление
 
 ```
-/plugin uninstall cerberus@concordloom      # Claude Code
-codex plugin remove cerberus@concordloom    # Codex
+Удали Cerberus по инструкции:
+https://raw.githubusercontent.com/concordloom/cerberus/main/docs/uninstall.md
 ```
 
-Если ставили в репозиторий: удалите `cerberus/`, `cerberus-critic/` и
-`cerberus-setup/` из `.claude/skills/` или `.agents/skills/`, а также
-`cerberus.json`, если он больше не нужен.
+Инструкция найдёт все установленные варианты и сохранит `cerberus.json`, если
+вы отдельно не попросите удалить его.
 
 ## Быстрый старт
 
-**1. Настройте проект.** Скажите агенту:
-
-```
-Прогони навык cerberus-setup на этом проекте.
-```
-
-Он найдёт ваши тесты и линтеры, прогонит их и запишет те, что прошли. Вывод
-английский; агент перескажет его вам по-русски.
-
-```text
-Set up: Python library — change that if it is wrong.
-
-Checks I ran here and wrote down:
-  ok       pytest -q
-```
-
-**2. Дальше, прежде чем поверить, что «работает»:**
+Установка уже включает настройку проекта. Прежде чем поверить, что «работает»:
 
 ```
 Прогони навык cerberus по этому изменению.
@@ -188,9 +148,9 @@ curl -fsS https://orders.dev.internal/version | jq -e --arg sha "$(git rev-parse
 `kubectl -n dev get deploy/orders -o jsonpath='{.spec.template.spec.containers[0].image}'`.
 
 **Если пайплайн катит только с основной ветки**, честной стадии 2 до мержа не
-существует. Выберите одно и запишите: разворачивать ветку в превью-неймспейс,
-выносить вердикт после мержа и до релиза, или объявить `stage2_unreachable`
-ниже.
+существует. Разворачивайте ветку в превью-неймспейс либо выносите вердикт после
+мержа, но до перевода задачи в Done или начала релиза. Поставка из основной
+ветки сама по себе не повод для `stage2_unreachable`.
 
 Для `service` и `chart` скрипт настройки умеет набросать эти команды из ваших
 `helm/`, манифестов, compose или джобы деплоя — попросите агента запустить
@@ -203,7 +163,7 @@ curl -fsS https://orders.dev.internal/version | jq -e --arg sha "$(git rev-parse
 
 ```json
 "stage2": [],
-"stage2_unreachable": "GitLab катит только с основной ветки, превью-неймспейса пока нет"
+"stage2_unreachable": "Поддерживаемая цель работает на оборудовании заказчика; у команды нет похожего устройства или эмулятора"
 ```
 
 Тогда каждый вердикт сузится до `READY scope: Stage 1` и процитирует вашу
@@ -217,9 +177,9 @@ curl -fsS https://orders.dev.internal/version | jq -e --arg sha "$(git rev-parse
 «готово». Сказать ему так не делать можно как и всё остальное: «не запускай
 цербера, пока не попрошу».
 
-Что действительно выполняется: `cerberus-setup` запускает у вас в проекте
-команды-кандидаты — тест-раннеры, линтеры, сборку, — чтобы выяснить, какие
-проходят. Стадия 2 запускает те команды, которые **вы** положили в `stage2`, с
+Что действительно выполняется: `cerberus-setup` читает правила проекта, затем
+запускает указанные в них проверки или безопасные команды-кандидаты, чтобы
+выяснить, какие проходят. Стадия 2 запускает те команды, которые **вы** положили в `stage2`, с
 теми доступами, что есть у вашей оболочки. `notes` — это записка агенту, а не
 граница прав: если ваш kubeconfig дотягивается до прода, то дотянется и команда
 из `stage2`. Направьте их на одноразовое окружение, а секреты в файл не
@@ -253,11 +213,10 @@ curl -fsS https://orders.dev.internal/version | jq -e --arg sha "$(git rev-parse
 
 ## Требования
 
-Python 3.10+ для скрипта настройки. Маршруту с репозиторием нужны ещё `curl` или
-`wget`, `tar` и `sh`. Формат навыка — это формат
-[Claude Code](https://claude.com/claude-code) и Codex; метод из
-[SKILL.ru.md](plugins/cerberus/skills/cerberus/SKILL.ru.md) не привязан ни к
-какому агенту, и его можно выполнять руками.
+Агент, который умеет читать репозиторий и устанавливать навыки.
+[Инструкция установки](docs/install.md) определит среду и перечислит нужные для
+выбранного маршрута инструменты. Метод из
+[SKILL.ru.md](plugins/cerberus/skills/cerberus/SKILL.ru.md) от агента не зависит.
 
 ## Лицензия и происхождение
 

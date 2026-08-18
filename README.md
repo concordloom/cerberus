@@ -5,8 +5,6 @@
 <p align="center">
   <a href="https://github.com/concordloom/cerberus/actions/workflows/ci.yml"><img src="https://github.com/concordloom/cerberus/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT">
-  <img src="https://img.shields.io/badge/Claude%20Code-plugin-8a6cff" alt="Claude Code plugin">
-  <img src="https://img.shields.io/badge/Codex-plugin-10a37f" alt="Codex plugin">
 </p>
 
 # cerberus
@@ -20,66 +18,29 @@ tell it not to.
 
 ## Install
 
-### For yourself
-
-Installs for you, in every project you open. Writes nothing to the repository.
-
-**Claude Code**
+Paste this into any coding agent working in your project:
 
 ```
-/plugin marketplace add concordloom/cerberus
-/plugin install cerberus@concordloom
+Install and configure Cerberus for this project by following the instructions here:
+https://raw.githubusercontent.com/concordloom/cerberus/main/docs/install.md
 ```
 
-**Codex**
-
-```
-codex plugin marketplace add concordloom/cerberus
-codex plugin add cerberus@concordloom
-```
-
-### Into the repository
-
-Copies the skills into the project, so your team gets them from git without
-installing anything. Needs `python3` 3.10+, `curl` or `wget`, `tar` and `sh`. It lands in `.claude/skills/`, or
-`.agents/skills/` if the project already has an `.agents/` directory.
-
-```console
-curl -fsSL https://raw.githubusercontent.com/concordloom/cerberus/main/install.sh | sh -s -- --setup
-```
-
-Re-running it is safe, and is how you update this route.
+It installs all three skills, learns the project's checks and delivery path,
+and leaves a short setup report.
 
 ## Uninstall
 
 ```
-/plugin uninstall cerberus@concordloom      # Claude Code
-codex plugin remove cerberus@concordloom    # Codex
+Uninstall Cerberus by following the instructions here:
+https://raw.githubusercontent.com/concordloom/cerberus/main/docs/uninstall.md
 ```
 
-Installed into the repository: delete `cerberus/`, `cerberus-critic/` and
-`cerberus-setup/` from `.claude/skills/` or `.agents/skills/`, and
-`cerberus.json` if you no longer want it.
+The removal guide finds every installed scope and preserves `cerberus.json`
+unless you separately ask to delete it.
 
 ## Quick start
 
-**1. Set the project up.** Say this to your agent:
-
-```
-Run the cerberus-setup skill on this project.
-```
-
-It finds your checks, runs them, and writes down the ones that pass. Output is
-English; your agent will tell you in your language.
-
-```text
-Set up: Python library — change that if it is wrong.
-
-Checks I ran here and wrote down:
-  ok       pytest -q
-```
-
-**2. Then, before you believe "it works":**
+Installation includes project setup. Before you believe "it works":
 
 ```
 Run the cerberus skill on this change.
@@ -187,9 +148,9 @@ already running. If there is no `/version` endpoint, compare the image digest:
 `kubectl -n dev get deploy/orders -o jsonpath='{.spec.template.spec.containers[0].image}'`.
 
 **If your pipeline only deploys from the default branch**, there is no honest
-Stage 2 before the merge. Pick one and write it down: deploy the branch to a
-preview namespace, run the verdict after the merge and before the release, or
-declare `stage2_unreachable` below.
+Stage 2 before the merge. Deploy the branch to a preview namespace, or run the
+verdict after the merge and before the task moves to Done or the release begins.
+Default-branch delivery is not by itself a reason for `stage2_unreachable`.
 
 For `service` and `chart` the setup script can draft those commands from your
 `helm/`, manifests, compose file or deploy job — ask the agent to run
@@ -202,7 +163,7 @@ fifth key next to it inside `verification`:
 
 ```json
 "stage2": [],
-"stage2_unreachable": "GitLab deploys from the default branch only; no preview namespace yet"
+"stage2_unreachable": "The supported target is customer-owned hardware; this team has no representative device or emulator"
 ```
 
 Every verdict then narrows to `READY scope: Stage 1` and quotes your reason.
@@ -215,8 +176,8 @@ skills are text your agent reads when you ask for them, and — as the first
 paragraph says — an agent may reach for them on "done" of its own accord. Tell
 it not to the way you tell it anything else: "don't run cerberus unless I ask".
 
-What does execute: `cerberus-setup` runs candidate check commands in your project — test
-runners, linters, a build — to find out which pass. Stage 2 runs the commands
+What does execute: `cerberus-setup` reads project rules, then runs their checks
+or safe candidates to find out which pass. Stage 2 runs the commands
 **you** put in `stage2`, with whatever credentials your shell has. `notes` is a
 note to the agent, not a permission boundary: if your kubeconfig can reach
 production, so can a command in `stage2`. Point them at a throwaway environment,
@@ -249,10 +210,10 @@ guess is how a tool gets uninstalled.
 
 ## Requirements
 
-Python 3.10+ for the setup script. The repository route also needs `curl` or
-`wget`, `tar` and `sh`. The skill format is [Claude Code](https://claude.com/claude-code)'s
-and Codex's; the method in [SKILL.md](plugins/cerberus/skills/cerberus/SKILL.md)
-is not specific to any agent and can be followed by hand.
+An agent that can read the repository and install skills. The
+[installation guide](docs/install.md) detects the host and lists any
+route-specific tools. The method in
+[SKILL.md](plugins/cerberus/skills/cerberus/SKILL.md) is agent-independent.
 
 ## License and origin
 
