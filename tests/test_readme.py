@@ -96,20 +96,19 @@ def test_both_languages_send_every_agent_to_the_same_guide():
         assert "Claude" not in blocks[0] and "Codex" not in blocks[0], blocks[0]
 
 
-def test_both_readmes_put_the_language_stop_before_each_guide_url():
+def test_both_readmes_put_the_language_stop_before_the_install_guide_url():
     question = "Which language would you like me to use: English or Russian?"
     for path in (README, README_RU):
         text = path.read_text(encoding="utf-8")
-        for heading in (("## Install", "## Uninstall") if path == README else
-                        ("## Установка", "## Удаление")):
-            prompts = shell_blocks(section(text, heading))
-            assert len(prompts) == 1, (path.name, heading)
-            prompt = prompts[0]
-            assert prompt.count(question) == 1, (path.name, heading)
-            assert prompt.index(question) < prompt.index("https://"), (path.name, heading)
-            assert "Wait for my answer" in prompt or "Дождись ответа" in prompt, (
-                path.name, heading)
-            assert "summariz" in prompt or "без пересказа" in prompt, (path.name, heading)
+        heading = "## Install" if path == README else "## Установка"
+        prompts = shell_blocks(section(text, heading))
+        assert len(prompts) == 1, (path.name, heading)
+        prompt = prompts[0]
+        assert prompt.count(question) == 1, (path.name, heading)
+        assert prompt.index(question) < prompt.index("https://"), (path.name, heading)
+        assert "Wait for my answer" in prompt or "Дождись ответа" in prompt, (
+            path.name, heading)
+        assert "summariz" in prompt or "без пересказа" in prompt, (path.name, heading)
 
 
 def test_no_page_asks_anyone_to_install_the_skills_one_at_a_time():
@@ -702,6 +701,8 @@ def test_uninstalling_is_a_single_agent_prompt_and_not_in_the_install_section():
         assert prompts[0].splitlines()[-1] == (
             "https://raw.githubusercontent.com/concordloom/cerberus/main/docs/uninstall.md"
         ), prompts[0]
+        assert "Which language would you like me to use" not in prompts[0]
+        assert "cerberus.json" in prompts[0]
         for old in ("/plugin", "codex plugin", ".claude/skills", ".agents/skills", "<details>"):
             assert old not in where, f"{path.name}: old uninstall route remains: {old}"
         installing = install_section(text).lower()
@@ -723,6 +724,7 @@ def test_the_page_shows_the_config_file_it_spends_a_section_describing():
         blocks = [b for lang, b in fenced(text) if lang == "json"]
         assert blocks, f"{path.name}: no config example anywhere"
         body = json.loads(blocks[0])
+        assert body["language"] == ("en" if path == README else "ru"), path.name
         assert "verification" in body, (
             f"{path.name}: the example omits the wrapper key, which is the one "
             "thing a reader cannot guess")

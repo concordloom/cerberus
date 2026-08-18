@@ -34,10 +34,9 @@ and leaves a short setup report.
 ## Uninstall
 
 ```
-Before doing anything else, ask me exactly:
-Which language would you like me to use: English or Russian?
-Wait for my answer. Then uninstall Cerberus from the complete raw guide without summarizing it
-(use curl or an equivalent if your web tool summarizes) and follow it:
+Uninstall Cerberus by following this complete raw guide.
+Read it in full; if your web tool summarizes, use curl or an equivalent.
+Use the language saved in cerberus.json:
 https://raw.githubusercontent.com/concordloom/cerberus/main/docs/uninstall.md
 ```
 
@@ -81,12 +80,15 @@ Verdict: NOT READY
 
 ## cerberus.json
 
-One file, and the skills are its only readers. New projects get it in the root;
-installs from before 2.1 keep theirs in `.claude/cerberus.json` or
-`.codex/cerberus.json` and are still read there. The four keys, and `stage2_unreachable` below is the fifth and last:
+One file, read by the skills and the removal guide. New projects get it in the
+root; installs from before 2.1 keep theirs in `.claude/cerberus.json` or
+`.codex/cerberus.json` and are still read there. `language` is the operator-facing
+language; the four keys under `verification`, plus `stage2_unreachable` below,
+describe how the project is checked:
 
 ```json
 {
+  "language": "en",
   "verification": {
     "artifact_kind": "service",
     "stage1": ["go build ./...", "go test ./... -race", "golangci-lint run"],
@@ -105,9 +107,9 @@ Every entry is a shell command run from the repository root, in order, and a
 non-zero exit fails the stage — which is why each line above ends in something
 that *can* return non-zero. A stage stops at its first failure.
 
-`cerberus-setup` writes `artifact_kind` and `stage1` after running the commands. `stage2`
-is yours — see below. `notes` is anything the agent should know and cannot read
-off the disk.
+`cerberus-setup` writes the selected `language`, then writes `artifact_kind` and
+`stage1` after running the commands. `stage2` is yours — see below. `notes` is
+anything the agent should know and cannot read off the disk.
 
 ## The three heads
 

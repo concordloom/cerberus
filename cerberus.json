@@ -1,4 +1,5 @@
 {
+  "language": "en",
   "//": "This repository's own configuration. It is also the worked example the documentation refers to: an artifact whose delivery boundary is not a deployment.",
   "verification": {
     "artifact_kind": "plugin",

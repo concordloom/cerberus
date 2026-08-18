@@ -22,13 +22,15 @@ project instructions exist, the setup script refuses generic detection; pass
 the commands you read with `--stage1` instead.
 
 During first onboarding, the installation guide already selected the
-conversation language. If setup is invoked on its own and no language has been
-selected, first ask exactly in English:
+conversation language. Reuse a valid top-level `language` from `cerberus.json`
+without asking. If setup is invoked on its own and neither the config nor the
+conversation provides a language, first ask exactly in English:
 
 > Which language would you like me to use: English or Russian?
 
 Your response must end after that question; use no tools first. Do not ask
-twice. After the answer, speak in that language.
+twice. After the answer, speak in that language and pass it to the setup script
+as `--language en` or `--language ru`.
 
 ## Run the mechanical part
 
@@ -45,6 +47,7 @@ observed artifact kind:
 
 ```sh
 python3 PATH/cerberus_setup.py --artifact-kind service \
+  --language en \
   --stage1 './app.sh --smoke' \
   --stage1 './app.sh --test'
 ```
@@ -61,10 +64,10 @@ at the first failure.
 
 ## Preserve the configuration
 
-The script writes the `verification` block: `artifact_kind`, `stage1`,
-`stage2`, and `notes`. It merges rather than replaces existing data. A
-hand-written artifact kind, operational note, or legacy config path must
-survive.
+The script writes the selected language as the top-level `language` value and
+writes the `verification` block: `artifact_kind`, `stage1`, `stage2`, and
+`notes`. It merges rather than replaces existing data. A hand-written artifact
+kind, operational note, or legacy config path must survive.
 
 Only Stage 1 commands that were actually run and passed may be written.
 `stage2` stays empty until its real route is inferred and confirmed. A comment,
@@ -153,6 +156,7 @@ moves to Done. A `NOT READY` verdict keeps that task open.
 - [ ] Was every recorded Stage 1 command run and shown passing?
 - [ ] Did I ask before lengthy or shared-state-changing work?
 - [ ] Did I explain the three stages briefly in the selected language?
+- [ ] Is that language saved as top-level `language: en | ru` in the config?
 - [ ] Did I infer Stage 2 from repository evidence before asking the operator?
 - [ ] Did I say back the proposed route and get it confirmed?
 - [ ] Can the future runner access the target and prove the exact revision?

@@ -174,6 +174,49 @@ def test_sets_up_a_python_project():
     assert not any("replace with" in c for c in cfg["stage1"]), cfg["stage1"]
 
 
+def test_setup_persists_the_selected_operator_language():
+    root = project(PY_PROJECT)
+    code, out = run_setup(root, "--language", "ru")
+    assert code == 0, out
+    assert config_of(root)["language"] == "ru"
+
+
+def test_an_explicit_language_update_preserves_a_hand_written_verification_block():
+    hand = {
+        "verification": {
+            "artifact_kind": "migration",
+            "stage1": ["true"],
+            "stage2": ["true"],
+            "notes": "keep me",
+        },
+        "something_else": {"kept": True},
+    }
+    root = project({**PY_PROJECT, "cerberus.json": json.dumps(hand)})
+    code, out = run_setup(root, "--language", "ru")
+    assert code == 0, out
+    body = config_of(root)
+    assert body["language"] == "ru"
+    assert body["verification"] == hand["verification"]
+    assert body["something_else"] == hand["something_else"]
+
+
+def test_check_mode_does_not_persist_a_language_update():
+    hand = {"verification": {"artifact_kind": "library", "stage1": ["true"], "stage2": []}}
+    root = project({**PY_PROJECT, "cerberus.json": json.dumps(hand)})
+    before = (root / "cerberus.json").read_bytes()
+    code, out = run_setup(root, "--check", "--language", "ru")
+    assert code == 0, out
+    assert (root / "cerberus.json").read_bytes() == before
+
+
+def test_each_skill_reuses_the_persisted_operator_language():
+    for skill in ("cerberus", "cerberus-critic", "cerberus-setup"):
+        for suffix in ("SKILL.md", "SKILL.ru.md"):
+            text = (SKILLS / skill / suffix).read_text(encoding="utf-8")
+            assert "`language`" in text, (skill, suffix)
+            assert "`cerberus.json`" in text, (skill, suffix)
+
+
 def test_never_writes_a_check_it_did_not_run():
     root = project(PY_PROJECT)
     run_setup(root)
@@ -1284,7 +1327,7 @@ def test_installing_leaves_a_config_and_setup_completes_it():
         # failure says which one came back rather than only that one did.
         for key in DEAD_KEYS:
             assert key not in body, f"install left a dead key: {key}"
-        extra = {k for k in body if k != "verification" and not k.startswith("//")}
+        extra = {k for k in body if k not in {"language", "verification"} and not k.startswith("//")}
         assert not extra, f"install left keys nothing reads: {extra}"
 
 

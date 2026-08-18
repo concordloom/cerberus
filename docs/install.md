@@ -13,7 +13,9 @@ Your response must end after that question. Do not inspect, fetch another
 resource, install, explain the stages, or announce a plan before the user
 answers. Then use the selected language for every explanation, question, and
 the final report. Keep commands, paths, configuration keys, skill names, and
-status names unchanged.
+status names unchanged. Carry the choice into setup as `--language en` or
+`--language ru`; it is selected once and persisted for future skills and
+uninstall.
 
 ## 2. Inspect before asking or changing
 
@@ -113,6 +115,7 @@ the script instead of letting it guess. Repeat `--stage1` for each command:
 
 ```sh
 python3 PATH/cerberus_setup.py --artifact-kind service \
+  --language en \
   --stage1 './app.sh --smoke' \
   --stage1 './app.sh --test'
 ```
@@ -171,9 +174,11 @@ missing: the exact URL or target, how the deployed revision is proven, whether
 the agent has access, and whether safe negative checks are allowed. Never put
 credentials in `cerberus.json`.
 
-Record delivery mechanics in `cerberus.json`: artifact kind, executable Stage
-1 and Stage 2 commands, and operational notes. Do not put a feature-specific
-test plan there; Cerberus derives that from the task during Stage 0.
+Record the selected language as the top-level `language` value in
+`cerberus.json`, using only `en` or `ru`. Record delivery mechanics separately:
+artifact kind, executable Stage 1 and Stage 2 commands, and operational notes.
+Do not put a feature-specific test plan there; Cerberus derives that from the
+task during Stage 0.
 
 Validate Stage 2 prerequisites with read-only checks. Show the exact target and
 obtain explicit confirmation before a deploy, migration, apply, or other shared
@@ -195,8 +200,8 @@ confirmed. If the user has not answered that question, setup is still in
 progress, not complete.
 
 Report the installation scope, verification of all three skills, config path,
-Stage 1 commands and observed results, confirmed Stage 2 route, access and
-revision proof, any blocker, and whether a restart is required.
+saved language, Stage 1 commands and observed results, confirmed Stage 2 route,
+access and revision proof, any blocker, and whether a restart is required.
 
 Then give three copyable prompts in the selected language:
 

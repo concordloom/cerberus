@@ -31,14 +31,25 @@ def test_readme_urls_resolve_to_the_guides_in_this_tree():
             assert (ROOT / relative).is_file(), f"{page.name}: missing {relative}"
 
 
-def test_both_guides_always_open_with_the_exact_english_language_question():
-    for path in (INSTALL, UNINSTALL):
-        text = path.read_text(encoding="utf-8")
-        first_step = text[: text.index("## 2.")]
-        assert "always ask this exact question in English" in first_step, path.name
-        assert first_step.count(LANGUAGE_QUESTION) == 1, path.name
-        assert "response must end after that question" in first_step, path.name
-        assert "Unless" not in first_step, path.name
+def test_install_opens_with_the_exact_english_language_question():
+    text = INSTALL.read_text(encoding="utf-8")
+    first_step = text[: text.index("## 2.")]
+    assert "always ask this exact question in English" in first_step
+    assert first_step.count(LANGUAGE_QUESTION) == 1
+    assert "response must end after that question" in first_step
+    assert "Unless" not in first_step
+
+
+def test_uninstall_reuses_the_saved_language_without_asking_again():
+    text = _flat(UNINSTALL)
+    assert LANGUAGE_QUESTION not in text
+    for phrase in (
+        "top-level `language` is `ru`",
+        "English when it is `en`",
+        "language of the current conversation",
+        "Never ask a dedicated language question during uninstall",
+    ):
+        assert phrase in text, phrase
 
 
 def test_install_is_agent_agnostic_and_brings_the_complete_bundle():
@@ -75,9 +86,21 @@ def test_install_reads_repository_rules_before_running_checks():
         "Do not ask the user for facts the repository already answers",
         "project-owned wrapper",
         "--stage1 './app.sh --smoke'",
+        "--language en",
         "write only Stage 1 commands that actually passed",
         "Ask before a lengthy suite",
         "project setup is blocked",
+    ):
+        assert phrase in text, phrase
+
+
+def test_install_persists_the_language_once_for_future_runs_and_uninstall():
+    text = _flat(INSTALL)
+    for phrase in (
+        "`--language en` or `--language ru`",
+        "selected once and persisted",
+        "top-level `language` value",
+        "saved language",
     ):
         assert phrase in text, phrase
 

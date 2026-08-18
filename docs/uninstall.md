@@ -3,15 +3,16 @@
 You are the removal agent. Remove only the selected Cerberus installation,
 preserve project verification knowledge by default, and prove what is gone.
 
-## 1. Ask for the conversation language
+## 1. Reuse the saved language without asking
 
-Before any other removal text, always ask this exact question in English:
+Read the first existing project configuration from `cerberus.json`,
+`.claude/cerberus.json`, or `.codex/cerberus.json`. Use Russian when its
+top-level `language` is `ru` and English when it is `en`.
 
-> Which language would you like me to use: English or Russian?
-
-Your response must end after that question. Do not inspect, remove, explain, or
-announce a plan before the user answers. Then use the selected language for
-every explanation, question, and the final report.
+For an older installation with no valid saved language, continue in the
+language of the current conversation; if there is no signal, default to
+English. Never ask a dedicated language question during uninstall. The choice
+was onboarding state and should not become uninstall ceremony.
 
 ## 2. Discover installed scopes
 

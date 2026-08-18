@@ -10,6 +10,10 @@ A mandatory attempt to **refute the claim**, run before publishing it. The
 companion to the gate, and not a substitute for it: the gate examines the
 **work**, this examines what you **say about** it.
 
+Use the top-level `language` value from `cerberus.json` (`en` or `ru`) for the
+operator-facing review. If it is absent, keep the current conversation
+language.
+
 ## Why this exists
 
 An engineering culture can be strong and machine-enforced and still have nothing

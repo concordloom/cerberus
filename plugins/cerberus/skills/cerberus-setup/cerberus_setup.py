@@ -445,6 +445,7 @@ def write_config(
     checks: list[str],
     dry: bool,
     existing: dict | None = None,
+    language: str | None = None,
 ) -> pathlib.Path:
     """Merge into whatever is there rather than replacing it.
 
@@ -453,6 +454,8 @@ def write_config(
     """
     path = resolve_config(root)
     body = dict(existing) if isinstance(existing, dict) else {}
+    if language is not None:
+        body["language"] = language
     body["//"] = "Every command in stage1 was run once, in this project, before being written here."
     prior = body.get("verification")
     verification = dict(prior) if isinstance(prior, dict) else {}
@@ -611,6 +614,11 @@ def main(argv: list[str] | None = None) -> int:
         choices=sorted(STAGE2_HINT_BY_KIND),
         help="override artifact detection after inspecting how this project ships",
     )
+    parser.add_argument(
+        "--language",
+        choices=("en", "ru"),
+        help="persist the selected operator-facing language in cerberus.json",
+    )
     parser.add_argument("--dir", default=".", help="project directory")
     args = parser.parse_args(argv)
 
@@ -640,9 +648,18 @@ def main(argv: list[str] | None = None) -> int:
         verification = verification or {}
 
         if not is_the_installers_copy(existing):
-            # Never modified. Its checks are run and reported, the ones found
-            # here are printed beside them, and the user decides.
-            print("Already configured, so nothing was changed. How it stands:")
+            language_saved = args.language is not None and existing.get("language") != args.language
+            if language_saved and not args.check:
+                existing = dict(existing)
+                existing["language"] = args.language
+                config.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")
+            # Verification is never modified. An explicitly selected language
+            # is independent onboarding state, so it may be updated without
+            # claiming ownership of the hand-written verification block.
+            if language_saved and not args.check:
+                print(f"Already configured; saved language '{args.language}'. Verification was not changed.")
+            else:
+                print("Already configured, so nothing was changed. How it stands:")
             print()
             listed = verification.get("stage1") or []
             still_failing = not listed
@@ -725,7 +742,7 @@ def main(argv: list[str] | None = None) -> int:
         print("Nothing was changed. Fix one of those, or tell me the right command.")
         return 2
 
-    written = write_config(root, kind, passing, args.check, existing)
+    written = write_config(root, kind, passing, args.check, existing, args.language)
 
     if explicit:
         print(f"Set up: project-defined {kind} — change that if it is wrong.")

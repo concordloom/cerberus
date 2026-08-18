@@ -34,10 +34,9 @@ https://raw.githubusercontent.com/concordloom/cerberus/main/docs/install.md
 ## Удаление
 
 ```
-Прежде чем делать что-либо ещё, задай мне ровно этот вопрос:
-Which language would you like me to use: English or Russian?
-Дождись ответа. Затем удали Cerberus по полной raw-инструкции, без пересказа
-(если веб-инструмент сокращает её, используй curl или аналог), и выполни её:
+Удали Cerberus по этой полной raw-инструкции.
+Прочитай её целиком; если веб-инструмент сокращает текст, используй curl или аналог.
+Используй язык из cerberus.json:
 https://raw.githubusercontent.com/concordloom/cerberus/main/docs/uninstall.md
 ```
 
@@ -81,12 +80,15 @@ Verdict: NOT READY
 
 ## cerberus.json
 
-Один файл, и читают его только навыки. Новые проекты получают его в корне;
-установки до 2.1 держат свой в `.claude/cerberus.json` или
-`.codex/cerberus.json`, и оттуда он тоже читается. Четыре ключа, и `stage2_unreachable` ниже — пятый и последний:
+Один файл, его читают навыки и инструкция удаления. Новые проекты получают его
+в корне; установки до 2.1 держат свой в `.claude/cerberus.json` или
+`.codex/cerberus.json`, и оттуда он тоже читается. `language` задаёт язык общения
+с оператором; четыре ключа внутри `verification` и описанный ниже
+`stage2_unreachable` задают проверку проекта:
 
 ```json
 {
+  "language": "ru",
   "verification": {
     "artifact_kind": "service",
     "stage1": ["go build ./...", "go test ./... -race", "golangci-lint run"],
@@ -105,9 +107,9 @@ Verdict: NOT READY
 ненулевой код возврата валит стадию — поэтому каждая строка выше заканчивается
 чем-то, что **умеет** его вернуть. На первом падении стадия останавливается.
 
-`cerberus-setup` записывает `artifact_kind` и `stage1`, предварительно прогнав команды.
-`stage2` — за вами, про него ниже. `notes` — всё, что агенту стоит знать и чего
-он не прочитает с диска.
+`cerberus-setup` записывает выбранный `language`, затем `artifact_kind` и
+`stage1`, предварительно прогнав команды. `stage2` — за вами, про него ниже.
+`notes` — всё, что агенту стоит знать и чего он не прочитает с диска.
 
 ## Три головы
 

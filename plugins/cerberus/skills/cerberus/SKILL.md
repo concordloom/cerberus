@@ -10,6 +10,10 @@ A mandatory attempt to **prove the change is broken**, run before telling anyone
 it works. This is not a happy-path check. Readiness is what is left over when a
 serious attempt to break the thing has failed.
 
+Use the top-level `language` value from `cerberus.json` (`en` or `ru`) for all
+operator-facing questions and reports. If it is absent, keep the current
+conversation language.
+
 ## Why this exists
 
 An agent built a feature, saw rows appear in the database and activity in the
@@ -259,6 +263,7 @@ fact rather than a guess each time:
 
 ```json
 {
+  "language": "en",
   "verification": {
     "artifact_kind": "library",
     "stage1": ["pytest -q", "ruff check ."],
