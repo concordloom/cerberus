@@ -27,7 +27,8 @@ selected, first ask exactly in English:
 
 > Which language would you like me to use: English or Russian?
 
-Do not ask twice. After the answer, speak in that language.
+Your response must end after that question; use no tools first. Do not ask
+twice. After the answer, speak in that language.
 
 ## Run the mechanical part
 

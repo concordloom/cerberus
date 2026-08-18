@@ -77,7 +77,9 @@ def test_the_agent_command_is_the_documented_one():
     assert len(blocks) == 1, f"expected one agent prompt, found {len(blocks)}"
     lines = [line.strip() for line in blocks[0].splitlines() if line.strip()]
     assert lines == [
-        "Install and configure Cerberus for this project by following the instructions here:",
+        "Before doing anything else, ask me exactly:",
+        "Which language would you like me to use: English or Russian?",
+        "Wait for my answer. Then install and configure Cerberus for this project by following:",
         "https://raw.githubusercontent.com/concordloom/cerberus/main/docs/install.md",
     ], lines
     assert "Claude" not in blocks[0] and "Codex" not in blocks[0], blocks[0]
@@ -91,6 +93,21 @@ def test_both_languages_send_every_agent_to_the_same_guide():
             "https://raw.githubusercontent.com/concordloom/cerberus/main/docs/install.md"
         ), blocks[0]
         assert "Claude" not in blocks[0] and "Codex" not in blocks[0], blocks[0]
+
+
+def test_both_readmes_put_the_language_stop_before_each_guide_url():
+    question = "Which language would you like me to use: English or Russian?"
+    for path in (README, README_RU):
+        text = path.read_text(encoding="utf-8")
+        for heading in (("## Install", "## Uninstall") if path == README else
+                        ("## Установка", "## Удаление")):
+            prompts = shell_blocks(section(text, heading))
+            assert len(prompts) == 1, (path.name, heading)
+            prompt = prompts[0]
+            assert prompt.count(question) == 1, (path.name, heading)
+            assert prompt.index(question) < prompt.index("https://"), (path.name, heading)
+            assert "Wait for my answer" in prompt or "Дождись ответа" in prompt, (
+                path.name, heading)
 
 
 def test_no_page_asks_anyone_to_install_the_skills_one_at_a_time():

@@ -37,6 +37,7 @@ def test_both_guides_always_open_with_the_exact_english_language_question():
         first_step = text[: text.index("## 2.")]
         assert "always ask this exact question in English" in first_step, path.name
         assert first_step.count(LANGUAGE_QUESTION) == 1, path.name
+        assert "response must end after that question" in first_step, path.name
         assert "Unless" not in first_step, path.name
 
 

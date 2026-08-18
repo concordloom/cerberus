@@ -21,7 +21,9 @@ tell it not to.
 Paste this into any coding agent working in your project:
 
 ```
-Install and configure Cerberus for this project by following the instructions here:
+Before doing anything else, ask me exactly:
+Which language would you like me to use: English or Russian?
+Wait for my answer. Then install and configure Cerberus for this project by following:
 https://raw.githubusercontent.com/concordloom/cerberus/main/docs/install.md
 ```
 
@@ -31,7 +33,9 @@ and leaves a short setup report.
 ## Uninstall
 
 ```
-Uninstall Cerberus by following the instructions here:
+Before doing anything else, ask me exactly:
+Which language would you like me to use: English or Russian?
+Wait for my answer. Then uninstall Cerberus by following:
 https://raw.githubusercontent.com/concordloom/cerberus/main/docs/uninstall.md
 ```
 

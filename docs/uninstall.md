@@ -9,8 +9,9 @@ Before any other removal text, always ask this exact question in English:
 
 > Which language would you like me to use: English or Russian?
 
-Wait for the answer, then use that language for every explanation, question,
-and the final report.
+Your response must end after that question. Do not inspect, remove, explain, or
+announce a plan before the user answers. Then use the selected language for
+every explanation, question, and the final report.
 
 ## 2. Discover installed scopes
 

@@ -21,7 +21,9 @@
 Вставьте это в диалог с любым агентом, который работает в вашем проекте:
 
 ```
-Установи и настрой Cerberus для этого проекта по инструкции:
+Прежде чем делать что-либо ещё, задай мне ровно этот вопрос:
+Which language would you like me to use: English or Russian?
+Дождись ответа. Затем установи и настрой Cerberus для этого проекта по инструкции:
 https://raw.githubusercontent.com/concordloom/cerberus/main/docs/install.md
 ```
 
@@ -31,7 +33,9 @@ https://raw.githubusercontent.com/concordloom/cerberus/main/docs/install.md
 ## Удаление
 
 ```
-Удали Cerberus по инструкции:
+Прежде чем делать что-либо ещё, задай мне ровно этот вопрос:
+Which language would you like me to use: English or Russian?
+Дождись ответа. Затем удали Cerberus по инструкции:
 https://raw.githubusercontent.com/concordloom/cerberus/main/docs/uninstall.md
 ```
 

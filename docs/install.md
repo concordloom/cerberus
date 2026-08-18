@@ -9,9 +9,11 @@ Before any other onboarding text, always ask this exact question in English:
 
 > Which language would you like me to use: English or Russian?
 
-Wait for the answer, then use that language for every explanation, question,
-and the final report. Keep commands, paths, configuration keys, skill names,
-and status names unchanged.
+Your response must end after that question. Do not inspect, fetch another
+resource, install, explain the stages, or announce a plan before the user
+answers. Then use the selected language for every explanation, question, and
+the final report. Keep commands, paths, configuration keys, skill names, and
+status names unchanged.
 
 ## 2. Inspect before asking or changing
 
