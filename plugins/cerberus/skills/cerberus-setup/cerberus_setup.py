@@ -384,8 +384,14 @@ def build_checks(runners: list[dict], root: pathlib.Path) -> list[tuple[str, int
 
 
 def run_explicit_checks(commands: list[str], root: pathlib.Path) -> list[tuple[str, int, str]]:
-    """Run project-owned checks supplied after the agent read local rules."""
-    return [(command, *run(command, root)) for command in commands]
+    """Run project-owned checks in order, stopping at the first red baseline."""
+    results = []
+    for command in commands:
+        result = (command, *run(command, root))
+        results.append(result)
+        if result[1] != 0:
+            break
+    return results
 
 
 def sort_results(results: list) -> tuple[list, list, list, list]:

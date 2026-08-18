@@ -120,6 +120,10 @@ Stage 2 as a verification attempt. Installation may still be successful, but
 project setup is blocked. You may still infer and discuss the future Stage 2
 route.
 
+Order explicit `--stage1` commands from fastest to slowest. The setup script
+stops at the first failure, so a red smoke check never falls through into the
+full suite.
+
 A build, package smoke test, or `--version` check is a Stage 2 prerequisite,
 not Stage 2 itself.
 
@@ -129,6 +133,11 @@ Inspect CI triggers, deploy jobs, Dockerfiles, charts, manifests, release
 scripts, service endpoints, and version metadata. Build the most likely route
 from that evidence and present it in ordinary language. Ask the user to confirm
 or correct your proposal; do not begin with an infrastructure questionnaire.
+
+This confirmation is a hard turn boundary. End that response with the
+confirmation question. Do not report `configured`, give the final setup
+summary, or continue into invocation and lifecycle advice until the user has
+answered.
 
 For example, if a repository contains a single binary, Docker support, and a
 Helm chart, ask which of those observed routes is used in reality and propose
@@ -172,6 +181,10 @@ Keep the final report short and separate these statuses:
 - **Project setup:** `configured` or `setup blocked`.
 - **Change verdict:** `READY` or `NOT READY` - never use these during
   installation because no product change is under test.
+
+Project setup cannot be `configured` before the inferred Stage 2 route has been
+confirmed. If the user has not answered that question, setup is still in
+progress, not complete.
 
 Report the installation scope, verification of all three skills, config path,
 Stage 1 commands and observed results, confirmed Stage 2 route, access and

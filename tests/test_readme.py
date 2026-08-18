@@ -79,7 +79,8 @@ def test_the_agent_command_is_the_documented_one():
     assert lines == [
         "Before doing anything else, ask me exactly:",
         "Which language would you like me to use: English or Russian?",
-        "Wait for my answer. Then install and configure Cerberus for this project by following:",
+        "Wait for my answer. Then install and configure Cerberus from the complete raw guide without summarizing it",
+        "(use curl or an equivalent if your web tool summarizes) and follow it:",
         "https://raw.githubusercontent.com/concordloom/cerberus/main/docs/install.md",
     ], lines
     assert "Claude" not in blocks[0] and "Codex" not in blocks[0], blocks[0]
@@ -108,6 +109,7 @@ def test_both_readmes_put_the_language_stop_before_each_guide_url():
             assert prompt.index(question) < prompt.index("https://"), (path.name, heading)
             assert "Wait for my answer" in prompt or "Дождись ответа" in prompt, (
                 path.name, heading)
+            assert "summariz" in prompt or "без пересказа" in prompt, (path.name, heading)
 
 
 def test_no_page_asks_anyone_to_install_the_skills_one_at_a_time():

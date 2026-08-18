@@ -56,7 +56,8 @@ Run fast, read-only checks automatically. Ask before a lengthy suite or a
 command that mutates shared state. If a required fast check is red, do not
 start the long suite without permission and do not execute Stage 2 as a
 verification run. Report `setup blocked`; you may still discuss the future
-Stage 2 route.
+Stage 2 route. Pass explicit checks from fastest to slowest; the script stops
+at the first failure.
 
 ## Preserve the configuration
 
@@ -94,6 +95,10 @@ scripts, service URLs, and version metadata. Present the most likely route and
 the evidence behind it, then ask the operator to confirm or correct it. Do not
 make them describe infrastructure the repository already shows.
 
+Confirmation is a hard turn boundary. End that response with the confirmation
+question. Do not report `configured`, give a final summary, or continue into
+invocation and lifecycle advice until the operator answers.
+
 For a service with binary, Docker, and Helm routes, name those observed routes
 and ask which one is used in reality. Propose the corresponding daemon, API,
 dashboard, rollout, and revision checks. Only when repository evidence is
@@ -129,6 +134,9 @@ or revision proof does not justify `stage2_unreachable`.
 Installation has `installed` or `not installed`. Project setup has `configured`
 or `setup blocked`. `READY` and `NOT READY` belong only to a Cerberus run against
 a concrete product change; never use them for installation or setup.
+
+Setup cannot be `configured` before the inferred Stage 2 route is confirmed.
+Before that answer, it is still in progress.
 
 Report the config path, artifact kind, Stage 1 commands and results, confirmed
 Stage 2 route, access and revision proof, remaining blockers, and any required

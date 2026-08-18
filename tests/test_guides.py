@@ -94,6 +94,18 @@ def test_install_infers_stage2_before_it_asks():
         assert phrase in text, phrase
 
 
+def test_stage2_confirmation_is_a_hard_turn_boundary():
+    text = _flat(INSTALL)
+    for phrase in (
+        "confirmation is a hard turn boundary",
+        "End that response with the confirmation question",
+        "Do not report `configured`",
+        "until the user has answered",
+        "cannot be `configured` before the inferred Stage 2 route has been confirmed",
+    ):
+        assert phrase in text, phrase
+
+
 def test_default_branch_delivery_becomes_an_explicit_post_merge_gate():
     text = _flat(INSTALL)
     for phrase in (

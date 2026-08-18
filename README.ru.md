@@ -23,7 +23,8 @@
 ```
 Прежде чем делать что-либо ещё, задай мне ровно этот вопрос:
 Which language would you like me to use: English or Russian?
-Дождись ответа. Затем установи и настрой Cerberus для этого проекта по инструкции:
+Дождись ответа. Затем установи и настрой Cerberus по полной raw-инструкции, без пересказа
+(если веб-инструмент сокращает её, используй curl или аналог), и выполни её:
 https://raw.githubusercontent.com/concordloom/cerberus/main/docs/install.md
 ```
 
@@ -35,7 +36,8 @@ https://raw.githubusercontent.com/concordloom/cerberus/main/docs/install.md
 ```
 Прежде чем делать что-либо ещё, задай мне ровно этот вопрос:
 Which language would you like me to use: English or Russian?
-Дождись ответа. Затем удали Cerberus по инструкции:
+Дождись ответа. Затем удали Cerberus по полной raw-инструкции, без пересказа
+(если веб-инструмент сокращает её, используй curl или аналог), и выполни её:
 https://raw.githubusercontent.com/concordloom/cerberus/main/docs/uninstall.md
 ```
 

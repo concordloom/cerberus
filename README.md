@@ -23,7 +23,8 @@ Paste this into any coding agent working in your project:
 ```
 Before doing anything else, ask me exactly:
 Which language would you like me to use: English or Russian?
-Wait for my answer. Then install and configure Cerberus for this project by following:
+Wait for my answer. Then install and configure Cerberus from the complete raw guide without summarizing it
+(use curl or an equivalent if your web tool summarizes) and follow it:
 https://raw.githubusercontent.com/concordloom/cerberus/main/docs/install.md
 ```
 
@@ -35,7 +36,8 @@ and leaves a short setup report.
 ```
 Before doing anything else, ask me exactly:
 Which language would you like me to use: English or Russian?
-Wait for my answer. Then uninstall Cerberus by following:
+Wait for my answer. Then uninstall Cerberus from the complete raw guide without summarizing it
+(use curl or an equivalent if your web tool summarizes) and follow it:
 https://raw.githubusercontent.com/concordloom/cerberus/main/docs/uninstall.md
 ```
 

@@ -285,6 +285,30 @@ def test_one_red_project_owned_check_blocks_setup_instead_of_writing_a_subset():
     assert not (root / "cerberus.json").exists(), "wrote a partial required baseline"
 
 
+def test_a_red_smoke_check_stops_before_the_long_project_owned_suite():
+    root = project({
+        "go.mod": "module example.com/loomwatch\n\ngo 1.25\n",
+        "Dockerfile": "FROM scratch\n",
+        "AGENTS.md": "Always use `app.sh`; smoke before the full suite.\n",
+        "app.sh": (
+            "#!/bin/sh\n"
+            "if [ \"$1\" = --smoke ]; then exit 1; fi\n"
+            "touch long-suite-ran\n"
+        ),
+    })
+    (root / "app.sh").chmod(0o755)
+    code, out = run_setup(
+        root,
+        "--stage1", "./app.sh --smoke",
+        "--stage1", "./app.sh --test",
+        "--artifact-kind", "service",
+    )
+    assert code == 2, out
+    assert "FAILING  ./app.sh --smoke" in out, out
+    assert "./app.sh --test" not in out, out
+    assert not (root / "long-suite-ran").exists(), "ran the full suite after red smoke"
+
+
 def test_a_configured_project_runs_its_own_checks():
     root = project({**PY_PROJECT, "cerberus.json": json.dumps(
         {"verification": {"artifact_kind": "service", "stage1": ["true"], "stage2": ["true"]}})})
@@ -984,7 +1008,7 @@ def test_the_wrong_revision_trap_is_explained_not_only_avoided():
 def test_the_skill_states_the_three_answers_to_merge_only_deployment():
     """#47, point 4. Choosing silently is how a verdict covers an undeployed revision."""
     for path in (SKILLS / "cerberus-setup" / "SKILL.md", SKILLS / "cerberus-setup" / "SKILL.ru.md"):
-        text = path.read_text(encoding="utf-8").lower()
+        text = " ".join(path.read_text(encoding="utf-8").lower().split())
         for needle in ("preview", "stage2_unreachable") if path.name.endswith("ru.md") is False \
                 else ("превью", "stage2_unreachable"):
             assert needle in text, f"{path.name}: {needle!r}"
@@ -1005,6 +1029,20 @@ def test_the_skill_requires_reading_the_commands_back_before_writing_them():
     for path, needle in ((SKILLS / "cerberus-setup" / "SKILL.md", "say back what you understood"),
                          (SKILLS / "cerberus-setup" / "SKILL.ru.md", "перескажи, что ты понял")):
         assert needle in path.read_text(encoding="utf-8").lower(), path.name
+
+
+def test_setup_cannot_finish_in_the_same_turn_as_stage2_confirmation():
+    for path, needles in (
+        (SKILLS / "cerberus-setup" / "SKILL.md",
+         ("hard turn boundary", "end that response with the confirmation question",
+          "cannot be `configured` before")),
+        (SKILLS / "cerberus-setup" / "SKILL.ru.md",
+         ("жёсткая граница хода", "закончи ответ вопросом о подтверждении",
+          "не может получить статус `configured` до")),
+    ):
+        text = " ".join(path.read_text(encoding="utf-8").lower().split())
+        for needle in needles:
+            assert needle in text, f"{path.name}: {needle!r}"
 
 
 # ------------------------------------- Not proven has to carry an attempt (#49)
