@@ -1,5 +1,12 @@
 # Changelog
 
+# [3.1.0](https://github.com/concordloom/cerberus/compare/v3.0.0...v3.1.0) (2026-08-18)
+
+
+### Features
+
+* make Cerberus onboarding agent-led ([e0fcaea](https://github.com/concordloom/cerberus/commit/e0fcaea8b96adb67cde08af83c9f4e5c7bcd420f))
+
 # [3.0.0](https://github.com/concordloom/cerberus/compare/v2.3.1...v3.0.0) (2026-08-16)
 
 
