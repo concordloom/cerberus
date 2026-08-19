@@ -10,16 +10,7 @@ this repository is tested or how a revision reaches the place where people use
 it. Discover those mechanics, verify them, and record only what future runs can
 actually execute.
 
-## Start with project rules
-
-Read `AGENTS.md`, `CLAUDE.md`, contribution docs, package scripts, build
-wrappers, CI workflows, deployment manifests, and any existing
-`cerberus.json`. Repository instructions outrank toolchain conventions.
-
-Never bypass a project-owned wrapper with generic commands. A `go.mod` does not
-authorise `go test ./...` when the repository says to use `app.sh`. If explicit
-project instructions exist, the setup script refuses generic detection; pass
-the commands you read with `--stage1` instead.
+## Select the language once
 
 During first onboarding, the installation guide already selected the
 conversation language. Reuse a valid top-level `language` from `cerberus.json`
@@ -32,7 +23,40 @@ Your response must end after that question; use no tools first. Do not ask
 twice. After the answer, speak in that language and pass it to the setup script
 as `--language en` or `--language ru`.
 
-## Run the mechanical part
+## Start with a human orientation
+
+Immediately after the language is known, explain the process before doing
+internal work:
+
+- **Stage 0** maps what could break for each future change.
+- **Stage 1** checks the code inside the repository. Set this up first.
+- **Stage 2** checks the built or deployed result where people actually use it.
+  Discuss it only after Stage 1 works.
+
+Keep this to three short points, then say you will find and run the project's
+own fast Stage 1 check. The person should understand the current step without
+having to understand Cerberus internals.
+
+Do not narrate tool or skill selection, raw-guide fetching, marketplace or
+version mechanics, installation paths, configuration files, JSON, keys, or
+internal CLI syntax. If the host requires an action announcement, combine it
+into one short sentence. Mention an internal detail only when the person must
+act on it or explicitly asks.
+
+## Read project rules before choosing checks
+
+Read `AGENTS.md`, `CLAUDE.md`, contribution docs, package scripts, build
+wrappers, CI workflows, deployment manifests, and any existing configuration.
+Repository instructions outrank toolchain conventions.
+
+Never bypass a project-owned wrapper with generic commands. A `go.mod` does not
+authorise `go test ./...` when the repository says to use `app.sh`. If explicit
+project instructions exist, the setup script refuses generic detection; pass
+the commands you read with `--stage1` instead.
+
+Do not inspect or discuss Stage 2 yet. Finish Stage 1 first.
+
+## Run the mechanical part silently
 
 Use whichever installed path exists:
 
@@ -56,13 +80,35 @@ Repeat `--stage1` as needed. `--check` runs and reports without writing.
 `--draft-stage2` prints a repository-derived proposal and writes nothing.
 
 Run fast, read-only checks automatically. Ask before a lengthy suite or a
-command that mutates shared state. If a required fast check is red, do not
-start the long suite without permission and do not execute Stage 2 as a
-verification run. Report `setup blocked`; you may still discuss the future
-Stage 2 route. Pass explicit checks from fastest to slowest; the script stops
-at the first failure.
+command that mutates shared state. Pass explicit checks from fastest to
+slowest; the script stops at the first failure.
 
-## Preserve the configuration
+## A Stage 1 blocker ends the turn
+
+If a required Stage 1 check is red:
+
+1. Explain in plain language what the check was trying to prove.
+2. Name the concrete cause and impact. Diagnose the useful underlying error; a
+   missing program inside a project wrapper does not mean the wrapper is absent.
+3. Offer one recommended next action grounded in the repository. Give one
+   alternative only when it is genuinely useful.
+4. End with exactly one short question about that next action.
+
+Do not inspect, infer, present, or ask about Stage 2 while Stage 1 is blocked.
+Do not give a setup summary, infrastructure questionnaire, raw command chain,
+large terminal excerpt, configuration path, JSON, or internal state. Resume
+only after the person answers.
+
+For LoomWatch with a missing Go toolchain, a good response is:
+
+> Stage 1 checks whether LoomWatch can pass its own fast project check. It is
+> not ready yet because that check starts through `app.sh`, but Go is missing
+> from this environment. The project can install its dependencies with its own
+> setup command. May I run that and repeat the fast check?
+
+After Stage 1 succeeds, report the result in one short sentence.
+
+## Preserve internal configuration without exposing it
 
 The script writes the selected language as the top-level `language` value and
 writes the `verification` block: `artifact_kind`, `stage1`, `stage2`, and
@@ -73,78 +119,74 @@ Only Stage 1 commands that were actually run and passed may be written.
 `stage2` stays empty until its real route is inferred and confirmed. A comment,
 `echo`, or another always-green command is not a check.
 
-`cerberus.json` stores stable project mechanics: what ships, executable checks,
-the delivery route, and operational notes. Do not put a feature-specific test
-plan there; Cerberus creates that from the task during Stage 0.
-
-## Explain the stages briefly
-
-Use three short points, not a lecture:
-
-- **Stage 0** maps what can break before testing begins. It is rebuilt for each
-  change.
-- **Stage 1** attacks the code locally: tests, negative cases, and its real
-  consumption path. Most of it is visible in the repository.
-- **Stage 2** attacks the built or deployed result where it is actually used.
-  Repository evidence can propose this route; the operator confirms reality.
+`cerberus.json` stores stable project mechanics, not a feature-specific test
+plan. Never mention this file, its path, format, keys, or contents during normal
+onboarding. Reveal those details only if the person explicitly asks or a
+malformed hand-written file requires manual repair. Never store credentials.
 
 A package smoke test, build, or `--version` call is only a Stage 2 prerequisite
 unless it crosses the actual delivery boundary.
 
-## Infer Stage 2 before asking
+## Introduce Stage 2 only after Stage 1 works
 
-Inspect CI triggers, deploy jobs, Dockerfiles, charts, manifests, release
-scripts, service URLs, and version metadata. Present the most likely route and
-the evidence behind it, then ask the operator to confirm or correct it. Do not
-make them describe infrastructure the repository already shows.
+Only after Stage 1 passes, inspect CI triggers, deploy jobs, Dockerfiles, charts,
+manifests, release scripts, service URLs, and version metadata. Explain in
+product language that Stage 2 proves the exact change reached the place where
+people use it and still works there.
 
-Confirmation is a hard turn boundary. End that response with the confirmation
-question. Do not report `configured`, give a final summary, or continue into
-invocation and lifecycle advice until the operator answers.
+Present the most likely route in one or two sentences, without an infrastructure
+or shell-command chain, then ask one short confirmation question. Do not make
+the person describe infrastructure the repository already shows and do not
+begin with an infrastructure questionnaire.
 
-For a service with binary, Docker, and Helm routes, name those observed routes
-and ask which one is used in reality. Propose the corresponding daemon, API,
-dashboard, rollout, and revision checks. Only when repository evidence is
-insufficient ask:
+For a service deployed from the main branch by CI, prefer:
+
+> It looks like pushes to the main branch are deployed by CI and the service is
+> then available at its normal URL. Is that the real path we should verify?
+
+If repository evidence is insufficient, ask:
 
 > How does this change get to where it really runs, and how would you know it
 > arrived?
 
-Then **say back what you understood as the exact command route** before writing
-it. Ask at most one batched follow-up for gaps that remain:
+Confirmation is a hard turn boundary. End with the question and wait.
 
-- exact URL, cluster, consumer, or other target;
-- access and credentials needed by the future runner;
-- proof that the running artifact is the exact commit;
-- permission for safe negative checks and never-touch targets.
+After confirmation, find remaining facts in the repository first. If one
+important fact is missing, explain why it matters and ask one question about
+it. Wait for the answer before asking another. Never batch the URL, cluster,
+namespace, credentials, revision proof, negative check, dependency installation,
+and long-suite permission into one message.
 
-The route normally has five parts: trigger delivery for the exact revision,
-wait with a command that can fail, prove the deployed revision, exercise a real
-consumer path, and prove the oracle can fail.
+Internally, the route must trigger or observe delivery for the exact revision,
+wait with a check that can fail, prove the deployed revision, exercise a real
+consumer path, and prove the check can fail safely.
 
 If CI deploys only from the default branch, there is no honest pre-merge Stage
-2. Record a preview environment or a post-merge verdict before Done or release.
+2. Record a preview environment or a post-merge run before Done or release.
 Use `stage2_unreachable` only when the project truly has no reachable delivery
 boundary.
 
 Validate read-only prerequisites. Show the exact target and ask before any
-deploy, apply, migration, or other shared write. No access to run it is a setup
-blocker, not a narrowing of future verdicts. Missing credentials, VPN, a URL,
-or revision proof does not justify `stage2_unreachable`.
+deploy, apply, migration, or other shared write. Missing access, credentials,
+VPN, a URL, or revision proof is a setup blocker. Discuss only that blocker with
+the same one-problem, one-next-step, one-question pattern.
 
-## Close with setup status, not a verdict
+## Close with a human-sized status, not a verdict
 
 Installation has `installed` or `not installed`. Project setup has `configured`
 or `setup blocked`. `READY` and `NOT READY` belong only to a Cerberus run against
-a concrete product change; never use them for installation or setup.
+a concrete product change.
 
 Setup cannot be `configured` before the inferred Stage 2 route is confirmed.
 Before that answer, it is still in progress.
 
-Report the config path, artifact kind, Stage 1 commands and results, confirmed
-Stage 2 route, access and revision proof, remaining blockers, and any required
-agent restart. Remind the operator how to invoke `cerberus-setup`, `cerberus`,
-and `cerberus-critic`.
+Use at most four short points: whether Cerberus is installed; whether the
+project's local check is ready and what was observed; whether the real delivery
+path is ready or the one remaining blocker; and the short phrase that invokes
+Cerberus on a completed change. Mention a restart only if required.
+
+Do not report configuration paths, the saved language, artifact kinds, internal
+keys, JSON, raw command routes, marketplace mechanics, or every installed file.
 
 Recommend running `cerberus` against the exact revision before a tracker task
 moves to Done. A `NOT READY` verdict keeps that task open.
@@ -152,14 +194,16 @@ moves to Done. A `NOT READY` verdict keeps that task open.
 ## Self-check before saying configured
 
 - [ ] Did I read project instructions before choosing or running commands?
-- [ ] Did I use project-owned wrappers instead of forbidden generic commands?
+- [ ] Did I use project-owned wrappers instead of generic commands?
+- [ ] Did I explain the three stages before internal work?
 - [ ] Was every recorded Stage 1 command run and shown passing?
+- [ ] If Stage 1 failed, did I stop before inspecting or discussing Stage 2?
+- [ ] Did a blocker response contain one problem, one next step, and one question?
 - [ ] Did I ask before lengthy or shared-state-changing work?
-- [ ] Did I explain the three stages briefly in the selected language?
-- [ ] Is that language saved as top-level `language: en | ru` in the config?
-- [ ] Did I infer Stage 2 from repository evidence before asking the operator?
-- [ ] Did I say back the proposed route and get it confirmed?
+- [ ] Did I describe Stage 2 in product language and get it confirmed?
+- [ ] Did I avoid batching unrelated Stage 2 questions?
 - [ ] Can the future runner access the target and prove the exact revision?
-- [ ] Can the Stage 2 oracle fail safely?
+- [ ] Can the Stage 2 check fail safely?
 - [ ] Is `stage2_unreachable` reserved for a true project-level absence?
+- [ ] Did I keep configuration files and JSON out of normal user-facing text?
 - [ ] Did I report setup status without issuing a product verdict?

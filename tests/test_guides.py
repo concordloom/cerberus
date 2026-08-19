@@ -12,6 +12,10 @@ INSTALL = ROOT / "docs" / "install.md"
 UNINSTALL = ROOT / "docs" / "uninstall.md"
 README = ROOT / "README.md"
 README_RU = ROOT / "README.ru.md"
+SETUP_SKILLS = (
+    ROOT / "plugins" / "cerberus" / "skills" / "cerberus-setup" / "SKILL.md",
+    ROOT / "plugins" / "cerberus" / "skills" / "cerberus-setup" / "SKILL.ru.md",
+)
 LANGUAGE_QUESTION = "Which language would you like me to use: English or Russian?"
 
 
@@ -87,9 +91,9 @@ def test_install_reads_repository_rules_before_running_checks():
         "project-owned wrapper",
         "--stage1 './app.sh --smoke'",
         "--language en",
-        "write only Stage 1 commands that actually passed",
+        "record only Stage 1 commands that actually passed",
         "Ask before a lengthy suite",
-        "project setup is blocked",
+        "Do not inspect or discuss the Stage 2 route yet",
     ):
         assert phrase in text, phrase
 
@@ -98,9 +102,8 @@ def test_install_persists_the_language_once_for_future_runs_and_uninstall():
     text = _flat(INSTALL)
     for phrase in (
         "`--language en` or `--language ru`",
-        "selected once and persisted",
-        "top-level `language` value",
-        "saved language",
+        "selected once and retained",
+        "Record the stable mechanics and selected language",
     ):
         assert phrase in text, phrase
 
@@ -108,10 +111,10 @@ def test_install_persists_the_language_once_for_future_runs_and_uninstall():
 def test_install_explains_stages_without_mislabeling_prerequisites():
     text = _flat(INSTALL)
     for phrase in (
-        "**Stage 0** maps what can break",
-        "**Stage 1** attacks the code locally",
-        "**Stage 2** attacks the built or deployed result",
-        "Stage 0 is rebuilt for each change",
+        "**Stage 0** decides what could break",
+        "**Stage 1** checks the code inside the repository",
+        "**Stage 2** checks the built or deployed result",
+        "This is what you will set up first",
         "Stage 2 prerequisite, not Stage 2 itself",
     ):
         assert phrase in text, phrase
@@ -120,13 +123,12 @@ def test_install_explains_stages_without_mislabeling_prerequisites():
 def test_install_infers_stage2_before_it_asks():
     text = _flat(INSTALL)
     for phrase in (
-        "Build the most likely route from that evidence",
-        "confirmation of the inferred Stage 2 route",
-        "do not begin with an infrastructure questionnaire",
-        "only then ask the open question",
-        "trigger delivery for the exact revision",
+        "Infer the most likely real delivery path from repository evidence",
+        "Ask one short confirmation question",
+        "Do not begin with an infrastructure questionnaire",
+        "trigger or observe delivery for the exact revision",
         "prove the running artifact is that revision",
-        "prove the oracle can fail",
+        "prove the check can fail",
     ):
         assert phrase in text, phrase
 
@@ -135,10 +137,8 @@ def test_stage2_confirmation_is_a_hard_turn_boundary():
     text = _flat(INSTALL)
     for phrase in (
         "confirmation is a hard turn boundary",
-        "End that response with the confirmation question",
-        "Do not report `configured`",
-        "until the user has answered",
-        "cannot be `configured` before the inferred Stage 2 route has been confirmed",
+        "End the response with that question",
+        "wait",
     ):
         assert phrase in text, phrase
 
@@ -146,12 +146,11 @@ def test_stage2_confirmation_is_a_hard_turn_boundary():
 def test_default_branch_delivery_becomes_an_explicit_post_merge_gate():
     text = _flat(INSTALL)
     for phrase in (
-        "full Cerberus verdict is post-merge",
+        "full Cerberus run is post-merge",
         "gate moving the task to Done or releasing it",
         "cannot honestly gate that merge",
-        "exact URL or target",
-        "whether the agent has access",
-        "safe negative checks are allowed",
+        "find the remaining facts in the repository first",
+        "ask one question about it",
     ):
         assert phrase in text, phrase
 
@@ -159,14 +158,75 @@ def test_default_branch_delivery_becomes_an_explicit_post_merge_gate():
 def test_install_keeps_setup_status_separate_from_product_verdicts():
     text = _flat(INSTALL)
     for phrase in (
-        "**Installation:** `installed` or `not installed`",
-        "**Project setup:** `configured` or `setup blocked`",
-        "**Change verdict:** `READY` or `NOT READY`",
-        "never use these during installation",
+        "Installation and setup do not receive a product verdict",
+        "belong only to a Cerberus run against a concrete product change",
         "before a tracker task moves to Done",
         "`NOT READY` keeps the task open",
     ):
         assert phrase in text, phrase
+
+
+def test_stage1_blocker_is_a_hard_turn_boundary_before_stage2():
+    text = _flat(INSTALL)
+    for phrase in (
+        "If a required Stage 1 check fails, this is a hard turn boundary",
+        "Do not inspect, infer, present, or ask about Stage 2 while Stage 1 is blocked",
+        "Offer one recommended next action",
+        "End with exactly one short question",
+        "Resume only after the person answers",
+    ):
+        assert phrase in text, phrase
+
+
+def test_normal_onboarding_hides_internal_configuration_and_tool_theatre():
+    text = _flat(INSTALL)
+    for phrase in (
+        "Keep the internal work internal",
+        "do not narrate tool or skill selection",
+        "configuration files, JSON",
+        "Never expose its filename, format, keys, or contents",
+        "Do not report the configuration path",
+        "marketplace mechanics",
+    ):
+        assert phrase in text, phrase
+
+
+def test_stage2_is_a_progressive_conversation_not_a_batched_questionnaire():
+    text = _flat(INSTALL)
+    for phrase in (
+        "Explain Stage 2 in product language",
+        "without printing an infrastructure or shell-command chain",
+        "ask one question about it",
+        "Wait for the answer before asking the next one",
+        "Never batch a URL, cluster, namespace, credentials, revision proof",
+    ):
+        assert phrase in text, phrase
+
+
+def test_the_loomwatch_regression_example_stops_at_the_go_blocker():
+    text = INSTALL.read_text(encoding="utf-8")
+    example = text[text.index("For LoomWatch with a missing Go toolchain"):
+                   text.index("After Stage 1 succeeds")]
+    assert "Go is missing" in example
+    assert "May I run that and repeat the fast check?" in example
+    for leaked in ("cerberus.json", "Kubernetes", "namespace", "token", "Helm"):
+        assert leaked not in example, (leaked, example)
+
+
+def test_installed_setup_skills_enforce_the_same_progressive_flow():
+    for path in SETUP_SKILLS:
+        text = _flat(path)
+        required = (
+            "Stage 2" in text,
+            "Stage 1" in text,
+            "JSON" in text,
+            "one question" in text or "один вопрос" in text,
+            "configuration files" in text or "конфигурационные файлы" in text,
+        )
+        assert all(required), (path.name, required)
+        stage1_gate = text.index("Stage 1")
+        stage2_intro = text.rindex("Stage 2")
+        assert stage1_gate < stage2_intro, path.name
 
 
 def test_uninstall_preserves_configuration_unless_separately_confirmed():

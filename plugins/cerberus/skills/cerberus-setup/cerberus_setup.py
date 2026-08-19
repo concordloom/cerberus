@@ -394,7 +394,7 @@ def run_explicit_checks(commands: list[str], root: pathlib.Path) -> list[tuple[s
     return results
 
 
-def sort_results(results: list) -> tuple[list, list, list, list]:
+def sort_results(results: list, *, explicit: bool = False) -> tuple[list, list, list, list]:
     """Split check results into what may be written and what may not.
 
     A function rather than four comprehensions inside main, because the rule —
@@ -403,9 +403,15 @@ def sort_results(results: list) -> tuple[list, list, list, list]:
     "ok" and "too slow" about it in adjacent lines.
     """
     passing = [cmd for cmd, code, _ in results if code == 0]
-    missing = [cmd for cmd, code, _ in results if code == 127]
+    # Exit 127 from an auto-detected candidate normally means that tool is not
+    # installed. For an explicit project-owned wrapper it can instead mean a
+    # nested dependency failed (`app.sh: go: command not found`). Calling the
+    # wrapper absent hides the useful error and sends the operator down the
+    # wrong path, so explicit commands are always reported as failed.
+    missing = [cmd for cmd, code, _ in results if code == 127 and not explicit]
     timed_out = [cmd for cmd, code, _ in results if code == 124]
-    broken = [(cmd, out) for cmd, code, out in results if code not in (0, 124, 127)]
+    broken = [(cmd, out) for cmd, code, out in results
+              if code not in (0, 124, 127) or (explicit and code == 127)]
     return passing, missing, timed_out, broken
 
 
@@ -671,7 +677,7 @@ def main(argv: list[str] | None = None) -> int:
                         print(f"  ok       {cmd}")
                     else:
                         first = out.splitlines()[0][:50] if out else "no output"
-                        label = "absent  " if code == 127 else "too slow" if code == 124 else "FAILING "
+                        label = "too slow" if code == 124 else "FAILING "
                         print(f"  {label} {cmd} — {first}")
                         still_failing = True
             else:
@@ -715,7 +721,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     results = run_explicit_checks(explicit, root) if explicit else build_checks(runners, root)
-    passing, missing, timed_out, broken = sort_results(results)
+    passing, missing, timed_out, broken = sort_results(results, explicit=bool(explicit))
 
     if explicit and (missing or timed_out or broken):
         print("A project-owned Stage 1 command did not pass, so setup is blocked.")

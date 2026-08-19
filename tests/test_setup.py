@@ -444,6 +444,31 @@ def test_a_failing_check_is_called_failing_not_absent():
     assert broken == [("b", "boom")]
 
 
+def test_an_explicit_wrapper_exit_127_reports_its_nested_dependency_failure():
+    """LoomWatch regression: app.sh existed, but missing Go made it exit 127.
+
+    Setup used to call the wrapper "not installed here", hiding the actual
+    failure and sending onboarding into an unrelated infrastructure discussion.
+    """
+    root = project({
+        "AGENTS.md": "Use ./app.sh --smoke for the fast check.\n",
+        "go.mod": "module example.com/loomwatch\n\ngo 1.24\n",
+        "app.sh": "#!/bin/sh\nmissing-loomwatch-go-binary\n",
+    })
+    (root / "app.sh").chmod(0o755)
+
+    code, out = run_setup(
+        root,
+        "--artifact-kind", "service",
+        "--stage1", "./app.sh --smoke",
+    )
+
+    assert code == 2, out
+    assert "FAILING  ./app.sh --smoke" in out, out
+    assert "missing-loomwatch-go-binary" in out, out
+    assert "not installed here" not in out, out
+
+
 def test_a_failing_check_is_reported_as_failing_end_to_end():
     root = project({**PY_PROJECT, "tests/test_demo.py": "def test_bad():\n    assert False\n"})
     code, out = run_setup(root)
@@ -1067,20 +1092,26 @@ def test_the_skill_asks_about_access_before_writing_commands():
             assert needle in text, f"{path.name}: {needle!r}"
 
 
-def test_the_skill_requires_reading_the_commands_back_before_writing_them():
-    """What they said and what you understood diverge silently."""
-    for path, needle in ((SKILLS / "cerberus-setup" / "SKILL.md", "say back what you understood"),
-                         (SKILLS / "cerberus-setup" / "SKILL.ru.md", "перескажи, что ты понял")):
-        assert needle in path.read_text(encoding="utf-8").lower(), path.name
+def test_the_skill_reads_the_route_back_in_product_language_not_as_commands():
+    """Confirmation must stay understandable without dumping infrastructure."""
+    for path, needles in (
+        (SKILLS / "cerberus-setup" / "SKILL.md",
+         ("explain in product language", "without an infrastructure or shell-command chain")),
+        (SKILLS / "cerberus-setup" / "SKILL.ru.md",
+         ("объясни на языке продукта", "без инфраструктурной цепочки")),
+    ):
+        text = " ".join(path.read_text(encoding="utf-8").lower().split())
+        for needle in needles:
+            assert needle in text, f"{path.name}: {needle!r}"
 
 
 def test_setup_cannot_finish_in_the_same_turn_as_stage2_confirmation():
     for path, needles in (
         (SKILLS / "cerberus-setup" / "SKILL.md",
-         ("hard turn boundary", "end that response with the confirmation question",
+         ("hard turn boundary", "end with the question and wait",
           "cannot be `configured` before")),
         (SKILLS / "cerberus-setup" / "SKILL.ru.md",
-         ("жёсткая граница хода", "закончи ответ вопросом о подтверждении",
+         ("жёсткая граница хода", "закончи вопросом и дождись ответа",
           "не может получить статус `configured` до")),
     ):
         text = " ".join(path.read_text(encoding="utf-8").lower().split())
