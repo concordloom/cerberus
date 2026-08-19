@@ -197,6 +197,41 @@ service endpoints, and version metadata. Combine repository evidence with what
 the person said. Verify the access method and every read-only prerequisite you
 can, then silently record only a route a future Cerberus run can execute.
 
+As part of that investigation, inspect the product surfaces that Stage 2 must
+actually exercise. Do not ask about browser tooling merely because frontend
+files exist. If the deployed product has a user interface, first look for a
+project-owned browser route such as Playwright or Cypress against the stand,
+then for a browser or computer-use tool already available to the agent.
+
+Only when the deployed UI is real and neither route exists, explain the missing
+capability and ask one contextual question in the selected language. In
+English:
+
+> The stand has a user interface, but this agent has no browser tool for Stage 2. To open it, exercise the flow, inspect console and network errors, and capture screenshots, may I connect Playwright MCP?
+
+This is another hard turn boundary. Do not combine it with the stand,
+delivery, access, URL, or credentials questions. Wait for the answer.
+
+If the person agrees, determine and use the current host's supported MCP setup
+route rather than guessing a command for Codex, Claude Code, Cursor, or another
+agent. The approval covers only connecting Playwright MCP, not changing the
+project or exercising a state-changing UI flow.
+
+Never claim that the current session can use a newly added MCP server. Check
+the current host's restart behaviour and visible tool inventory. If a fresh
+agent session, application restart, or extension restart is required, tell the
+person explicitly, give the exact resume phrase, and stop. Resume Stage 2 setup
+only after the restarted session can see the browser tool. Then perform a safe
+read-only browser probe against the stand: open the UI, inspect the rendered
+state plus console and network errors, and capture a screenshot. Ask separately
+before any state-changing browser action.
+
+If the person declines or the host cannot connect a browser tool, continue
+setting up reachable non-UI surfaces and record the UI capability as missing.
+Do not ask again during normal setup. A future change that affects UI behaviour
+cannot receive `READY` until its UI cells have browser evidence; a backend-only
+change does not need a browser merely because the service also has a UI.
+
 If one important fact is still missing, explain why it matters and ask one
 question about it. Wait for the answer before asking the next one. Never batch a
 URL, cluster, namespace, credentials, revision proof, negative test, dependency

@@ -1,7 +1,10 @@
 ---
 name: cerberus
-description: Adversarial verification before claiming a change works. Use before saying "done", "it works", "deployed and working" or "all green" about anything that executes — backend, runtime, UI, data schema.
-when_to_use: Before any readiness claim about an executable change, whether you were asked for it or reached for it yourself. Deciding a change has earned it is part of the work, and no hook will make that decision.
+description: >
+  Adversarial verification before claiming a change works. Use before saying
+  "done", "it works", "deployed and working" or "all green" about anything
+  that executes — backend, runtime, UI, data schema. Use before any readiness
+  claim about an executable change, whether requested or reached independently.
 ---
 
 # Cerberus — adversarial verification gate
@@ -417,8 +420,18 @@ result, with evidence.
    with real arguments. In every case the artifact is the produced one, not the
    working tree.
 
-2. **UI through a browser.** Open the page, screenshot it, look at the render
-   and at console errors. The screenshot is the evidence.
+2. **UI through a browser.** Open the page, exercise the affected flow, inspect
+   the rendered result plus console and network errors, and capture screenshots.
+   Prefer a project-owned browser route against the deployed stand, then a
+   browser tool already available to the agent. If the change affects UI and no
+   browser route exists, ask to connect Playwright MCP; do not substitute HTTP
+   calls or source inspection. A newly connected MCP server is not available
+   until the current host proves it is visible. State any fresh-session,
+   application-restart, or extension-restart requirement explicitly and resume
+   only after the browser tool appears. If the person declines or the host
+   cannot connect it, mark the UI cells `GAP` and return `NOT READY` for a UI
+   change. A backend-only change does not require browser evidence merely
+   because the service also has a UI.
 3. **API through real calls**, with authentication, against the deployment. For
    a library, the equivalent is the public surface called from outside the
    package — including what your own tests never import, because they import
@@ -610,7 +623,9 @@ Treat it as a `BLOCKER` on the configuration and say what is missing.
       state actually reached?
 - [ ] Were negative conclusions read from the source rather than a filtering
       projection?
-- [ ] Stage 2: UI screenshotted, API called for real, negatives run live?
+- [ ] Stage 2: for a UI change, did a real browser exercise the deployed flow,
+      with render, console, network and screenshot evidence — or is it an
+      explicit `GAP` that prevents `READY`?
 - [ ] Stage 2: external integrations exercised by real call — not mocked, not
       bypassed (a mocked cell is 🧊, never ✅)?
 - [ ] Is every finding reproduced, with evidence, rather than hypothesised?

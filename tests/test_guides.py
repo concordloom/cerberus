@@ -16,6 +16,10 @@ SETUP_SKILLS = (
     ROOT / "plugins" / "cerberus" / "skills" / "cerberus-setup" / "SKILL.md",
     ROOT / "plugins" / "cerberus" / "skills" / "cerberus-setup" / "SKILL.ru.md",
 )
+RUNNER_SKILLS = (
+    ROOT / "plugins" / "cerberus" / "skills" / "cerberus" / "SKILL.md",
+    ROOT / "plugins" / "cerberus" / "skills" / "cerberus" / "SKILL.ru.md",
+)
 LANGUAGE_QUESTION = "Which language would you like me to use: English or Russian?"
 
 
@@ -227,6 +231,73 @@ def test_stage2_is_a_progressive_conversation_not_a_batched_questionnaire():
         "Never batch a URL, cluster, namespace, credentials, revision proof",
     ):
         assert phrase in text, phrase
+
+
+def test_ui_browser_question_appears_only_after_stage2_surface_discovery():
+    text = _flat(INSTALL)
+    phrases = (
+        "Do not ask about browser tooling merely because frontend files exist",
+        "Only when the deployed UI is real and neither route exists",
+        "may I connect Playwright MCP?",
+        "This is another hard turn boundary",
+        "Do not combine it with the stand, delivery, access, URL, or credentials questions",
+    )
+    for phrase in phrases:
+        assert phrase in text, phrase
+
+    stand_question = text.index("Is there a test or staging environment")
+    access_question = text.index("How does a new version get there")
+    surface_discovery = text.index("inspect the product surfaces")
+    playwright_question = text.index("may I connect Playwright MCP?")
+    assert stand_question < access_question < surface_discovery < playwright_question
+
+
+def test_new_mcp_never_pretends_to_be_loaded_before_restart():
+    expected = {
+        INSTALL: (
+            "Never claim that the current session can use a newly added MCP server",
+            "fresh agent session, application restart, or extension restart",
+            "tell the person explicitly",
+            "Resume Stage 2 setup only after the restarted session can see the browser tool",
+        ),
+        SETUP_SKILLS[0]: (
+            "Never claim that the current session can use a newly added MCP server",
+            "fresh agent session, application restart, or extension restart",
+            "tell the person explicitly",
+            "Resume setup only after the restarted session can see the browser tool",
+        ),
+        SETUP_SKILLS[1]: (
+            "Никогда не утверждай, что текущая сессия уже видит только что добавленный MCP",
+            "нужна новая сессия агента, перезапуск приложения или расширения",
+            "явно скажи об этом человеку",
+            "Продолжай настройку только после того, как перезапущенная сессия увидит браузерный инструмент",
+        ),
+    }
+    for path, phrases in expected.items():
+        text = _flat(path)
+        for phrase in phrases:
+            assert phrase in text, (path.name, phrase)
+
+
+def test_ui_changes_require_real_browser_evidence_or_not_ready():
+    expected = {
+        RUNNER_SKILLS[0]: (
+            "ask to connect Playwright MCP",
+            "do not substitute HTTP calls or source inspection",
+            "mark the UI cells `GAP` and return `NOT READY` for a UI change",
+            "A backend-only change does not require browser evidence",
+        ),
+        RUNNER_SKILLS[1]: (
+            "предложить подключить Playwright MCP",
+            "не заменять его HTTP-вызовами или чтением исходников",
+            "отметить UI-клетки как `GAP` и вернуть `NOT READY` для UI-изменения",
+            "Backend-изменению не нужны браузерные доказательства",
+        ),
+    }
+    for path, phrases in expected.items():
+        text = _flat(path)
+        for phrase in phrases:
+            assert phrase in text, (path.name, phrase)
 
 
 def test_the_loomwatch_regression_example_stops_at_the_go_blocker():

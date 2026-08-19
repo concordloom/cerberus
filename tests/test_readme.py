@@ -353,18 +353,15 @@ def test_nothing_promises_that_the_skill_stays_quiet():
 
 
 def test_the_skill_does_not_contradict_its_own_description():
-    """#43, point 4. The two lines sat four lines apart and argued.
-
-    `description` names the trigger words that make an agent pick this up;
-    `when_to_use` said nothing would pick it up. Whichever an agent believed,
-    the file was wrong.
-    """
+    """The valid description alone owns the complete trigger contract."""
     for path in (ROOT / "plugins/cerberus/skills/cerberus/SKILL.md",
                  ROOT / "plugins/cerberus/skills/cerberus/SKILL.ru.md"):
         head = path.read_text(encoding="utf-8").split("---")[1]
-        assert re.search(r"when_to_use:", head), path.name
+        assert not re.search(r"when_to_use:", head), path.name
+        assert re.search(r"description:\s*>", head), path.name
+        assert re.search(r"readiness\s+claim|заявлением\s+о\s+готовности", head), path.name
         assert not re.search(r"[Nn]othing invokes|[Нн]икто не вызовет", head), (
-            f"{path.name}: when_to_use denies what description is written to cause")
+            f"{path.name}: description denies its own trigger")
 
 
 def test_the_page_never_promises_an_automatic_refusal():

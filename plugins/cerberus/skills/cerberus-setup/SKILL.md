@@ -156,6 +156,39 @@ service URLs, and version metadata. Combine repository evidence with what the
 person said. Verify access and all read-only prerequisites you can, then silently
 record only a route a future Cerberus run can execute.
 
+During that investigation, inspect the real product surfaces Stage 2 must
+exercise. Do not ask about browser tooling merely because frontend files exist.
+If the deployed product has a UI, first look for a project-owned browser route
+such as Playwright or Cypress against the stand, then for a browser or
+computer-use tool already available to the agent.
+
+Only when the deployed UI is real and neither route exists, explain the missing
+capability and ask one contextual question:
+
+> The stand has a user interface, but this agent has no browser tool for Stage 2. To open it, exercise the flow, inspect console and network errors, and capture screenshots, may I connect Playwright MCP?
+
+This is a hard turn boundary. Do not combine it with the stand, delivery,
+access, URL, or credentials questions. Wait for the answer.
+
+If the person agrees, determine and use the current host's supported MCP setup
+route rather than guessing a command. The approval covers only connecting
+Playwright MCP, not changing the project or exercising a state-changing UI
+flow.
+
+Never claim that the current session can use a newly added MCP server. Check
+the host's restart behaviour and visible tool inventory. If a fresh agent
+session, application restart, or extension restart is required, tell the person
+explicitly, give the exact resume phrase, and stop. Resume setup only after the
+restarted session can see the browser tool. Then perform a safe read-only probe:
+open the stand UI, inspect the rendered state plus console and network errors,
+and capture a screenshot. Ask separately before a state-changing browser action.
+
+If the person declines or the host cannot connect a browser tool, continue with
+reachable non-UI surfaces and record the UI capability as missing. Do not ask
+again during normal setup. A future UI change cannot receive `READY` until its
+UI cells have browser evidence; a backend-only change does not need a browser
+merely because the service also has a UI.
+
 If one important fact is still missing, explain why it matters and ask one
 question about it. Wait for the answer before asking another. Never batch the
 URL, cluster, namespace, credentials, revision proof, negative check, dependency
@@ -224,6 +257,8 @@ Give one short copyable prompt for each gate in the selected language.
 - [ ] Did I ask before lengthy or shared-state-changing work?
 - [ ] For a deployed service, did I first ask only whether a stand is available?
 - [ ] If yes, did I ask how delivery and access work without requesting secrets?
+- [ ] If a deployed UI had no browser route, did I offer Playwright MCP only after discovering that gap?
+- [ ] After connecting MCP, did I state and respect the host's restart boundary?
 - [ ] Did I avoid batching unrelated Stage 2 questions?
 - [ ] Can the future runner access the target and prove the exact revision?
 - [ ] Can the Stage 2 check fail safely?
