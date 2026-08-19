@@ -91,19 +91,44 @@ Run fast, read-only checks automatically. Ask before a lengthy suite or a
 command that mutates shared state. Pass explicit checks from fastest to
 slowest; the script stops at the first failure.
 
+The request to install or set up Cerberus authorizes one continuous local setup
+goal. Approval attaches to the goal, not to each command. Within that goal,
+continue autonomously through local, reversible diagnostics, including:
+
+- user-scoped dependency installation that needs no elevated privileges;
+- temporary environments, caches, and diagnostic output;
+- bounded reruns of the same project-owned check with safer environment,
+  parallelism, cache, or tracing settings;
+- read-only inspection that narrows a failure to a dependency, phase, package,
+  test, or process.
+
+Do not ask permission to change diagnostic strategy while it stays inside this
+scope. Ask only before a system-wide installation or elevated privileges,
+editing tracked project files, a lengthy suite outside the agreed budget,
+raising a resource limit beyond the current safety envelope, accessing a
+secret, or changing shared or external state.
+
 Every first Stage 1 command needs a wall-clock budget. Use
 `--timeout-seconds 120`, which is 120 seconds by default, or a smaller
-repository-defined limit.
-While it runs, monitor the whole process tree and treat 4 GiB of resident memory
-as the default safety ceiling for an unknown fast check. Stop at either limit,
-report that the fast check exceeded its safety envelope, and diagnose under
-equally strict limits. Do not rerun a timed-out command directly without an
-equivalent limit. Ask before raising either limit for a check the repository
-documents as legitimately expensive.
+repository-defined limit. Use memory as a host-relative safety signal: watch
+available memory, sustained swap pressure, host responsiveness, and repository
+evidence instead of enforcing one universal RSS number. A runtime memory
+objective is not a compiler memory limit. Stop before the check threatens the
+host, and diagnose under an equivalent or safer envelope. Do not rerun a
+timed-out command directly without an equivalent limit. Ask before raising
+either limit for a check the repository documents as legitimately expensive.
 
-## A Stage 1 blocker ends the turn
+## Diagnose Stage 1 autonomously; stop only at an authority boundary
 
-If a required Stage 1 check is red:
+When a required Stage 1 check is red, diagnose it inside the autonomy budget
+before presenting a blocker. Each retry must test a materially different
+hypothesis and preserve or tighten the current safety envelope. Continue while
+the evidence narrows the cause. If two consecutive attempts reproduce the same
+blocker twice without materially new evidence, stop rather than churn.
+
+A Stage 1 failure becomes a hard turn boundary only when the next useful action
+crosses an authority boundary above, requires a product or workflow choice, or
+the bounded diagnostic loop has stopped making progress. Then:
 
 1. Explain in plain language what the check was trying to prove.
 2. Name the concrete cause and impact. Diagnose the useful underlying error; a
@@ -117,12 +142,13 @@ Do not give a setup summary, infrastructure questionnaire, raw command chain,
 large terminal excerpt, configuration path, JSON, or internal state. Resume
 only after the person answers.
 
-For LoomWatch with a missing Go toolchain, a good response is:
+For a project wrapper with a missing nested dependency, good behaviour is:
 
-> Stage 1 checks whether LoomWatch can pass its own fast project check. It is
-> not ready yet because that check starts through `app.sh`, but Go is missing
-> from this environment. The project can install its dependencies with its own
-> setup command. May I run that and repeat the fast check?
+> Stage 1 needs a tool that is not available here. The system route requires
+> elevated privileges, so I will first try a user-local or project-declared
+> route and repeat the project check. Those steps are local and reversible, so
+> I will continue without another question. If the only remaining route
+> requires elevated privileges, I will stop and ask.
 
 After Stage 1 succeeds, report the result in one short sentence.
 
@@ -287,6 +313,8 @@ Give one short copyable prompt for each gate in the selected language.
 - [ ] If Stage 1 failed, did I stop before inspecting or discussing Stage 2?
 - [ ] Did a blocker response contain one problem, one next step, and one question?
 - [ ] Did I ask before lengthy or shared-state-changing work?
+- [ ] Did I treat approval as applying to the setup goal rather than each safe command?
+- [ ] Did I continue safe local diagnostics without repeated permission questions?
 - [ ] Did every first Stage 1 command have time and memory safety limits?
 - [ ] For a deployed service, did I first ask only whether a stand is available?
 - [ ] If yes, did I ask how delivery and access work without requesting secrets?

@@ -174,14 +174,17 @@ def test_install_keeps_setup_status_separate_from_product_verdicts():
         assert phrase in text, phrase
 
 
-def test_stage1_blocker_is_a_hard_turn_boundary_before_stage2():
+def test_stage1_failure_is_autonomous_until_authority_changes():
     text = _flat(INSTALL)
     for phrase in (
-        "If a required Stage 1 check fails, this is a hard turn boundary",
+        "Approval attaches to the goal, not to each command",
+        "continue autonomously through local, reversible diagnostics",
+        "Do not ask permission to change diagnostic strategy",
+        "same blocker twice without materially new evidence",
+        "A Stage 1 failure becomes a hard turn boundary only when",
         "Do not inspect, infer, present, or ask about Stage 2 while Stage 1 is blocked",
         "Offer one recommended next action",
         "End with exactly one short question",
-        "Resume only after the person answers",
     ):
         assert phrase in text, phrase
 
@@ -234,19 +237,22 @@ def test_first_stage1_run_has_a_resource_envelope():
             "Every first Stage 1 command needs a wall-clock budget",
             "120 seconds",
             "Do not rerun a timed-out command directly without an equivalent limit",
-            "4 GiB",
+            "host-relative safety signal",
+            "runtime memory objective is not a compiler memory limit",
         ),
         SETUP_SKILLS[0]: (
             "Every first Stage 1 command needs a wall-clock budget",
             "120 seconds",
             "Do not rerun a timed-out command directly without an equivalent limit",
-            "4 GiB",
+            "host-relative safety signal",
+            "runtime memory objective is not a compiler memory limit",
         ),
         SETUP_SKILLS[1]: (
             "Первый запуск каждой команды Stage 1 должен иметь ограничение по времени",
             "120 секунд",
             "Не перезапускай команду после тайм-аута напрямую без равноценного ограничения",
-            "4 ГиБ",
+            "относительный к машине сигнал безопасности",
+            "Ограничение памяти готового продукта не становится лимитом памяти компилятора",
         ),
     }
     for path, phrases in expected.items():
@@ -408,14 +414,67 @@ def test_ui_changes_require_real_browser_evidence_or_not_ready():
             assert phrase in text, (path.name, phrase)
 
 
-def test_the_loomwatch_regression_example_stops_at_the_go_blocker():
+def test_missing_nested_dependency_uses_safe_local_routes_before_asking():
     text = INSTALL.read_text(encoding="utf-8")
-    example = text[text.index("For LoomWatch with a missing Go toolchain"):
-                   text.index("After Stage 1 succeeds")]
-    assert "Go is missing" in example
-    assert "May I run that and repeat the fast check?" in example
-    for leaked in ("cerberus.json", "Kubernetes", "namespace", "token", "Helm"):
+    example = " ".join(text[
+        text.index("For a project wrapper with a missing nested dependency"):
+        text.index("After Stage 1 succeeds")
+    ].replace("> ", "").split())
+    assert "user-local or project-declared route" in example
+    assert "continue without another question" in example
+    assert "only remaining route requires elevated privileges" in example
+    for leaked in ("LoomWatch", "onWatch", "Go", "GOMAXPROCS", "GOMEMLIMIT",
+                   "cerberus.json", "Kubernetes", "namespace", "token", "Helm"):
         assert leaked not in example, (leaked, example)
+
+
+def test_autonomy_contract_is_project_and_toolchain_agnostic():
+    surfaces = (INSTALL, *SETUP_SKILLS, *RUNNER_SKILLS)
+    for path in surfaces:
+        low = path.read_text(encoding="utf-8").lower()
+        for project_name in ("loomwatch", "onwatch"):
+            assert project_name not in low, (path.name, project_name)
+
+    expected = {
+        INSTALL: (
+            "user-scoped dependency installation that needs no elevated privileges",
+            "temporary environments, caches, and diagnostic output",
+            "tracked project files",
+            "system-wide installation",
+        ),
+        SETUP_SKILLS[0]: (
+            "user-scoped dependency installation that needs no elevated privileges",
+            "temporary environments, caches, and diagnostic output",
+            "tracked project files",
+            "system-wide installation",
+        ),
+        SETUP_SKILLS[1]: (
+            "установку зависимости в пользовательское окружение без повышенных прав",
+            "временные окружения, кеши и диагностический вывод",
+            "отслеживаемых файлов проекта",
+            "системной установкой",
+        ),
+        RUNNER_SKILLS[0]: (
+            "Approval attaches to the verification goal, not to each command",
+            "local, read-only or reversible diagnostics",
+            "user-scoped dependency installation that needs no elevated privileges",
+            "temporary environments, caches, and diagnostic output",
+            "tracked project files",
+            "system-wide installation",
+        ),
+        RUNNER_SKILLS[1]: (
+            "Согласие относится к цели проверки, а не к каждой команде",
+            "локальную диагностику только для чтения или с обратимым эффектом",
+            "установку зависимости в пользовательское окружение без повышенных прав",
+            "временные окружения, кеши и диагностический вывод",
+            "отслеживаемых файлов проекта",
+            "системной установкой",
+        ),
+    }
+    for path, phrases in expected.items():
+        text = _flat(path)
+        for phrase in phrases:
+            assert phrase in text, (path.name, phrase)
 
 
 def test_install_recommends_the_three_gate_development_loop():

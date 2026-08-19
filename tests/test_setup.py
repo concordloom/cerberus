@@ -272,7 +272,7 @@ def test_refuses_a_project_it_cannot_recognise():
 
 def test_project_instructions_block_generic_toolchain_guesses():
     root = project({
-        "go.mod": "module example.com/loomwatch\n\ngo 1.25\n",
+        "go.mod": "module example.com/wrapped-project\n\ngo 1.25\n",
         "AGENTS.md": (
             "Always use `app.sh` for build and test - never run `go build` "
             "or `go test` directly.\n"
@@ -289,7 +289,7 @@ def test_project_instructions_block_generic_toolchain_guesses():
 
 def test_explicit_project_owned_checks_replace_generic_go_commands():
     root = project({
-        "go.mod": "module example.com/loomwatch\n\ngo 1.25\n",
+        "go.mod": "module example.com/wrapped-project\n\ngo 1.25\n",
         "Dockerfile": "FROM scratch\n",
         "AGENTS.md": "Always use `app.sh` for build and test.\n",
         "app.sh": "#!/bin/sh\nprintf '%s\\n' \"$1\" >> wrapper.log\n",
@@ -309,7 +309,7 @@ def test_explicit_project_owned_checks_replace_generic_go_commands():
 
 def test_one_red_project_owned_check_blocks_setup_instead_of_writing_a_subset():
     root = project({
-        "go.mod": "module example.com/loomwatch\n\ngo 1.25\n",
+        "go.mod": "module example.com/wrapped-project\n\ngo 1.25\n",
         "Dockerfile": "FROM scratch\n",
         "AGENTS.md": "Always use `app.sh` for build and test.\n",
         "app.sh": "#!/bin/sh\n[ \"$1\" = --smoke ]\n",
@@ -330,7 +330,7 @@ def test_one_red_project_owned_check_blocks_setup_instead_of_writing_a_subset():
 
 def test_a_red_smoke_check_stops_before_the_long_project_owned_suite():
     root = project({
-        "go.mod": "module example.com/loomwatch\n\ngo 1.25\n",
+        "go.mod": "module example.com/wrapped-project\n\ngo 1.25\n",
         "Dockerfile": "FROM scratch\n",
         "AGENTS.md": "Always use `app.sh`; smoke before the full suite.\n",
         "app.sh": (
@@ -445,15 +445,15 @@ def test_a_failing_check_is_called_failing_not_absent():
 
 
 def test_an_explicit_wrapper_exit_127_reports_its_nested_dependency_failure():
-    """LoomWatch regression: app.sh existed, but missing Go made it exit 127.
+    """A wrapper can exist while one of its nested dependencies is missing.
 
     Setup used to call the wrapper "not installed here", hiding the actual
     failure and sending onboarding into an unrelated infrastructure discussion.
     """
     root = project({
         "AGENTS.md": "Use ./app.sh --smoke for the fast check.\n",
-        "go.mod": "module example.com/loomwatch\n\ngo 1.24\n",
-        "app.sh": "#!/bin/sh\nmissing-loomwatch-go-binary\n",
+        "go.mod": "module example.com/wrapped-project\n\ngo 1.24\n",
+        "app.sh": "#!/bin/sh\nmissing-project-tool\n",
     })
     (root / "app.sh").chmod(0o755)
 
@@ -465,7 +465,7 @@ def test_an_explicit_wrapper_exit_127_reports_its_nested_dependency_failure():
 
     assert code == 2, out
     assert "FAILING  ./app.sh --smoke" in out, out
-    assert "missing-loomwatch-go-binary" in out, out
+    assert "missing-project-tool" in out, out
     assert "not installed here" not in out, out
 
 

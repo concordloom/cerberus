@@ -184,6 +184,18 @@ these axes with more happy-path runs.
 
 ## Stage 1 — Break the code
 
+Approval attaches to the verification goal, not to each command. Continue
+local, read-only or reversible diagnostics without asking after every failed
+attempt: inspect output, isolate the failing phase, vary temporary environment
+or tracing, and rerun bounded checks when each attempt tests a new hypothesis.
+This autonomy includes user-scoped dependency installation that needs no
+elevated privileges, plus temporary environments, caches, and diagnostic
+output, provided they stay inside the agreed verification goal.
+Ask before editing tracked project files, a system-wide installation or
+elevated privileges, raising an agreed resource envelope, accessing secrets, or
+changing shared or external state. If the same blocker repeats twice without
+materially new evidence, stop and report it instead of churning.
+
 Statically and locally, try to break it:
 
 1. **Build, tests, lint** over the affected areas. Your own run, not "a subagent
@@ -611,6 +623,8 @@ Treat it as a `BLOCKER` on the configuration and say what is missing.
 - [ ] Stage 0: did every **new mechanism** get its own matrix instead of
       dissolving into "the flow works"?
 - [ ] Stage 1: build, tests and lint — my own run, green?
+- [ ] Did I treat approval as covering the verification goal and continue safe
+      local diagnostics without per-command questions?
 - [ ] Stage 1: consumption path traced for every value written — is the runtime
       proven to read the new value?
 - [ ] Stage 1: for a bug class — every call site, with search output as proof
