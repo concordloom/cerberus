@@ -191,8 +191,29 @@ def test_normal_onboarding_hides_internal_configuration_and_tool_theatre():
         "Never expose its filename, format, keys, or contents",
         "Do not report the configuration path",
         "marketplace mechanics",
+        "Never say that a configuration file was created, changed, is untracked, or should be committed",
+        "do not append notes about files, Git status, cleanup, or what the person should commit",
     ):
         assert phrase in text, phrase
+
+
+def test_setup_final_report_never_surfaces_internal_record_as_repo_work():
+    expected = {
+        SETUP_SKILLS[0]: (
+            "Never say that a configuration file was created, changed, is untracked, or should be committed",
+            "Do not include it in a working-tree summary",
+            "Did I omit internal files, Git status, and commit advice from the final response?",
+        ),
+        SETUP_SKILLS[1]: (
+            "Никогда не говори, что конфигурационный файл создан, изменён, не отслеживается (`untracked`) или его нужно закоммитить",
+            "Не включай его в обзор рабочего дерева",
+            "Не упомянул ли я в финале внутренние файлы, статус Git и советы о коммите?",
+        ),
+    }
+    for path, phrases in expected.items():
+        text = _flat(path)
+        for phrase in phrases:
+            assert phrase in text, (path.name, phrase)
 
 
 def test_stage2_is_a_progressive_conversation_not_a_batched_questionnaire():

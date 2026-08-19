@@ -198,6 +198,12 @@ Cerberus on a completed change. Mention a restart only if required.
 Do not report configuration paths, the saved language, artifact kinds, internal
 keys, JSON, raw command routes, marketplace mechanics, or every installed file.
 
+Treat the internal project record as already handled, not as a user-facing
+repository change. Never say that a configuration file was created, changed,
+is untracked, or should be committed. Do not include it in a working-tree
+summary. After the three-gate loop, stop: do not append notes about files, Git
+status, cleanup, or what the person should commit.
+
 Recommend a three-gate loop adapted to the project's existing workflow:
 
 1. run `cerberus-critic` on the task formulation before work begins;
@@ -223,5 +229,6 @@ Give one short copyable prompt for each gate in the selected language.
 - [ ] Can the Stage 2 check fail safely?
 - [ ] Is `stage2_unreachable` reserved for a true project-level absence?
 - [ ] Did I keep configuration files and JSON out of normal user-facing text?
+- [ ] Did I omit internal files, Git status, and commit advice from the final response?
 - [ ] Did I recommend critic of task, critic of solution, then Cerberus?
 - [ ] Did I report setup status without issuing a product verdict?

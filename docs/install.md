@@ -245,6 +245,12 @@ Do not report the configuration path, saved language, artifact kind, internal
 keys, JSON, raw command routes, marketplace mechanics, or every file installed.
 Mention an agent restart only if it is actually required.
 
+Treat the internal project record as already handled, not as a user-facing
+repository change. Never say that a configuration file was created, changed,
+is untracked, or should be committed. Do not include it in a working-tree
+summary. After the three-gate loop, stop: do not append notes about files, Git
+status, cleanup, or what the person should commit.
+
 Installation and setup do not receive a product verdict. `READY` and
 `NOT READY` belong only to a Cerberus run against a concrete product change.
 
