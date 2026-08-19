@@ -120,12 +120,15 @@ def test_install_explains_stages_without_mislabeling_prerequisites():
         assert phrase in text, phrase
 
 
-def test_install_infers_stage2_before_it_asks():
+def test_install_asks_about_a_stand_before_inferring_stage2():
     text = _flat(INSTALL)
     for phrase in (
-        "Infer the most likely real delivery path from repository evidence",
-        "Ask one short confirmation question",
-        "Do not begin with an infrastructure questionnaire",
+        "do not infer and present its infrastructure first",
+        "Is there a test or staging environment where Cerberus can verify the deployed version?",
+        "Есть ли стенд, на котором Cerberus сможет проверить уже развёрнутую версию?",
+        "How does a new version get there, and how can the agent obtain access?",
+        "Do not send secrets",
+        "After the answer, inspect CI triggers",
         "trigger or observe delivery for the exact revision",
         "prove the running artifact is that revision",
         "prove the check can fail",
@@ -136,9 +139,10 @@ def test_install_infers_stage2_before_it_asks():
 def test_stage2_confirmation_is_a_hard_turn_boundary():
     text = _flat(INSTALL)
     for phrase in (
-        "confirmation is a hard turn boundary",
-        "End the response with that question",
-        "wait",
+        "availability question is a hard turn boundary",
+        "End the response with it and wait",
+        "Then wait again",
+        "before the person answers",
     ):
         assert phrase in text, phrase
 
@@ -149,7 +153,7 @@ def test_default_branch_delivery_becomes_an_explicit_post_merge_gate():
         "full Cerberus run is post-merge",
         "gate moving the task to Done or releasing it",
         "cannot honestly gate that merge",
-        "find the remaining facts in the repository first",
+        "Combine repository evidence with what the person said",
         "ask one question about it",
     ):
         assert phrase in text, phrase
@@ -160,7 +164,7 @@ def test_install_keeps_setup_status_separate_from_product_verdicts():
     for phrase in (
         "Installation and setup do not receive a product verdict",
         "belong only to a Cerberus run against a concrete product change",
-        "before a tracker task moves to Done",
+        "before the tracker task moves to Done",
         "`NOT READY` keeps the task open",
     ):
         assert phrase in text, phrase
@@ -194,8 +198,9 @@ def test_normal_onboarding_hides_internal_configuration_and_tool_theatre():
 def test_stage2_is_a_progressive_conversation_not_a_batched_questionnaire():
     text = _flat(INSTALL)
     for phrase in (
-        "Explain Stage 2 in product language",
-        "without printing an infrastructure or shell-command chain",
+        "Explain Stage 2 in one sentence",
+        "do not infer and present its infrastructure first",
+        "ask one related follow-up",
         "ask one question about it",
         "Wait for the answer before asking the next one",
         "Never batch a URL, cluster, namespace, credentials, revision proof",
@@ -211,6 +216,18 @@ def test_the_loomwatch_regression_example_stops_at_the_go_blocker():
     assert "May I run that and repeat the fast check?" in example
     for leaked in ("cerberus.json", "Kubernetes", "namespace", "token", "Helm"):
         assert leaked not in example, (leaked, example)
+
+
+def test_install_recommends_the_three_gate_development_loop():
+    text = _flat(INSTALL)
+    for phrase in (
+        "three-gate development loop",
+        "run `cerberus-critic` on the task formulation before work begins",
+        "run `cerberus-critic` on the proposed solution before implementation",
+        "run `cerberus` on the completed change and exact delivered revision",
+        "Give one short copyable prompt for each gate",
+    ):
+        assert phrase in text, phrase
 
 
 def test_installed_setup_skills_enforce_the_same_progressive_flow():

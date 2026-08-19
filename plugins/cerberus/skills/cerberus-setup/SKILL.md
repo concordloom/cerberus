@@ -127,35 +127,39 @@ malformed hand-written file requires manual repair. Never store credentials.
 A package smoke test, build, or `--version` call is only a Stage 2 prerequisite
 unless it crosses the actual delivery boundary.
 
-## Introduce Stage 2 only after Stage 1 works
+## Ask whether Stage 2 has somewhere real to run
 
-Only after Stage 1 passes, inspect CI triggers, deploy jobs, Dockerfiles, charts,
-manifests, release scripts, service URLs, and version metadata. Explain in
-product language that Stage 2 proves the exact change reached the place where
-people use it and still works there.
+Only after Stage 1 passes, explain in one sentence that Stage 2 checks the built
+or deployed result where people actually use it.
 
-Present the most likely route in one or two sentences, without an infrastructure
-or shell-command chain, then ask one short confirmation question. Do not make
-the person describe infrastructure the repository already shows and do not
-begin with an infrastructure questionnaire.
+For a deployed service or application, do not inspect and present its
+infrastructure first. Ask only:
 
-For a service deployed from the main branch by CI, prefer:
+> Is there a test or staging environment where Cerberus can verify the deployed version?
 
-> It looks like pushes to the main branch are deployed by CI and the service is
-> then available at its normal URL. Is that the real path we should verify?
+This availability question is a hard turn boundary. End with it and wait.
 
-If repository evidence is insufficient, ask:
+If the answer is yes, ask one related follow-up:
 
-> How does this change get to where it really runs, and how would you know it
-> arrived?
+> How does a new version get there, and how can the agent obtain access? Do not send secrets; just name the existing access method.
 
-Confirmation is a hard turn boundary. End with the question and wait.
+Then wait again. Do not ask for infrastructure fields or present a command
+route before the person answers.
 
-After confirmation, find remaining facts in the repository first. If one
-important fact is missing, explain why it matters and ask one question about
-it. Wait for the answer before asking another. Never batch the URL, cluster,
-namespace, credentials, revision proof, negative check, dependency installation,
-and long-suite permission into one message.
+For a package, CLI, plugin, or another artifact that can be checked safely in a
+clean consumer environment, create that environment yourself instead of asking
+an irrelevant staging question. Ask only when the real consumer environment
+cannot be created or reached automatically.
+
+After the answer, inspect CI triggers, deploy jobs, manifests, release scripts,
+service URLs, and version metadata. Combine repository evidence with what the
+person said. Verify access and all read-only prerequisites you can, then silently
+record only a route a future Cerberus run can execute.
+
+If one important fact is still missing, explain why it matters and ask one
+question about it. Wait for the answer before asking another. Never batch the
+URL, cluster, namespace, credentials, revision proof, negative check, dependency
+installation, and long-suite permission into one message.
 
 Internally, the route must trigger or observe delivery for the exact revision,
 wait with a check that can fail, prove the deployed revision, exercise a real
@@ -165,6 +169,11 @@ If CI deploys only from the default branch, there is no honest pre-merge Stage
 2. Record a preview environment or a post-merge run before Done or release.
 Use `stage2_unreachable` only when the project truly has no reachable delivery
 boundary.
+
+If no test or staging environment exists, record the missing project-level
+target and finish with an honest Stage 1 scope. If it exists but the agent lacks
+access, treat access as the one setup blocker. If the answer is ambiguous, ask
+one short clarification instead of guessing.
 
 Validate read-only prerequisites. Show the exact target and ask before any
 deploy, apply, migration, or other shared write. Missing access, credentials,
@@ -177,8 +186,9 @@ Installation has `installed` or `not installed`. Project setup has `configured`
 or `setup blocked`. `READY` and `NOT READY` belong only to a Cerberus run against
 a concrete product change.
 
-Setup cannot be `configured` before the inferred Stage 2 route is confirmed.
-Before that answer, it is still in progress.
+Setup cannot be `configured` until the Stage 2 target and access are verified,
+or the absence of a project-level target is confirmed and recorded. Before
+that, setup is still in progress.
 
 Use at most four short points: whether Cerberus is installed; whether the
 project's local check is ready and what was observed; whether the real delivery
@@ -188,8 +198,14 @@ Cerberus on a completed change. Mention a restart only if required.
 Do not report configuration paths, the saved language, artifact kinds, internal
 keys, JSON, raw command routes, marketplace mechanics, or every installed file.
 
-Recommend running `cerberus` against the exact revision before a tracker task
-moves to Done. A `NOT READY` verdict keeps that task open.
+Recommend a three-gate loop adapted to the project's existing workflow:
+
+1. run `cerberus-critic` on the task formulation before work begins;
+2. run `cerberus-critic` on the proposed solution before implementation;
+3. run `cerberus` on the completed change and exact delivered revision before
+   the tracker task moves to Done. A `NOT READY` verdict keeps it open.
+
+Give one short copyable prompt for each gate in the selected language.
 
 ## Self-check before saying configured
 
@@ -200,10 +216,12 @@ moves to Done. A `NOT READY` verdict keeps that task open.
 - [ ] If Stage 1 failed, did I stop before inspecting or discussing Stage 2?
 - [ ] Did a blocker response contain one problem, one next step, and one question?
 - [ ] Did I ask before lengthy or shared-state-changing work?
-- [ ] Did I describe Stage 2 in product language and get it confirmed?
+- [ ] For a deployed service, did I first ask only whether a stand is available?
+- [ ] If yes, did I ask how delivery and access work without requesting secrets?
 - [ ] Did I avoid batching unrelated Stage 2 questions?
 - [ ] Can the future runner access the target and prove the exact revision?
 - [ ] Can the Stage 2 check fail safely?
 - [ ] Is `stage2_unreachable` reserved for a true project-level absence?
 - [ ] Did I keep configuration files and JSON out of normal user-facing text?
+- [ ] Did I recommend critic of task, critic of solution, then Cerberus?
 - [ ] Did I report setup status without issuing a product verdict?

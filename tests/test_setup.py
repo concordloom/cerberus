@@ -1092,27 +1092,44 @@ def test_the_skill_asks_about_access_before_writing_commands():
             assert needle in text, f"{path.name}: {needle!r}"
 
 
-def test_the_skill_reads_the_route_back_in_product_language_not_as_commands():
-    """Confirmation must stay understandable without dumping infrastructure."""
+def test_the_skill_asks_about_a_stand_before_inspecting_infrastructure():
+    """The operator should answer one product question, not decode a route."""
     for path, needles in (
         (SKILLS / "cerberus-setup" / "SKILL.md",
-         ("explain in product language", "without an infrastructure or shell-command chain")),
+         ("is there a test or staging environment",
+          "do not inspect and present its infrastructure first")),
         (SKILLS / "cerberus-setup" / "SKILL.ru.md",
-         ("объясни на языке продукта", "без инфраструктурной цепочки")),
+         ("есть ли стенд", "не изучай и не показывай инфраструктуру первым делом")),
     ):
         text = " ".join(path.read_text(encoding="utf-8").lower().split())
         for needle in needles:
             assert needle in text, f"{path.name}: {needle!r}"
 
 
-def test_setup_cannot_finish_in_the_same_turn_as_stage2_confirmation():
+def test_setup_waits_for_stage2_availability_then_delivery_and_access():
     for path, needles in (
         (SKILLS / "cerberus-setup" / "SKILL.md",
-         ("hard turn boundary", "end with the question and wait",
-          "cannot be `configured` before")),
+         ("availability question is a hard turn boundary", "end with it and wait",
+          "how does a new version get there", "then wait again",
+          "cannot be `configured` until")),
         (SKILLS / "cerberus-setup" / "SKILL.ru.md",
-         ("жёсткая граница хода", "закончи вопросом и дождись ответа",
-          "не может получить статус `configured` до")),
+         ("этот вопрос — жёсткая граница хода", "закончи им ответ",
+          "как новая версия попадает на стенд", "снова дождись ответа",
+          "не может получить статус `configured`, пока")),
+    ):
+        text = " ".join(path.read_text(encoding="utf-8").lower().split())
+        for needle in needles:
+            assert needle in text, f"{path.name}: {needle!r}"
+
+
+def test_setup_recommends_critic_task_then_critic_solution_then_cerberus():
+    for path, needles in (
+        (SKILLS / "cerberus-setup" / "SKILL.md",
+         ("three-gate loop", "task formulation before work begins",
+          "proposed solution before implementation", "completed change and exact delivered revision")),
+        (SKILLS / "cerberus-setup" / "SKILL.ru.md",
+         ("трёхшаговый цикл", "по постановке задачи", "по предложенному решению",
+          "по готовому изменению и точной поставленной ревизии")),
     ):
         text = " ".join(path.read_text(encoding="utf-8").lower().split())
         for needle in needles:

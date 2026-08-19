@@ -163,30 +163,43 @@ After Stage 1 succeeds, report that result in one short sentence. A build,
 package smoke test, or `--version` check is only a Stage 2 prerequisite, not
 Stage 2 itself.
 
-## 6. Introduce Stage 2 as a conversation
+## 6. Ask whether Stage 2 has somewhere real to run
 
-Only now inspect CI triggers, deploy jobs, Dockerfiles, charts, manifests,
-release scripts, service endpoints, and version metadata. Infer the most likely
-real delivery path from repository evidence.
+Explain Stage 2 in one sentence: it checks the built or deployed result where
+people actually use it.
 
-Explain Stage 2 in product language: it proves that the exact change reached
-the place where people use the result and still works there. Summarize the
-observed route in one or two sentences, without printing an infrastructure or
-shell-command chain. Ask one short confirmation question. Do not begin with an
-infrastructure questionnaire.
+For a service or application that is deployed, do not infer and present its
+infrastructure first. Ask only:
 
-For a service, prefer a question shaped like this:
+> Is there a test or staging environment where Cerberus can verify the deployed version?
 
-> It looks like pushes to the main branch are deployed by CI and the service is
-> then available at its normal URL. Is that the real path we should verify?
+In Russian, prefer the natural equivalent:
 
-This confirmation is a hard turn boundary. End the response with that question
+> Есть ли стенд, на котором Cerberus сможет проверить уже развёрнутую версию?
+
+This availability question is a hard turn boundary. End the response with it
 and wait.
 
-After confirmation, find the remaining facts in the repository first. If one
-important fact is still missing, explain why it matters and ask one question
-about it. Wait for the answer before asking the next one. Never batch a URL,
-cluster, namespace, credentials, revision proof, negative test, dependency
+If the answer is yes, ask one related follow-up:
+
+> How does a new version get there, and how can the agent obtain access? Do not send secrets; just name the existing access method.
+
+Then wait again. Do not ask for infrastructure fields or present a proposed
+command route before the person answers.
+
+For a package, CLI, plugin, or other artifact that can be checked safely in a
+clean consumer environment, create that environment yourself instead of asking
+an irrelevant staging question. Ask only if a real consumer environment cannot
+be created or reached automatically.
+
+After the answer, inspect CI triggers, deploy jobs, manifests, release scripts,
+service endpoints, and version metadata. Combine repository evidence with what
+the person said. Verify the access method and every read-only prerequisite you
+can, then silently record only a route a future Cerberus run can execute.
+
+If one important fact is still missing, explain why it matters and ask one
+question about it. Wait for the answer before asking the next one. Never batch a
+URL, cluster, namespace, credentials, revision proof, negative test, dependency
 installation, and long-suite permission into one message.
 
 Internally, the confirmed route must be able to:
@@ -201,6 +214,11 @@ If deployment happens only after a push or merge to the default branch, say
 plainly that a full Cerberus run is post-merge. It can gate moving the task to
 Done or releasing it, but cannot honestly gate that merge unless the project
 adds a preview environment.
+
+If no test or staging environment exists, record that Stage 2 has no reachable
+project-level target and finish with an honest Stage 1 scope. If the environment
+exists but the agent lacks access, treat access as the one setup blocker. If the
+answer is ambiguous, ask one short clarification instead of guessing.
 
 Record the stable mechanics and selected language in the project configuration
 silently. Never expose its filename, format, keys, or contents during normal
@@ -230,7 +248,14 @@ Mention an agent restart only if it is actually required.
 Installation and setup do not receive a product verdict. `READY` and
 `NOT READY` belong only to a Cerberus run against a concrete product change.
 
-End with one practical lifecycle recommendation: run Cerberus against the exact
-revision before a tracker task moves to Done; `NOT READY` keeps the task open.
-Offer to add that rule to the repository or tracker workflow, but do not edit
-those files unless asked.
+End with a practical three-gate development loop, adapted to the project's
+existing workflow:
+
+1. run `cerberus-critic` on the task formulation before work begins;
+2. run `cerberus-critic` on the proposed solution before implementation;
+3. run `cerberus` on the completed change and exact delivered revision before
+   the tracker task moves to Done. `NOT READY` keeps the task open.
+
+Give one short copyable prompt for each gate in the selected language. Offer to
+add the loop to the repository or tracker workflow, but do not edit those files
+unless asked.
