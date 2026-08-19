@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.2.1](https://github.com/concordloom/cerberus/compare/v3.2.0...v3.2.1) (2026-08-19)
+
+
+### Bug Fixes
+
+* make setup calmer and safer ([#72](https://github.com/concordloom/cerberus/issues/72)) ([7a09b62](https://github.com/concordloom/cerberus/commit/7a09b62b9d2c9c774331a0504f181836f12ae1ba))
+
 # [3.2.0](https://github.com/concordloom/cerberus/compare/v3.1.8...v3.2.0) (2026-08-19)
 
 
