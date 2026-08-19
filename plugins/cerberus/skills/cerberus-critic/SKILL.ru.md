@@ -1,7 +1,10 @@
 ---
 name: cerberus-critic
-description: Adversarial review of a claim before it is published. Use before saying "the cause is X", "this is not our bug", "the class is closed", "this will prevent it" or before relaying someone else's analysis.
-when_to_use: Before publishing a diagnosis, an explanation of a mechanism, a conclusion that implies work, or a retelling of another review.
+description: >
+  Адверсариальная проверка утверждения до публикации. Использовать перед
+  публикацией диагноза, объяснения механизма, вывода, который подразумевает
+  работу, или пересказом чужого ревью, в том числе перед утверждениями «причина
+  в X», «это не наш баг», «класс закрыт» или «это предотвратит повтор».
 ---
 
 # Критик — адверсариальная проверка утверждений

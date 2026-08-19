@@ -360,7 +360,11 @@ def _looks_like_a_command(root: pathlib.Path) -> bool:
     return False
 
 
-def build_checks(runners: list[dict], root: pathlib.Path) -> list[tuple[str, int, str]]:
+def build_checks(
+    runners: list[dict],
+    root: pathlib.Path,
+    timeout: int = 120,
+) -> list[tuple[str, int, str]]:
     """Run every candidate check and report how each one went.
 
     Nothing reaches the config without having been executed here first, and the
@@ -374,20 +378,24 @@ def build_checks(runners: list[dict], root: pathlib.Path) -> list[tuple[str, int
         for cmd, needs in runner["checks"]:
             if needs and not any((root / n).exists() for n in needs):
                 continue
-            code, out = run(cmd, root)
+            code, out = run(cmd, root, timeout=timeout)
             results.append((cmd, code, out))
             ran_one = ran_one or code == 0
         if not ran_one and runner["fallback"]:
-            code, out = run(runner["fallback"], root)
+            code, out = run(runner["fallback"], root, timeout=timeout)
             results.append((runner["fallback"], code, out))
     return results
 
 
-def run_explicit_checks(commands: list[str], root: pathlib.Path) -> list[tuple[str, int, str]]:
+def run_explicit_checks(
+    commands: list[str],
+    root: pathlib.Path,
+    timeout: int = 120,
+) -> list[tuple[str, int, str]]:
     """Run project-owned checks in order, stopping at the first red baseline."""
     results = []
     for command in commands:
-        result = (command, *run(command, root))
+        result = (command, *run(command, root, timeout=timeout))
         results.append(result)
         if result[1] != 0:
             break
@@ -625,8 +633,18 @@ def main(argv: list[str] | None = None) -> int:
         choices=("en", "ru"),
         help="persist the selected operator-facing language in cerberus.json",
     )
+    parser.add_argument(
+        "--timeout-seconds",
+        type=int,
+        default=120,
+        metavar="SECONDS",
+        help="wall-clock limit for each Stage 1 command (default: 120)",
+    )
     parser.add_argument("--dir", default=".", help="project directory")
     args = parser.parse_args(argv)
+
+    if args.timeout_seconds < 1:
+        parser.error("--timeout-seconds must be at least 1")
 
     root = pathlib.Path(args.dir).resolve()
     config = resolve_config(root)
@@ -672,7 +690,7 @@ def main(argv: list[str] | None = None) -> int:
             if listed:
                 print("Checks it lists:")
                 for cmd in listed:
-                    code, out = run(str(cmd), root)
+                    code, out = run(str(cmd), root, timeout=args.timeout_seconds)
                     if code == 0:
                         print(f"  ok       {cmd}")
                     else:
@@ -688,7 +706,9 @@ def main(argv: list[str] | None = None) -> int:
                 # a second run of the command, and on a project with one check
                 # printed that check twice under two different headings.
                 already = {str(c) for c in listed}
-                found = [c for c, code, _ in build_checks(runners, root)
+                found = [c for c, code, _ in build_checks(
+                    runners, root, timeout=args.timeout_seconds
+                )
                          if code == 0 and c not in already]
                 if found:
                     print()
@@ -720,7 +740,11 @@ def main(argv: list[str] | None = None) -> int:
         print("     package, a command they type")
         return 2
 
-    results = run_explicit_checks(explicit, root) if explicit else build_checks(runners, root)
+    results = (
+        run_explicit_checks(explicit, root, timeout=args.timeout_seconds)
+        if explicit
+        else build_checks(runners, root, timeout=args.timeout_seconds)
+    )
     passing, missing, timed_out, broken = sort_results(results, explicit=bool(explicit))
 
     if explicit and (missing or timed_out or broken):

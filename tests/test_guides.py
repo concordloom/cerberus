@@ -201,6 +201,114 @@ def test_normal_onboarding_hides_internal_configuration_and_tool_theatre():
         assert phrase in text, phrase
 
 
+def test_onboarding_progress_reports_state_not_a_terminal_transcript():
+    expected = {
+        INSTALL: (
+            "one user decision should normally produce one substantive response",
+            "Do not emit repeated still-working updates for the same state",
+            "checksum parsing, shell filters, retries, process polling",
+            "A retry or a different diagnostic command is not a human-facing state change",
+        ),
+        SETUP_SKILLS[0]: (
+            "one user decision should normally produce one substantive response",
+            "Do not emit repeated still-working updates for the same state",
+            "checksum parsing, shell filters, retries, process polling",
+            "A retry or a different diagnostic command is not a human-facing state change",
+        ),
+        SETUP_SKILLS[1]: (
+            "на один выбор человека должен приходиться один содержательный ответ",
+            "Не отправляй повторные сообщения «ещё работаю» для одного состояния",
+            "разбор контрольной суммы, фильтры оболочки, повторы, опрос процессов",
+            "Повтор или другая диагностическая команда не меняют состояние для человека",
+        ),
+    }
+    for path, phrases in expected.items():
+        text = _flat(path)
+        for phrase in phrases:
+            assert phrase in text, (path.name, phrase)
+
+
+def test_first_stage1_run_has_a_resource_envelope():
+    expected = {
+        INSTALL: (
+            "Every first Stage 1 command needs a wall-clock budget",
+            "120 seconds",
+            "Do not rerun a timed-out command directly without an equivalent limit",
+            "4 GiB",
+        ),
+        SETUP_SKILLS[0]: (
+            "Every first Stage 1 command needs a wall-clock budget",
+            "120 seconds",
+            "Do not rerun a timed-out command directly without an equivalent limit",
+            "4 GiB",
+        ),
+        SETUP_SKILLS[1]: (
+            "Первый запуск каждой команды Stage 1 должен иметь ограничение по времени",
+            "120 секунд",
+            "Не перезапускай команду после тайм-аута напрямую без равноценного ограничения",
+            "4 ГиБ",
+        ),
+    }
+    for path, phrases in expected.items():
+        text = _flat(path)
+        for phrase in phrases:
+            assert phrase in text, (path.name, phrase)
+
+
+def test_authenticated_production_read_requires_specific_confirmation():
+    runner_skills = {
+        RUNNER_SKILLS[0]: (
+            "Describing an access method is context, not approval",
+            "authenticated production read",
+            "reading a secret",
+            "one exact read-only probe",
+        ),
+        RUNNER_SKILLS[1]: (
+            "Описание способа доступа — это контекст, а не разрешение",
+            "авторизованным чтением production",
+            "чтением секрета",
+            "одну конкретную проверку только для чтения",
+        ),
+    }
+    setup_surfaces = {
+        INSTALL: runner_skills[RUNNER_SKILLS[0]],
+        SETUP_SKILLS[0]: runner_skills[RUNNER_SKILLS[0]],
+        SETUP_SKILLS[1]: runner_skills[RUNNER_SKILLS[1]],
+        **runner_skills,
+    }
+    for path, phrases in setup_surfaces.items():
+        text = _flat(path)
+        for phrase in phrases:
+            assert phrase in text, (path.name, phrase)
+
+
+def test_shared_mechanics_and_local_access_are_two_distinct_layers():
+    expected = {
+        INSTALL: (
+            "stable, portable verification mechanics belong to the project",
+            "machine-specific paths, private targets, and credentials stay in an ignored local override",
+            "Never put the shared project configuration in `.git/info/exclude`",
+            "The local override must be separate from the shared project record",
+        ),
+        SETUP_SKILLS[0]: (
+            "stable, portable verification mechanics belong to the project",
+            "machine-specific paths, private targets, and credentials stay in an ignored local override",
+            "Never put the shared project configuration in `.git/info/exclude`",
+            "The local override must be separate from the shared project record",
+        ),
+        SETUP_SKILLS[1]: (
+            "Устойчивая переносимая механика проверки принадлежит проекту",
+            "локальные пути, приватные цели и учётные данные остаются в игнорируемом локальном дополнении",
+            "Никогда не добавляй общую конфигурацию проекта в `.git/info/exclude`",
+            "Локальное дополнение должно быть отделено от общей записи проекта",
+        ),
+    }
+    for path, phrases in expected.items():
+        text = _flat(path)
+        for phrase in phrases:
+            assert phrase in text, (path.name, phrase)
+
+
 def test_setup_final_report_never_surfaces_internal_record_as_repo_work():
     expected = {
         SETUP_SKILLS[0]: (

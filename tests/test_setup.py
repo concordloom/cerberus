@@ -497,6 +497,26 @@ def test_a_timed_out_check_is_never_written():
         assert code == 124
 
 
+def test_cli_timeout_budget_applies_to_project_owned_checks():
+    root = project({
+        "AGENTS.md": "Use ./slow-check for Stage 1.\n",
+        "Dockerfile": "FROM scratch\n",
+        "slow-check": "#!/bin/sh\nsleep 5\n",
+    })
+    (root / "slow-check").chmod(0o755)
+
+    code, out = run_setup(
+        root,
+        "--artifact-kind", "service",
+        "--stage1", "./slow-check",
+        "--timeout-seconds", "1",
+    )
+
+    assert code == 2, out
+    assert "too slow ./slow-check" in out, out
+    assert not (root / "cerberus.json").exists(), "a timed-out baseline was persisted"
+
+
 def test_a_timed_out_check_does_not_leave_the_tree_running():
     sys.path.insert(0, str(SETUP.parent))
     import cerberus_setup
@@ -1556,6 +1576,17 @@ def test_both_languages_declare_the_same_skill_name():
         head = ru.read_text(encoding="utf-8").split("---")[1]
         declared = re.search(r"^name:\s*(\S+)", head, re.M).group(1)
         assert declared == skill.name, f"{skill.name}: SKILL.ru.md says {declared!r}"
+
+
+def test_skill_trigger_contract_lives_in_description_not_custom_frontmatter():
+    for skill in sorted(SKILLS.iterdir()):
+        for path in (skill / "SKILL.md", skill / "SKILL.ru.md"):
+            if not path.exists():
+                continue
+            head = path.read_text(encoding="utf-8").split("---")[1]
+            assert "when_to_use:" not in head, (
+                f"{path.relative_to(ROOT)} uses unsupported when_to_use frontmatter"
+            )
 
 
 def _main() -> int:

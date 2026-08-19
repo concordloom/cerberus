@@ -43,6 +43,14 @@ internal CLI syntax. If the host requires an action announcement, combine it
 into one short sentence. Mention an internal detail only when the person must
 act on it or explicitly asks.
 
+During setup, one user decision should normally produce one substantive
+response. Do not emit repeated still-working updates for the same state. Tool
+selection, downloads, checksum parsing, shell filters, retries, process
+polling, and alternative diagnostic commands are internal work. A retry or a
+different diagnostic command is not a human-facing state change. If the host
+requires a periodic update during a long operation, give one plain sentence
+about the current goal and omit the mechanics.
+
 ## Read project rules before choosing checks
 
 Read `AGENTS.md`, `CLAUDE.md`, contribution docs, package scripts, build
@@ -82,6 +90,16 @@ Repeat `--stage1` as needed. `--check` runs and reports without writing.
 Run fast, read-only checks automatically. Ask before a lengthy suite or a
 command that mutates shared state. Pass explicit checks from fastest to
 slowest; the script stops at the first failure.
+
+Every first Stage 1 command needs a wall-clock budget. Use
+`--timeout-seconds 120`, which is 120 seconds by default, or a smaller
+repository-defined limit.
+While it runs, monitor the whole process tree and treat 4 GiB of resident memory
+as the default safety ceiling for an unknown fast check. Stop at either limit,
+report that the fast check exceeded its safety envelope, and diagnose under
+equally strict limits. Do not rerun a timed-out command directly without an
+equivalent limit. Ask before raising either limit for a check the repository
+documents as legitimately expensive.
 
 ## A Stage 1 blocker ends the turn
 
@@ -123,6 +141,14 @@ Only Stage 1 commands that were actually run and passed may be written.
 plan. Never mention this file, its path, format, keys, or contents during normal
 onboarding. Reveal those details only if the person explicitly asks or a
 malformed hand-written file requires manual repair. Never store credentials.
+
+The stable, portable verification mechanics belong to the project;
+machine-specific paths, private targets, and credentials stay in an ignored
+local override. The local override must be separate from the shared project
+record and the shared route must refer to local values through environment
+variables or another project-owned indirection. Never put the shared project
+configuration in `.git/info/exclude`. Never copy a private target or an
+absolute home-directory path into a file intended for the team.
 
 A package smoke test, build, or `--version` call is only a Stage 2 prerequisite
 unless it crosses the actual delivery boundary.
@@ -208,10 +234,16 @@ target and finish with an honest Stage 1 scope. If it exists but the agent lacks
 access, treat access as the one setup blocker. If the answer is ambiguous, ask
 one short clarification instead of guessing.
 
-Validate read-only prerequisites. Show the exact target and ask before any
-deploy, apply, migration, or other shared write. Missing access, credentials,
-VPN, a URL, or revision proof is a setup blocker. Discuss only that blocker with
-the same one-problem, one-next-step, one-question pattern.
+Validate public and anonymous read-only prerequisites automatically.
+Describing an access method is context, not approval. Before an authenticated
+production read or reading a secret, name the production target, explain the
+intended observation in plain language, and ask for explicit confirmation for
+one exact read-only probe. Keep the credential only in process memory and never
+print or persist it. That confirmation does not authorize another endpoint, a
+state-changing UI flow, deploy, apply, migration, or other shared write; ask
+separately. Missing access, credentials, VPN, a URL, or revision proof is a
+setup blocker. Discuss only that blocker with the same one-problem,
+one-next-step, one-question pattern.
 
 ## Close with a human-sized status, not a verdict
 
@@ -255,14 +287,18 @@ Give one short copyable prompt for each gate in the selected language.
 - [ ] If Stage 1 failed, did I stop before inspecting or discussing Stage 2?
 - [ ] Did a blocker response contain one problem, one next step, and one question?
 - [ ] Did I ask before lengthy or shared-state-changing work?
+- [ ] Did every first Stage 1 command have time and memory safety limits?
 - [ ] For a deployed service, did I first ask only whether a stand is available?
 - [ ] If yes, did I ask how delivery and access work without requesting secrets?
+- [ ] Before an authenticated production read or secret access, did I obtain
+      target-specific confirmation for one read-only probe?
 - [ ] If a deployed UI had no browser route, did I offer Playwright MCP only after discovering that gap?
 - [ ] After connecting MCP, did I state and respect the host's restart boundary?
 - [ ] Did I avoid batching unrelated Stage 2 questions?
 - [ ] Can the future runner access the target and prove the exact revision?
 - [ ] Can the Stage 2 check fail safely?
 - [ ] Is `stage2_unreachable` reserved for a true project-level absence?
+- [ ] Is shared verification portable, with private local values kept separate?
 - [ ] Did I keep configuration files and JSON out of normal user-facing text?
 - [ ] Did I omit internal files, Git status, and commit advice from the final response?
 - [ ] Did I recommend critic of task, critic of solution, then Cerberus?

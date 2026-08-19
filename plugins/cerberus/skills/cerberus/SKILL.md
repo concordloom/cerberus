@@ -406,6 +406,13 @@ honest.
 
 ### Past the boundary
 
+Describing an access method is context, not approval. Before an authenticated
+production read or reading a secret, name the target and intended observation,
+then ask for explicit confirmation for one exact read-only probe. Keep the
+credential only in process memory and never print or persist it. A public
+anonymous probe may run without this extra question; a deploy, state-changing
+UI flow, or adverse production impact always needs separate authority.
+
 The items below are written for a deployed service because that is the richest
 case. For another artifact kind, substitute the equivalent from the boundary
 table and keep the requirement identical: the real thing, driven to a real
@@ -612,6 +619,8 @@ Treat it as a `BLOCKER` on the configuration and say what is missing.
 - [ ] Stage 1: does each test invoke production code rather than hand-building
       the state it claims to prove?
 - [ ] Stage 2: deployed, healthy?
+- [ ] Before an authenticated production read or secret access, was there
+      target-specific confirmation for one exact read-only probe?
 - [ ] Stage 2: real end-to-end run driven to a real result, not a proxy?
 - [ ] Stage 2: per mechanism, were the incompleteness hypothesis, adverse
       precondition, trigger evidence, failure oracle, counterfactual and cleanup
