@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.2.2](https://github.com/concordloom/cerberus/compare/v3.2.1...v3.2.2) (2026-08-19)
+
+
+### Bug Fixes
+
+* make Cerberus diagnostics autonomous ([5d7f16c](https://github.com/concordloom/cerberus/commit/5d7f16c9879564344824d02bbfd5df3b9a04a07a))
+
 ## [3.2.1](https://github.com/concordloom/cerberus/compare/v3.2.0...v3.2.1) (2026-08-19)
 
 
