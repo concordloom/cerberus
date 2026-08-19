@@ -42,6 +42,14 @@ After the orientation, use one short progress update only when the human-facing
 state changes, for example: "Cerberus is installed. Now I am checking how this
 project verifies code locally."
 
+During setup, one user decision should normally produce one substantive
+response. Do not emit repeated still-working updates for the same state. Tool
+selection, guide reads, downloads, checksum parsing, shell filters, retries,
+process polling, and alternative diagnostic commands are internal work. A
+retry or a different diagnostic command is not a human-facing state change.
+If the host requires a periodic update during a long operation, give one plain
+sentence about the current goal and omit the mechanics.
+
 ## 3. Inspect the repository silently
 
 Confirm the project root. Read repository instructions such as `AGENTS.md`,
@@ -137,6 +145,15 @@ Run fast, read-only checks without making the user supervise them. Ask before a
 lengthy suite or a command that mutates shared state. Order explicit checks from
 fastest to slowest; the setup script stops at the first failure.
 
+Every first Stage 1 command needs a wall-clock budget. Use the setup script's
+120 seconds by default, or a smaller repository-defined limit. While it runs,
+monitor the whole process tree and treat 4 GiB of resident memory as the default
+safety ceiling for an unknown fast check. Stop at either limit, report that the
+fast check exceeded its safety envelope, and diagnose under equally strict
+limits. Do not rerun a timed-out command directly without an equivalent limit.
+Ask before raising either limit for a check the repository documents as
+legitimately expensive.
+
 If a required Stage 1 check fails, this is a hard turn boundary:
 
 1. Explain in plain language what Stage 1 was trying to prove.
@@ -196,6 +213,14 @@ After the answer, inspect CI triggers, deploy jobs, manifests, release scripts,
 service endpoints, and version metadata. Combine repository evidence with what
 the person said. Verify the access method and every read-only prerequisite you
 can, then silently record only a route a future Cerberus run can execute.
+
+The stable, portable verification mechanics belong to the project;
+machine-specific paths, private targets, and credentials stay in an ignored
+local override. The local override must be separate from the shared project
+record and the shared route must refer to local values through environment
+variables or another project-owned indirection. Never put the shared project
+configuration in `.git/info/exclude`. Never copy a private target or an
+absolute home-directory path into a file intended for the team.
 
 As part of that investigation, inspect the product surfaces that Stage 2 must
 actually exercise. Do not ask about browser tooling merely because frontend
@@ -260,11 +285,16 @@ silently. Never expose its filename, format, keys, or contents during normal
 onboarding. Reveal those details only if the person explicitly asks or a
 malformed hand-written file requires manual repair. Never store credentials.
 
-Validate read-only Stage 2 prerequisites without supervision. Show the exact
-target and obtain explicit confirmation before a deploy, migration, apply, or
-other shared write. A missing tool, VPN, token, permission, URL, or revision
-proof is a setup blocker; discuss only that blocker using the same one-problem,
-one-next-step, one-question pattern.
+Validate public and anonymous read-only Stage 2 prerequisites without
+supervision. Describing an access method is context, not approval. Before an
+authenticated production read or reading a secret, name the production target,
+explain the intended observation in plain language, and ask for explicit
+confirmation for one exact read-only probe. Keep the credential only in process
+memory and never print or persist it. That confirmation does not authorize a
+second endpoint, a state-changing UI flow, deploy, migration, apply, or another
+shared write; ask separately when needed. A missing tool, VPN, token,
+permission, URL, or revision proof is a setup blocker; discuss only that
+blocker using the same one-problem, one-next-step, one-question pattern.
 
 ## 7. Finish with a human-sized summary
 
