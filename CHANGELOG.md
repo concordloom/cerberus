@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.1.8](https://github.com/concordloom/cerberus/compare/v3.1.7...v3.1.8) (2026-08-19)
+
+
+### Bug Fixes
+
+* keep setup internals out of final status ([90d7ca8](https://github.com/concordloom/cerberus/commit/90d7ca82882f97032a177b8aeb22a486c3db6081))
+
 ## [3.1.7](https://github.com/concordloom/cerberus/compare/v3.1.6...v3.1.7) (2026-08-19)
 
 
