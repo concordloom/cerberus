@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.1.7](https://github.com/concordloom/cerberus/compare/v3.1.6...v3.1.7) (2026-08-19)
+
+
+### Bug Fixes
+
+* ask for a stage two stand first ([f2f7374](https://github.com/concordloom/cerberus/commit/f2f7374847dd301873331322a406ff2f3ac83242))
+
 ## [3.1.6](https://github.com/concordloom/cerberus/compare/v3.1.5...v3.1.6) (2026-08-19)
 
 
