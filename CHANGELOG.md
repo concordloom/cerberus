@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.1.6](https://github.com/concordloom/cerberus/compare/v3.1.5...v3.1.6) (2026-08-19)
+
+
+### Bug Fixes
+
+* make setup a progressive conversation ([f9d713b](https://github.com/concordloom/cerberus/commit/f9d713bc06d08552f3573e5574fd4ef9f1ae8fc7))
+
 ## [3.1.5](https://github.com/concordloom/cerberus/compare/v3.1.4...v3.1.5) (2026-08-18)
 
 
