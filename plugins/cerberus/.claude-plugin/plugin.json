@@ -1,7 +1,7 @@
 {
   "name": "cerberus",
   "displayName": "Cerberus",
-  "version": "3.1.8",
+  "version": "3.2.0",
   "description": "Adversarial verification gate. Before claiming a change works, prove it is broken — and fail. Three skills: the cycle itself, a critic that refutes claims, and a setup step that works out this project's checks by running them.",
   "author": {
     "name": "Concord Loom",

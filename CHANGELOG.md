@@ -1,5 +1,12 @@
 # Changelog
 
+# [3.2.0](https://github.com/concordloom/cerberus/compare/v3.1.8...v3.2.0) (2026-08-19)
+
+
+### Features
+
+* offer Playwright MCP for UI verification ([623c517](https://github.com/concordloom/cerberus/commit/623c5176810dadab00e80b04147192bffed2c5f2))
+
 ## [3.1.8](https://github.com/concordloom/cerberus/compare/v3.1.7...v3.1.8) (2026-08-19)
 
 
