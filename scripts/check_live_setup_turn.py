@@ -134,6 +134,25 @@ def tool_uses(items: list[object]) -> list[dict]:
     ]
 
 
+def assistant_text_before(items: list[object], limit: int) -> str:
+    blocks = []
+    for index, item in enumerate(items):
+        if index >= limit or not isinstance(item, dict) or item.get("type") != "assistant":
+            continue
+        message = item.get("message")
+        content = message.get("content") if isinstance(message, dict) else None
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if (
+                isinstance(block, dict)
+                and block.get("type") == "text"
+                and isinstance(block.get("text"), str)
+            ):
+                blocks.append(block["text"])
+    return " ".join(blocks)
+
+
 def raw_guide_fetch(value: dict) -> bool:
     name = str(value.get("name") or "").lower()
     payload = value.get("input")
@@ -387,6 +406,7 @@ def completed_fixture_critic_result(value: dict, result: str, russian: bool) -> 
     candidates = {item.strip() for item in surfaces.split(",") if item.strip()}
     canonical = set()
     for candidate in candidates:
+        candidate = candidate.replace("_", "-")
         if candidate in {"command", "command-line", "cli"}:
             canonical.add("command")
         elif candidate in {"web", "web-ui", "web-interface", "dashboard", "ui"}:
@@ -461,6 +481,13 @@ def main(argv: list[str]) -> int:
         if not stage1_calls:
             return fail("the live trace does not show the Stage 1 setup command")
         stage1_call_index, stage1_id = stage1_calls[0]
+        orientation = assistant_text_before(items, stage1_call_index).lower()
+        stages = [orientation.find(label) for label in ("stage 0", "stage 1", "stage 2")]
+        if any(index < 0 for index in stages) or stages != sorted(stages):
+            return fail("the three-stage orientation is absent or out of order")
+        bounded = "после" in orientation if russian else "after stage 1" in orientation
+        if orientation.count("stage 2") != 1 or not bounded:
+            return fail("Stage 2 was not bounded behind Stage 1")
         stage1_results = [
             (index, value)
             for index, value in tool_results(items, stage1_id)
@@ -506,16 +533,10 @@ def main(argv: list[str]) -> int:
         for banned in banned_terms:
             if banned in lower:
                 return fail(f"internal defect detail leaked: {banned}")
-        stages = [lower.find(label) for label in ("stage 0", "stage 1", "stage 2")]
-        if any(index < 0 for index in stages) or stages != sorted(stages):
-            return fail("the three-stage orientation is absent or out of order")
-        bounded = "после" in lower if russian else "after stage 1" in lower
-        if lower.count("stage 2") != 1 or not bounded:
-            return fail("Stage 2 was not bounded behind Stage 1")
         green = (
-            re.search(r"(?:^|[.!?]\s+)stage 1 (?:готова|прошла)(?:[.!?:]|$)", lower)
+            re.search(r"(?:^|[.!?]\s+)stage 1 (?:готова|прошла)\s*(?:[.!?:—–-]|$)", lower)
             if russian
-            else re.search(r"(?:^|[.!?]\s+)stage 1 (?:passed|is ready)(?:[.!?]|$)", lower)
+            else re.search(r"(?:^|[.!?]\s+)stage 1 (?:passed|is ready)\s*(?:[.!?:—–-]|$)", lower)
         )
         if not green:
             return fail("the response does not report the green Stage 1 result")
@@ -536,10 +557,17 @@ def main(argv: list[str]) -> int:
             return fail("the surfaces turn must contain exactly one question")
         if not result.endswith("?"):
             return fail("the surfaces turn must end with its hard-boundary question")
-        expected_question = SURFACES_QUESTION_RU if russian else SURFACES_QUESTION
         question = re.split(r"(?<=[.!?])\s+", result)[-1]
-        if question != expected_question:
-            return fail("the hybrid fixture's canonical surfaces question is absent")
+        expected_opening = "После поставки " if russian else "After delivery, "
+        if not question.startswith(expected_opening):
+            return fail("the surfaces question does not start at the delivery boundary")
+        forbidden_question_terms = (
+            r"\b(?:не|без|кроме|исключая|исключить)\b"
+            if russian
+            else r"\b(?:not|no|without|except|excluding|other than|inverse)\b"
+        )
+        if re.search(forbidden_question_terms, question.lower()):
+            return fail("the surfaces question negates or excludes a surviving candidate")
         extra_surface_terms = (
             r"\b(?:миграц\w*|пакет\w*|библиотек\w*|плагин\w*|сервис\w*|"
             r"api|http|мобильн\w*|фонов\w*|задач\w*|чарт\w*|релиз\w*|"

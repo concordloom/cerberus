@@ -1668,9 +1668,25 @@ def test_live_setup_oracle_rejects_shortcuts_and_internal_leaks():
         mode: str = "surfaces",
         critic_content: object | None = None,
         stage1_command: str | None = None,
+        orientation: bool = True,
     ) -> int:
         russian = mode.endswith("-ru")
-        events = [{
+        events = []
+        if orientation:
+            events.append({
+                "type": "assistant",
+                "message": {"content": [{
+                    "type": "text",
+                    "text": (
+                        "Stage 0 определяет возможные сбои. Stage 1 проверяет код. "
+                        "Stage 2 проверяет поставленный результат только после Stage 1."
+                        if russian
+                        else "Stage 0 maps possible failures. Stage 1 checks the code. "
+                             "Stage 2 checks the delivered result only after Stage 1."
+                    ),
+                }]},
+            })
+        events.extend([{
             "type": "assistant",
             "message": {"content": [{
                 "type": "tool_use",
@@ -1691,7 +1707,7 @@ def test_live_setup_oracle_rejects_shortcuts_and_internal_leaks():
                 "is_error": False,
                 "content": "Stage 1 set up. Delivery surfaces still need confirmation.",
             }]},
-        }]
+        }])
         if critic:
             events.append({
                 "type": "assistant",
@@ -1775,6 +1791,17 @@ def test_live_setup_oracle_rejects_shortcuts_and_internal_leaks():
             "GOPNIK_CRITIC_STATUS: complete"
         ),
     ) == 0
+    assert check(good, orientation=False) != 0
+    assert check(
+        "Stage 1 is ready — the project's own check runs and passes. "
+        "I found a command-line app and a web interface. "
+        "After delivery, do people use only the command, only the web interface, or both?"
+    ) == 0
+    assert check(
+        "Stage 1 is ready — the project's own check runs and passes. "
+        "I found a command-line tool and an operator dashboard web page. "
+        "After delivery, do people use only the command-line tool, only the dashboard, or both?"
+    ) == 0
     assert check(
         good,
         critic_content=[
@@ -1791,6 +1818,14 @@ def test_live_setup_oracle_rejects_shortcuts_and_internal_leaks():
                 "text": "agentId: worker-1\n<usage>tokens: 10</usage>",
             },
         ],
+    ) == 0
+    assert check(
+        good,
+        critic_content=(
+            "The CLI and web UI remain candidate surfaces.\n"
+            "GOPNIK_CRITIC_SURFACES: cli, web_ui\n"
+            "GOPNIK_CRITIC_STATUS: complete"
+        ),
     ) == 0
     assert check(
         good,
