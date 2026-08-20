@@ -233,6 +233,10 @@ def test_delivery_surfaces_are_criticized_then_confirmed_after_stage1():
             "critic brief must carry the same product-facing boundary",
             "evidence, not a surviving surface",
             "Do not leave the critic to infer this split",
+            "already is the independent adversary",
+            "without spawning another agent",
+            "Verify every load-bearing inclusion or exclusion",
+            "do not silently edit the critic's set",
             "independent agent using `gopnik-critic`",
             "mandate to refute the classification",
             "`GOPNIK_CRITIC_STATUS: complete`",
@@ -256,6 +260,10 @@ def test_delivery_surfaces_are_criticized_then_confirmed_after_stage1():
             "critic brief must carry the same product-facing boundary",
             "evidence, not a surviving surface",
             "Do not leave the critic to infer this split",
+            "already is the independent adversary",
+            "without spawning another agent",
+            "Verify every load-bearing inclusion or exclusion",
+            "do not silently edit the critic's set",
             "independent agent using `gopnik-critic`",
             "mandate to refute the classification",
             "`GOPNIK_CRITIC_STATUS: complete`",
@@ -279,6 +287,10 @@ def test_delivery_surfaces_are_criticized_then_confirmed_after_stage1():
             "В prompt критика явно перенеси ту же продуктовую границу",
             "доказательство, а не уцелевшая поверхность",
             "Не оставляй критику выводить это различие",
+            "уже является независимым адверсарием",
+            "не порождая ещё одного агента",
+            "Проверь по репозиторию каждое опорное включение и исключение",
+            "не исправляй набор критика молча",
             "независимому агенту с `gopnik-critic`",
             "поручением опровергнуть классификацию",
             "`GOPNIK_CRITIC_STATUS: complete`",
@@ -444,6 +456,27 @@ def test_critic_has_bounded_private_diagnostics():
             "точный идентификатор, который вернул spawn",
             "верните статус `blocked`",
             "перестали давать новые доказательства",
+        ),
+    }
+    for path, phrases in expected.items():
+        text = _flat(path)
+        for phrase in phrases:
+            assert phrase in text, (path.name, phrase)
+
+
+def test_spawned_critic_does_not_recurse():
+    expected = {
+        ROOT / "plugins/gopnik/skills/gopnik-critic/SKILL.md": (
+            "Independent adversary mode",
+            "already is the independent adversary in step 2",
+            "Do not spawn another adversary",
+            "second nested closure loop",
+        ),
+        ROOT / "plugins/gopnik/skills/gopnik-critic/SKILL.ru.md": (
+            "Режим независимого адверсария",
+            "уже является независимым адверсарием из шага 2",
+            "Не порождайте ещё одного адверсария",
+            "второй вложенный контур подтверждения",
         ),
     }
     for path, phrases in expected.items():

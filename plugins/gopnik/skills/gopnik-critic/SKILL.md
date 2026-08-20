@@ -72,6 +72,17 @@ hundred percent were generalisations and none were readings.
 Four steps. The last two are the ones that get skipped, and skipping either one
 returns you to an unverified claim with more ceremony attached.
 
+### Independent adversary mode
+
+If another agent explicitly spawned this agent with a refutation mandate, this
+agent already is the independent adversary in step 2. Do not spawn another
+adversary or recursively restart this skill. Inspect the primary sources,
+attempt the requested refutation directly, and return the requested structured
+result to the spawner. The spawner remains responsible for verifying every
+load-bearing finding before it turns the result into a claim. A structured
+candidate set returned for a later question is not a retelling that requires a
+second nested closure loop.
+
 1. **State the claim as an operation, not as a conclusion.** See the next
    section; this is most of the value and it costs nothing.
 

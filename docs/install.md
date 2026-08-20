@@ -286,6 +286,9 @@ or release route that only transports another artifact is evidence, not a
 surviving surface; a reusable workflow/action or a product background job that
 a consumer invokes is a surface. Do not leave the critic to infer this split
 from the word `job`.
+Explicitly tell that spawned agent it already is the independent adversary and
+must use `gopnik-critic` in independent adversary mode without spawning another
+agent.
 Give that agent an explicit completion contract: only after it has inspected
 the evidence and completed the challenge, its penultimate line must be
 `GOPNIK_CRITIC_SURFACES: <comma-separated surviving surface identifiers>` and
@@ -293,6 +296,10 @@ its last line must be exactly `GOPNIK_CRITIC_STATUS: complete`; if it cannot
 complete the analysis, its last line must instead be
 `GOPNIK_CRITIC_STATUS: blocked`. Do not continue to the user question unless
 the correlated agent result carries the surfaces line and the complete marker.
+Verify every load-bearing inclusion or exclusion against the repository before
+using that set. If it does not survive this check, do not silently edit the
+critic's set; return a corrected brief to one independent critic or report the
+classification as blocked.
 Use the surviving surfaces from that line in the question; do not restore a
 candidate the critic refuted.
 The critic does not decide how the product is really operated and does not
