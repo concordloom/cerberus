@@ -1142,18 +1142,86 @@ def test_setup_waits_for_stage2_availability_then_delivery_and_access():
             assert needle in text, f"{path.name}: {needle!r}"
 
 
-def test_setup_recommends_critic_task_then_critic_solution_then_cerberus():
+def test_setup_separates_the_recommendation_from_the_tracker_example():
     for path, needles in (
         (SKILLS / "cerberus-setup" / "SKILL.md",
-         ("three-gate loop", "task formulation before work begins",
-          "proposed solution before implementation", "completed change and exact delivered revision")),
+         ("if setup is blocked, do not use the configured closing flow below",
+          "do not append the recommendation or tracker example to a `setup blocked` response",
+          "only after setup reaches `configured`",
+          "start the recommendation as a separate paragraph",
+          "do not merge the recommendation into a status bullet",
+          "do not qualify it with project-specific process or artifact details",
+          "we recommend integrating cerberus into the development cycle",
+          "for example, when work is managed through tasks in a tracker",
+          "after the task is defined", "checks its wording and completion criteria",
+          "after the solution is prepared", "checks the chosen approach",
+          "after implementation", "before the task moves to `done`")),
         (SKILLS / "cerberus-setup" / "SKILL.ru.md",
-         ("трёхшаговый цикл", "по постановке задачи", "по предложенному решению",
-          "по готовому изменению и точной поставленной ревизии")),
+         ("если настройка заблокирована, не используй описанный ниже финал",
+          "не добавляй рекомендацию и пример с трекером в ответ со статусом `setup blocked`",
+          "только после статуса `configured`",
+          "начни рекомендацию с нового абзаца",
+          "не сливай рекомендацию с пунктом статуса",
+          "не уточняй её деталями процесса или типа артефакта",
+          "рекомендуем встроить cerberus в цикл разработки",
+          "например, если работа ведётся через задачи в трекере",
+          "после постановки задачи", "проверяет её формулировку и критерии готовности",
+          "после подготовки решения", "проверяет выбранный подход",
+          "после реализации", "перед переводом задачи в `done`")),
     ):
         text = " ".join(path.read_text(encoding="utf-8").lower().split())
         for needle in needles:
             assert needle in text, f"{path.name}: {needle!r}"
+        for rejected in ("adapt", "адаптируй", "copyable prompt", "копируемой фраз"):
+            assert rejected not in text, f"{path.name}: {rejected!r}"
+
+        recommendation = text.index(
+            "we recommend integrating cerberus" if path.name == "SKILL.md"
+            else "рекомендуем встроить cerberus")
+        example = text.index(
+            "for example, when work is managed" if path.name == "SKILL.md"
+            else "например, если работа ведётся")
+        assert recommendation < example, path.name
+
+
+def test_setup_closing_contract_contains_no_positive_merge_tailor_or_command_directive():
+    patterns = (
+        re.compile(r"(?:merge|combine).*(?:recommendation).*(?:status|report)", re.I),
+        re.compile(r"(?:adapt|tailor|qualify).*(?:recommendation)", re.I),
+        re.compile(r"(?:give|provide).*(?:copyable|command-style).*(?:prompt|command)", re.I),
+        re.compile(r"(?:слей|объедини).*(?:рекомендац).*(?:статус|отчёт)", re.I),
+        re.compile(r"(?:адаптируй|уточни).*(?:рекомендац)", re.I),
+        re.compile(r"(?:дай|предоставь).*(?:копируем|командн).*(?:фраз|команд)", re.I),
+    )
+
+    def is_positive_directive(line):
+        directive = re.sub(r"^(?:(?:[-*+>])|(?:\d+[.)]))\s*", "", line.strip())
+        if not directive or directive.lower().startswith(
+                ("do not ", "never ", "не ", "никогда не ")):
+            return False
+        return any(pattern.search(directive) for pattern in patterns)
+
+    positive_examples = (
+        "Merge the recommendation with the status report.",
+        "For this project, tailor the recommendation to the artifact kind.",
+        "- Give one copyable command prompt to the person.",
+        "В финале слей рекомендацию со статусом.",
+        "Для этого проекта адаптируй рекомендацию под тип артефакта.",
+        "- Дай копируемую командную фразу.",
+    )
+    negative_guards = (
+        "Do not merge the recommendation into a status bullet.",
+        "- Never tailor the recommendation to the project.",
+        "Не сливай рекомендацию с пунктом статуса.",
+        "- Не давай копируемую командную фразу.",
+        "1. Никогда не адаптируй рекомендацию под тип артефакта.",
+    )
+    assert all(is_positive_directive(line) for line in positive_examples)
+    assert not any(is_positive_directive(line) for line in negative_guards)
+
+    for path in (SKILLS / "cerberus-setup").glob("SKILL*.md"):
+        for line in path.read_text(encoding="utf-8").splitlines():
+            assert not is_positive_directive(line), (path.name, line.strip())
 
 
 # ------------------------------------- Not proven has to carry an attempt (#49)

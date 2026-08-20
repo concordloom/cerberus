@@ -323,15 +323,23 @@ shared write; ask separately when needed. A missing tool, VPN, token,
 permission, URL, or revision proof is a setup blocker; discuss only that
 blocker using the same one-problem, one-next-step, one-question pattern.
 
-## 7. Finish with a human-sized summary
+## 7. Finish with a human-sized summary and recommendation
 
-Keep the final report to four short points at most:
+If setup is blocked, do not use the configured closing flow below. End with the
+single blocker question described above. Do not append the recommendation or
+tracker example to a `setup blocked` response.
+
+Only after setup reaches `configured`, give the status report and recommendation
+below. Keep them as two distinct parts: finish the status report first, then
+start the recommendation as a separate paragraph. Do not merge the
+recommendation into a status bullet.
+
+Keep the status report to three short points at most:
 
 - whether Cerberus is installed;
 - whether the project's local check is ready and what was observed;
 - whether the real delivery path is ready for Stage 2, or the one remaining
-  blocker;
-- the short phrase the person can use to run Cerberus on a completed change.
+  blocker.
 
 Do not report the configuration path, saved language, artifact kind, internal
 keys, JSON, raw command routes, marketplace mechanics, or every file installed.
@@ -340,20 +348,37 @@ Mention an agent restart only if it is actually required.
 Treat the internal project record as already handled, not as a user-facing
 repository change. Never say that a configuration file was created, changed,
 is untracked, or should be committed. Do not include it in a working-tree
-summary. After the three-gate loop, stop: do not append notes about files, Git
-status, cleanup, or what the person should commit.
+summary. After the recommendation and tracker example, stop: do not append notes
+about files, Git status, cleanup, or what the person should commit.
 
 Installation and setup do not receive a product verdict. `READY` and
 `NOT READY` belong only to a Cerberus run against a concrete product change.
 
-End with a practical three-gate development loop, adapted to the project's
-existing workflow:
+After the configured status report, give one universal recommendation. Keep it
+separate from any example. Do not qualify it with project-specific process or
+artifact details. Use the exact first sentence for the selected language:
 
-1. run `cerberus-critic` on the task formulation before work begins;
-2. run `cerberus-critic` on the proposed solution before implementation;
-3. run `cerberus` on the completed change and exact delivered revision before
-   the tracker task moves to Done. `NOT READY` keeps the task open.
+- English: `We recommend integrating Cerberus into the development cycle.`
+- Russian: `Рекомендуем встроить Cerberus в цикл разработки.`
 
-Give one short copyable prompt for each gate in the selected language. Offer to
-add the loop to the repository or tracker workflow, but do not edit those files
-unless asked.
+Then give the tracker flow separately as an example in the selected language.
+Use this content:
+
+English:
+
+> For example, when work is managed through tasks in a tracker:
+>
+> 1. After the task is defined, `cerberus-critic` checks its wording and completion criteria.
+> 2. After the solution is prepared, `cerberus-critic` checks the chosen approach.
+> 3. After implementation, `cerberus` checks the completed change before the task moves to `Done`.
+
+Russian:
+
+> Например, если работа ведётся через задачи в трекере:
+>
+> 1. После постановки задачи `cerberus-critic` проверяет её формулировку и критерии готовности.
+> 2. После подготовки решения `cerberus-critic` проверяет выбранный подход.
+> 3. После реализации `cerberus` проверяет готовое изменение перед переводом задачи в `Done`.
+
+Do not replace this recommendation with a mandatory workflow. Do not add
+command-style prompts for the person to copy.

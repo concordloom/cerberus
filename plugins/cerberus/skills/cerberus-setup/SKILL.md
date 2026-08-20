@@ -271,7 +271,7 @@ separately. Missing access, credentials, VPN, a URL, or revision proof is a
 setup blocker. Discuss only that blocker with the same one-problem,
 one-next-step, one-question pattern.
 
-## Close with a human-sized status, not a verdict
+## Close with a human-sized status and recommendation, not a verdict
 
 Installation has `installed` or `not installed`. Project setup has `configured`
 or `setup blocked`. `READY` and `NOT READY` belong only to a Cerberus run against
@@ -281,10 +281,19 @@ Setup cannot be `configured` until the Stage 2 target and access are verified,
 or the absence of a project-level target is confirmed and recorded. Before
 that, setup is still in progress.
 
-Use at most four short points: whether Cerberus is installed; whether the
-project's local check is ready and what was observed; whether the real delivery
-path is ready or the one remaining blocker; and the short phrase that invokes
-Cerberus on a completed change. Mention a restart only if required.
+If setup is blocked, do not use the configured closing flow below. End with the
+single blocker question described above. Do not append the recommendation or
+tracker example to a `setup blocked` response.
+
+Only after setup reaches `configured`, give the status report and recommendation
+below. Keep them as two distinct parts: finish the status report first, then
+start the recommendation as a separate paragraph. Do not merge the
+recommendation into a status bullet.
+
+Use at most three short points: whether Cerberus is installed; whether the
+project's local check is ready and what was observed; and whether the real
+delivery path is ready or the one remaining blocker. Mention a restart only if
+required.
 
 Do not report configuration paths, the saved language, artifact kinds, internal
 keys, JSON, raw command routes, marketplace mechanics, or every installed file.
@@ -292,17 +301,36 @@ keys, JSON, raw command routes, marketplace mechanics, or every installed file.
 Treat the internal project record as already handled, not as a user-facing
 repository change. Never say that a configuration file was created, changed,
 is untracked, or should be committed. Do not include it in a working-tree
-summary. After the three-gate loop, stop: do not append notes about files, Git
-status, cleanup, or what the person should commit.
+summary. After the recommendation and tracker example, stop: do not append notes
+about files, Git status, cleanup, or what the person should commit.
 
-Recommend a three-gate loop adapted to the project's existing workflow:
+After the configured status report, give one universal recommendation. Keep it
+separate from the example. Do not qualify it with project-specific process or
+artifact details. Use the exact first sentence for the selected language:
 
-1. run `cerberus-critic` on the task formulation before work begins;
-2. run `cerberus-critic` on the proposed solution before implementation;
-3. run `cerberus` on the completed change and exact delivered revision before
-   the tracker task moves to Done. A `NOT READY` verdict keeps it open.
+- English: `We recommend integrating Cerberus into the development cycle.`
+- Russian: `Рекомендуем встроить Cerberus в цикл разработки.`
 
-Give one short copyable prompt for each gate in the selected language.
+Then give the tracker flow separately as an example in the selected language:
+
+English:
+
+> For example, when work is managed through tasks in a tracker:
+>
+> 1. After the task is defined, `cerberus-critic` checks its wording and completion criteria.
+> 2. After the solution is prepared, `cerberus-critic` checks the chosen approach.
+> 3. After implementation, `cerberus` checks the completed change before the task moves to `Done`.
+
+Russian:
+
+> Например, если работа ведётся через задачи в трекере:
+>
+> 1. После постановки задачи `cerberus-critic` проверяет её формулировку и критерии готовности.
+> 2. После подготовки решения `cerberus-critic` проверяет выбранный подход.
+> 3. После реализации `cerberus` проверяет готовое изменение перед переводом задачи в `Done`.
+
+Do not turn the recommendation into a mandatory workflow or add command-style
+prompts for the person to copy.
 
 ## Self-check before saying configured
 
@@ -329,5 +357,6 @@ Give one short copyable prompt for each gate in the selected language.
 - [ ] Is shared verification portable, with private local values kept separate?
 - [ ] Did I keep configuration files and JSON out of normal user-facing text?
 - [ ] Did I omit internal files, Git status, and commit advice from the final response?
-- [ ] Did I recommend critic of task, critic of solution, then Cerberus?
+- [ ] If setup was blocked, did I stop before the recommendation and tracker example?
+- [ ] Did I keep the universal recommendation separate from the tracker example?
 - [ ] Did I report setup status without issuing a product verdict?

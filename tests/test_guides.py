@@ -168,8 +168,6 @@ def test_install_keeps_setup_status_separate_from_product_verdicts():
     for phrase in (
         "Installation and setup do not receive a product verdict",
         "belong only to a Cerberus run against a concrete product change",
-        "before the tracker task moves to Done",
-        "`NOT READY` keeps the task open",
     ):
         assert phrase in text, phrase
 
@@ -477,16 +475,39 @@ def test_autonomy_contract_is_project_and_toolchain_agnostic():
             assert phrase in text, (path.name, phrase)
 
 
-def test_install_recommends_the_three_gate_development_loop():
+def test_install_separates_the_universal_recommendation_from_the_tracker_example():
     text = _flat(INSTALL)
     for phrase in (
-        "three-gate development loop",
-        "run `cerberus-critic` on the task formulation before work begins",
-        "run `cerberus-critic` on the proposed solution before implementation",
-        "run `cerberus` on the completed change and exact delivered revision",
-        "Give one short copyable prompt for each gate",
+        "If setup is blocked, do not use the configured closing flow below",
+        "Do not append the recommendation or tracker example to a `setup blocked` response",
+        "Only after setup reaches `configured`",
+        "finish the status report first, then start the recommendation as a separate paragraph",
+        "Do not merge the recommendation into a status bullet",
+        "Do not qualify it with project-specific process or artifact details",
+        "We recommend integrating Cerberus into the development cycle.",
+        "Рекомендуем встроить Cerberus в цикл разработки.",
+        "For example, when work is managed through tasks in a tracker:",
+        "Например, если работа ведётся через задачи в трекере:",
+        "After the task is defined, `cerberus-critic` checks its wording and completion criteria",
+        "После постановки задачи `cerberus-critic` проверяет её формулировку и критерии готовности",
+        "After implementation, `cerberus` checks the completed change before the task moves to `Done`",
+        "После реализации `cerberus` проверяет готовое изменение перед переводом задачи в `Done`",
     ):
         assert phrase in text, phrase
+
+    for rejected in (
+        "End with one universal recommendation",
+        "adapted to the project's existing workflow",
+        "Give one short copyable prompt for each gate",
+        "Offer to add the loop to the repository or tracker workflow",
+    ):
+        assert rejected not in text, rejected
+
+    blocked = text.index("If setup is blocked")
+    configured = text.index("Only after setup reaches `configured`")
+    recommendation = text.index("We recommend integrating Cerberus")
+    example = text.index("For example, when work is managed through tasks in a tracker")
+    assert blocked < configured < recommendation < example
 
 
 def test_installed_setup_skills_enforce_the_same_progressive_flow():
