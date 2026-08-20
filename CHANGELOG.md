@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.0.4](https://github.com/concordloom/gopnik/compare/v4.0.3...v4.0.4) (2026-08-20)
+
+
+### Bug Fixes
+
+* accept bounded read-only fetch timeout ([e13277c](https://github.com/concordloom/gopnik/commit/e13277c3affae509c19c11b6244c4cde6e6f06c3))
+
 ## [4.0.3](https://github.com/concordloom/gopnik/compare/v4.0.2...v4.0.3) (2026-08-20)
 
 
