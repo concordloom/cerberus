@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.0.9](https://github.com/concordloom/gopnik/compare/v4.0.8...v4.0.9) (2026-08-20)
+
+
+### Bug Fixes
+
+* accept safe curl flag clusters ([2894dd7](https://github.com/concordloom/gopnik/commit/2894dd79dfeccc5b34f1883305ee046b0fc852c8))
+
 ## [4.0.8](https://github.com/concordloom/gopnik/compare/v4.0.7...v4.0.8) (2026-08-20)
 
 
