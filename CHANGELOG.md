@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.0.6](https://github.com/concordloom/gopnik/compare/v4.0.5...v4.0.6) (2026-08-20)
+
+
+### Bug Fixes
+
+* verify product-facing surface handoff ([6dac268](https://github.com/concordloom/gopnik/commit/6dac26845888072175fcaa99b8b99bc8da462ae0))
+
 ## [4.0.5](https://github.com/concordloom/gopnik/compare/v4.0.4...v4.0.5) (2026-08-20)
 
 
