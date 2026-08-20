@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.0.10](https://github.com/concordloom/gopnik/compare/v4.0.9...v4.0.10) (2026-08-20)
+
+
+### Bug Fixes
+
+* validate progressive surface turns ([4d4e0fc](https://github.com/concordloom/gopnik/commit/4d4e0fc2364f7f46bacf009fcadd13c4fdb2b471))
+
 ## [4.0.9](https://github.com/concordloom/gopnik/compare/v4.0.8...v4.0.9) (2026-08-20)
 
 
