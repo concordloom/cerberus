@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.0.1](https://github.com/concordloom/gopnik/compare/v4.0.0...v4.0.1) (2026-08-20)
+
+
+### Bug Fixes
+
+* reuse Claude login in isolated live checks ([bf3f7be](https://github.com/concordloom/gopnik/commit/bf3f7be957bd53d847abcaa9929aba918d2cfc91))
+
 # [4.0.0](https://github.com/concordloom/gopnik/compare/v3.2.3...v4.0.0) (2026-08-20)
 
 
