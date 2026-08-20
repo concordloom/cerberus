@@ -162,7 +162,23 @@ def raw_guide_fetch(value: dict) -> bool:
             "-f", "-s", "-S", "-L", "-fsSL", "-sSL", "-sSfL",
             "--fail", "--silent", "--show-error", "--location",
         }
-        return all(item in allowed for item in argv[1:-1])
+        options = argv[1:-1]
+        index = 0
+        while index < len(options):
+            item = options[index]
+            if item in allowed:
+                index += 1
+                continue
+            if item in {"-m", "--max-time", "--connect-timeout"}:
+                if index + 1 >= len(options):
+                    return False
+                value = options[index + 1]
+                if not value.isdigit() or not 1 <= int(value) <= 120:
+                    return False
+                index += 2
+                continue
+            return False
+        return True
     if argv[0] == "wget":
         options = argv[1:-1]
         return options in (

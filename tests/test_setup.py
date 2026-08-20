@@ -1959,6 +1959,24 @@ def test_live_setup_oracle_rejects_shortcuts_and_internal_leaks():
         "Which language would you like me to use: English or Russian?",
         "Bash",
         {"command": (
+            "curl -sSL --max-time 60 "
+            "https://raw.githubusercontent.com/concordloom/gopnik/main/docs/install.md"
+        )},
+    ) == 0
+    assert check_tool_turn(
+        "language",
+        "Which language would you like me to use: English or Russian?",
+        "Bash",
+        {"command": (
+            "curl -sSL --max-time 9999 "
+            "https://raw.githubusercontent.com/concordloom/gopnik/main/docs/install.md"
+        )},
+    ) != 0
+    assert check_tool_turn(
+        "language",
+        "Which language would you like me to use: English or Russian?",
+        "Bash",
+        {"command": (
             "wget -qO- "
             "https://raw.githubusercontent.com/concordloom/gopnik/main/docs/install.md"
         )},
