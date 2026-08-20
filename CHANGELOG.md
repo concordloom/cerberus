@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.2.3](https://github.com/concordloom/cerberus/compare/v3.2.2...v3.2.3) (2026-08-20)
+
+
+### Bug Fixes
+
+* make setup recommendation universal ([0c2e29f](https://github.com/concordloom/cerberus/commit/0c2e29f5a124e834d98a2c49b38b3fe32191d365))
+
 ## [3.2.2](https://github.com/concordloom/cerberus/compare/v3.2.1...v3.2.2) (2026-08-19)
 
 
