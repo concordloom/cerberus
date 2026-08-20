@@ -1514,6 +1514,12 @@ def test_this_repository_verifies_it_with_a_live_session():
     assert any("scratch-ru/.claude/skills/gopnik/SKILL.md" in command
                for command in stage2), stage2
     assert any("expected-sha" in command and "git -C" in command for command in stage2), stage2
+    auth = stage2[0]
+    assert 'GOPNIK_CLAUDE_SOURCE_DIR=${CLAUDE_CONFIG_DIR:-"$HOME/.claude"}' in auth, auth
+    assert auth.count('.credentials.json') >= 5, auth
+    assert auth.count("claude auth status --json") == 2, auth
+    assert auth.count('"loggedIn": true') == 2, auth
+    assert "cp " not in auth and "install -m" not in auth, auth
     assert any("plugin details gopnik | grep -Eq" in command for command in stage2), stage2
     assert any("rm -rf" in command and "gopnik-stage2.*" in command for command in stage2), stage2
 
