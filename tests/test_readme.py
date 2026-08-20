@@ -70,11 +70,11 @@ def test_hero_and_brand_assets_are_real() -> None:
 def test_install_is_one_agent_prompt_not_a_platform_matrix() -> None:
     expected = {
         README: [
-            "Install and configure Gopnik by following the complete guide:",
+            "Install and configure Gopnik. Read the complete raw guide without saving it to a file, then follow it exactly:",
             "https://raw.githubusercontent.com/concordloom/gopnik/main/docs/install.md",
         ],
         README_RU: [
-            "Установи и настрой Gopnik по полной инструкции:",
+            "Установи и настрой Gopnik. Прочитай полную raw-инструкцию, не сохраняя её в файл, и точно следуй ей:",
             "https://raw.githubusercontent.com/concordloom/gopnik/main/docs/install.md",
         ],
     }

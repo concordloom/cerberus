@@ -1504,7 +1504,7 @@ def test_this_repository_verifies_it_with_a_live_session():
     assert "printf stage1-ran > .stage1-ran" in fixture, fixture
 
     joined = "\n".join(live)
-    assert "Install and configure Gopnik. Read the complete raw guide" in joined, joined
+    assert "Read the complete raw guide without saving it to a file" in joined, joined
     assert "For this agent across my projects." in joined, joined
     assert "Both the installed command and the deployed web interface are used." in joined, joined
     assert "Russian" in joined and "Только в этом репозитории." in joined, joined

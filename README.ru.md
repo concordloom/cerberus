@@ -22,7 +22,7 @@ Gopnik — навык состязательной проверки для ИИ-
 Отправьте своему ИИ-агенту:
 
 ```text
-Установи и настрой Gopnik по полной инструкции:
+Установи и настрой Gopnik. Прочитай полную raw-инструкцию, не сохраняя её в файл, и точно следуй ей:
 https://raw.githubusercontent.com/concordloom/gopnik/main/docs/install.md
 ```
 
@@ -90,7 +90,7 @@ Gopnik запускает агент. Это не фоновая служба, �
 Отправьте агенту, в котором установлен Gopnik:
 
 ```text
-Удали Gopnik по полной инструкции:
+Удали Gopnik. Прочитай полную raw-инструкцию, не сохраняя её в файл, и точно следуй ей:
 https://raw.githubusercontent.com/concordloom/gopnik/main/docs/uninstall.md
 ```
 

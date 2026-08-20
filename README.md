@@ -22,7 +22,7 @@ tree—and reports exactly what was and was not proven.
 Paste this into your coding agent:
 
 ```text
-Install and configure Gopnik by following the complete guide:
+Install and configure Gopnik. Read the complete raw guide without saving it to a file, then follow it exactly:
 https://raw.githubusercontent.com/concordloom/gopnik/main/docs/install.md
 ```
 
@@ -91,7 +91,7 @@ Your team decides where its verdict belongs in the workflow.
 Paste this into the agent that has Gopnik installed:
 
 ```text
-Uninstall Gopnik by following the complete guide:
+Uninstall Gopnik. Read the complete raw guide without saving it to a file, then follow it exactly:
 https://raw.githubusercontent.com/concordloom/gopnik/main/docs/uninstall.md
 ```
 
