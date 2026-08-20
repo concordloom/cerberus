@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.0.5](https://github.com/concordloom/gopnik/compare/v4.0.4...v4.0.5) (2026-08-20)
+
+
+### Bug Fixes
+
+* bound setup and critic diagnostics ([bd73e27](https://github.com/concordloom/gopnik/commit/bd73e27ea130e57211c15f714218ef103ee8fb2b))
+
 ## [4.0.4](https://github.com/concordloom/gopnik/compare/v4.0.3...v4.0.4) (2026-08-20)
 
 
