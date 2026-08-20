@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.0.7](https://github.com/concordloom/gopnik/compare/v4.0.6...v4.0.7) (2026-08-20)
+
+
+### Bug Fixes
+
+* preserve critic boundaries across agents ([b9d4dd9](https://github.com/concordloom/gopnik/commit/b9d4dd90c520626967baffe3a0fc5f8cb701bcfa))
+
 ## [4.0.6](https://github.com/concordloom/gopnik/compare/v4.0.5...v4.0.6) (2026-08-20)
 
 
