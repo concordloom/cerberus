@@ -169,6 +169,9 @@ def raw_guide_fetch(value: dict) -> bool:
             if item in allowed:
                 index += 1
                 continue
+            if re.fullmatch(r"-[fsSL]+", item):
+                index += 1
+                continue
             if item in {"-m", "--max-time", "--connect-timeout"}:
                 if index + 1 >= len(options):
                     return False
