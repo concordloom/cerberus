@@ -99,6 +99,10 @@ returns you to an unverified claim with more ceremony attached.
 - Use the host's agent/subagent wait mechanism when it exists. Do not invent
   shell polling by task name or command substring. If only a process is
   available, wait on its exact child PID with a bounded timeout.
+- Record the exact agent identifier returned at spawn and use that identifier
+  for every follow-up and loop-closure message; never address the role or a
+  display name. If the adversary does not confirm the retelling, report the
+  critique as blocked rather than claiming the loop completed.
 - A new check must challenge a load-bearing claim or resolve contradictory
   evidence. Stop repeated variants once they stop producing new evidence.
 - Do not overwrite project files, delete shared paths, or change external

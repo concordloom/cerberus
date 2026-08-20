@@ -281,6 +281,11 @@ binary.
 Form a provisional classification and compact evidence inventory. Give both to
 an independent agent using `gopnik-critic`, with the mandate to refute the
 classification by finding omitted delivery surfaces or conflicting evidence.
+The critic brief must carry the same product-facing boundary: a CI, deployment,
+or release route that only transports another artifact is evidence, not a
+surviving surface; a reusable workflow/action or a product background job that
+a consumer invokes is a surface. Do not leave the critic to infer this split
+from the word `job`.
 Give that agent an explicit completion contract: only after it has inspected
 the evidence and completed the challenge, its penultimate line must be
 `GOPNIK_CRITIC_SURFACES: <comma-separated surviving surface identifiers>` and
