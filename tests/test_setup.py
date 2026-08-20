@@ -1581,6 +1581,35 @@ def test_live_setup_oracle_rejects_shortcuts_and_internal_leaks():
             text=True,
         ).returncode
 
+    def check_tool_chain(mode: str, result: str, calls: list[tuple[str, dict]]) -> int:
+        events = []
+        for index, (name, payload) in enumerate(calls):
+            tool_id = f"before-boundary-{index}"
+            events.extend([
+                {"type": "assistant", "message": {"content": [{
+                    "type": "tool_use",
+                    "id": tool_id,
+                    "name": name,
+                    "input": payload,
+                }]}},
+                {"type": "user", "message": {"content": [{
+                    "type": "tool_result",
+                    "tool_use_id": tool_id,
+                    "is_error": False,
+                    "content": "done",
+                }]}},
+            ])
+        events.append({"type": "result", "result": result})
+        transcript.write_text(
+            "\n".join(json.dumps(event) for event in events) + "\n",
+            encoding="utf-8",
+        )
+        return subprocess.run(
+            [sys.executable, str(LIVE_SETUP_ORACLE), mode, str(transcript)],
+            capture_output=True,
+            text=True,
+        ).returncode
+
     def check_stand(
         mode: str,
         result: str,
@@ -1870,6 +1899,51 @@ def test_live_setup_oracle_rejects_shortcuts_and_internal_leaks():
                 "gopnik/main/docs/install.md"
             ),
         },
+    ) != 0
+    language_question = "Which language would you like me to use: English or Russian?"
+    safe_fetch = {
+        "command": (
+            "curl -fsSL "
+            "https://raw.githubusercontent.com/concordloom/gopnik/main/docs/install.md"
+        )
+    }
+    assert check_tool_chain(
+        "language",
+        language_question,
+        [
+            ("ToolSearch", {"query": "select:WebFetch", "max_results": 5}),
+            ("Bash", safe_fetch),
+        ],
+    ) == 0
+    assert check_tool_chain(
+        "language",
+        language_question,
+        [
+            ("ToolSearch", {"query": "select:WebFetch", "max_results": 3}),
+            ("Bash", {
+                "command": (
+                    "curl -sSL https://raw.githubusercontent.com/"
+                    "concordloom/gopnik/main/docs/install.md"
+                ),
+                "description": "Fetch raw install guide",
+            }),
+        ],
+    ) == 0
+    assert check_tool_chain(
+        "language",
+        language_question,
+        [
+            ("ToolSearch", {"query": "curl installation commands"}),
+            ("Bash", safe_fetch),
+        ],
+    ) != 0
+    assert check_tool_chain(
+        "language",
+        language_question,
+        [
+            ("Bash", safe_fetch),
+            ("ToolSearch", {"query": "select:WebFetch"}),
+        ],
     ) != 0
     assert check_tool_turn(
         "language",

@@ -159,7 +159,7 @@ def raw_guide_fetch(value: dict) -> bool:
         return False
     if argv[0] == "curl":
         allowed = {
-            "-f", "-s", "-S", "-L", "-fsSL", "-sSfL",
+            "-f", "-s", "-S", "-L", "-fsSL", "-sSL", "-sSfL",
             "--fail", "--silent", "--show-error", "--location",
         }
         return all(item in allowed for item in argv[1:-1])
@@ -173,6 +173,16 @@ def raw_guide_fetch(value: dict) -> bool:
             ["--quiet", "--output-document=-"],
         )
     return False
+
+
+def raw_guide_tool_discovery(value: dict) -> bool:
+    payload = value.get("input")
+    return (
+        str(value.get("name") or "").lower() == "toolsearch"
+        and isinstance(payload, dict)
+        and payload.get("query") == "select:WebFetch"
+        and set(payload) <= {"query", "max_results"}
+    )
 
 
 def pure_python_helper_argv(command: object) -> list[str] | None:
@@ -359,7 +369,16 @@ def main(argv: list[str]) -> int:
         calls = tool_uses(items)
         if result != LANGUAGE_QUESTION:
             return fail(result)
-        if len(calls) > 1 or any(not raw_guide_fetch(call) for call in calls):
+        safe_bootstrap = (
+            not calls
+            or (len(calls) == 1 and raw_guide_fetch(calls[0]))
+            or (
+                len(calls) == 2
+                and raw_guide_tool_discovery(calls[0])
+                and raw_guide_fetch(calls[1])
+            )
+        )
+        if not safe_bootstrap:
             return fail("tool activity occurred before the language hard boundary")
         return 0
 
