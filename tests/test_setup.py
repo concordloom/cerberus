@@ -1666,7 +1666,7 @@ def test_live_setup_oracle_rejects_shortcuts_and_internal_leaks():
         *,
         critic: bool = True,
         mode: str = "surfaces",
-        critic_content: str | None = None,
+        critic_content: object | None = None,
         stage1_command: str | None = None,
     ) -> int:
         russian = mode.endswith("-ru")
@@ -1774,6 +1774,23 @@ def test_live_setup_oracle_rejects_shortcuts_and_internal_leaks():
             "GOPNIK_CRITIC_SURFACES: command, web\n"
             "GOPNIK_CRITIC_STATUS: complete"
         ),
+    ) == 0
+    assert check(
+        good,
+        critic_content=[
+            {
+                "type": "text",
+                "text": (
+                    "The command and web interface remain candidate surfaces.\n"
+                    "GOPNIK_CRITIC_SURFACES: command, web\n"
+                    "GOPNIK_CRITIC_STATUS: complete"
+                ),
+            },
+            {
+                "type": "text",
+                "text": "agentId: worker-1\n<usage>tokens: 10</usage>",
+            },
+        ],
     ) == 0
     assert check(
         good,

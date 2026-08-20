@@ -356,9 +356,22 @@ def candidate_is_named(candidate: str, result: str, russian: bool) -> bool:
 def completed_fixture_critic_result(value: dict, result: str, russian: bool) -> bool:
     if not successful_result(value):
         return False
+    payload = value.get("content")
+    if isinstance(payload, str):
+        primary = payload
+    elif (
+        isinstance(payload, list)
+        and payload
+        and isinstance(payload[0], dict)
+        and payload[0].get("type") == "text"
+        and isinstance(payload[0].get("text"), str)
+    ):
+        primary = payload[0]["text"]
+    else:
+        return False
     lines = [
         line.strip()
-        for line in "\n".join(text_values(value.get("content"))).splitlines()
+        for line in primary.splitlines()
         if line.strip()
     ]
     if len(lines) < 2 or lines[-1] != CRITIC_COMPLETE_MARKER:

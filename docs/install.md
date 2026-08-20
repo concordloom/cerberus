@@ -260,10 +260,18 @@ Stage 2 itself.
 
 Only after Stage 1 passes, inspect the candidate delivery surfaces. Treat an
 old configuration, previous conversation, and memory as leads, never as
-confirmation. Enumerate what the repository can produce or expose: installed
-commands, packages, libraries, plugins, HTTP services and APIs, web or mobile
-interfaces, background jobs, charts, migrations, and deployment or release
-routes.
+confirmation. Enumerate the product-facing things a person or another system
+can consume after delivery: installed commands, packages, libraries, plugins,
+HTTP services and APIs, web or mobile interfaces, background jobs, charts, and
+migrations. Inspect deployment and release routes as evidence for how those
+surfaces arrive, not as product-use choices of their own; the exception is a
+reusable workflow or action that consumers invoke directly.
+
+Require a concrete consumption boundary. A declared console entry point,
+published package API, protocol/server entry point, renderable UI artifact, or
+runnable job can support a candidate even when its route is broken. A filename,
+function name, or string such as `server`, `serve`, or `web service` alone does
+not prove a service exists.
 
 Do not let the packaging label end the search. One binary can also run a
 service and UI; one repository can ship several artifacts. A clean installed
