@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.0.8](https://github.com/concordloom/gopnik/compare/v4.0.7...v4.0.8) (2026-08-20)
+
+
+### Bug Fixes
+
+* avoid recursive critics during setup ([57ee267](https://github.com/concordloom/gopnik/commit/57ee2674d6b70f3d4717401df3736fa00fd17f82))
+
 ## [4.0.7](https://github.com/concordloom/gopnik/compare/v4.0.6...v4.0.7) (2026-08-20)
 
 
