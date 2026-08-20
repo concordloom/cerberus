@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.0.2](https://github.com/concordloom/gopnik/compare/v4.0.1...v4.0.2) (2026-08-20)
+
+
+### Bug Fixes
+
+* allow read-only guide discovery before onboarding ([ec671ba](https://github.com/concordloom/gopnik/commit/ec671ba2401cff5bdcb208f3b0a6dcbd78a29d42))
+
 ## [4.0.1](https://github.com/concordloom/gopnik/compare/v4.0.0...v4.0.1) (2026-08-20)
 
 
