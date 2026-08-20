@@ -1,5 +1,15 @@
 # Changelog
 
+# [4.0.0](https://github.com/concordloom/gopnik/compare/v3.2.3...v4.0.0) (2026-08-20)
+
+
+* feat!: rebrand Cerberus as Gopnik ([decac57](https://github.com/concordloom/gopnik/commit/decac57f9e09a990b107ae2022ec6a172671d782))
+
+
+### BREAKING CHANGES
+
+* the repository, plugin selector, skills, setup helper, configuration file, and environment protocol now use the Gopnik identity.
+
 ## [3.2.3](https://github.com/concordloom/cerberus/compare/v3.2.2...v3.2.3) (2026-08-20)
 
 
