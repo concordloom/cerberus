@@ -180,6 +180,10 @@ python3 PATH/gopnik_setup.py --defer-artifact-kind \
   --stage1 './app.sh --test'
 ```
 
+Run the setup helper as the complete shell command. Do not append a pipe,
+redirect, `tail`, `tee`, `|| true`, or another wrapper: its tool result must
+carry the helper's real exit status.
+
 Use the actual installed path. Guided setup must defer the delivery kind until
 Stage 1 passes, a critic challenges the candidate surfaces, and the person
 confirms how the project is used. When no authoritative project instructions

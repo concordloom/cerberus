@@ -85,6 +85,10 @@ python3 PATH/gopnik_setup.py --defer-artifact-kind \
   --stage1 './app.sh --test'
 ```
 
+Run the setup helper as the complete Bash command. Do not append a pipe,
+redirect, `tail`, `tee`, `|| true`, or another wrapper: its tool result must
+carry the helper's real exit status.
+
 Repeat `--stage1` as needed. `--check` runs and reports without writing.
 `--draft-stage2` prints a repository-derived proposal and writes nothing.
 

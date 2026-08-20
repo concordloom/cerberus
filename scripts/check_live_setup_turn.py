@@ -231,18 +231,40 @@ def stage1_events(items: list[object], expected_language: str) -> list[tuple[int
             argv = pure_python_helper_argv(command)
             if argv is None:
                 continue
-            stage1_indexes = [i for i, item in enumerate(argv) if item == "--stage1"]
-            language_indexes = [i for i, item in enumerate(argv) if item == "--language"]
+            flags: dict[str, str | bool] = {}
+            cursor = 2
+            valid = True
+            while cursor < len(argv):
+                option = argv[cursor]
+                if option == "--defer-artifact-kind":
+                    if option in flags:
+                        valid = False
+                        break
+                    flags[option] = True
+                    cursor += 1
+                    continue
+                if option in {"--language", "--stage1", "--timeout-seconds"}:
+                    if option in flags or cursor + 1 >= len(argv):
+                        valid = False
+                        break
+                    flags[option] = argv[cursor + 1]
+                    cursor += 2
+                    continue
+                valid = False
+                break
             if (
                 name == "bash"
-                and len(argv) == 7
-                and argv.count("--defer-artifact-kind") == 1
-                and len(stage1_indexes) == 1
-                and stage1_indexes[0] + 1 < len(argv)
-                and argv[stage1_indexes[0] + 1] == "./check.sh"
-                and len(language_indexes) == 1
-                and language_indexes[0] + 1 < len(argv)
-                and argv[language_indexes[0] + 1] == expected_language
+                and valid
+                and flags.get("--defer-artifact-kind") is True
+                and flags.get("--language") == expected_language
+                and flags.get("--stage1") == "./check.sh"
+                and flags.get("--timeout-seconds", "120") == "120"
+                and set(flags) <= {
+                    "--defer-artifact-kind",
+                    "--language",
+                    "--stage1",
+                    "--timeout-seconds",
+                }
                 and isinstance(value.get("id"), str)
             ):
                 found.append((index, value["id"]))

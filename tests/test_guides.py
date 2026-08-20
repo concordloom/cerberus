@@ -373,6 +373,8 @@ def test_first_stage1_run_has_a_resource_envelope():
         INSTALL: (
             "Every first Stage 1 command needs a wall-clock budget",
             "120 seconds",
+            "Do not append a pipe",
+            "helper's real exit status",
             "Do not rerun a timed-out command directly without an equivalent limit",
             "host-relative safety signal",
             "runtime memory objective is not a compiler memory limit",
@@ -380,6 +382,8 @@ def test_first_stage1_run_has_a_resource_envelope():
         SETUP_SKILLS[0]: (
             "Every first Stage 1 command needs a wall-clock budget",
             "120 seconds",
+            "Do not append a pipe",
+            "helper's real exit status",
             "Do not rerun a timed-out command directly without an equivalent limit",
             "host-relative safety signal",
             "runtime memory objective is not a compiler memory limit",
@@ -387,9 +391,34 @@ def test_first_stage1_run_has_a_resource_envelope():
         SETUP_SKILLS[1]: (
             "Первый запуск каждой команды Stage 1 должен иметь ограничение по времени",
             "120 секунд",
+            "Не добавляй pipe",
+            "настоящий код выхода helper",
             "Не перезапускай команду после тайм-аута напрямую без равноценного ограничения",
             "относительный к машине сигнал безопасности",
             "Ограничение памяти готового продукта не становится лимитом памяти компилятора",
+        ),
+    }
+    for path, phrases in expected.items():
+        text = _flat(path)
+        for phrase in phrases:
+            assert phrase in text, (path.name, phrase)
+
+
+def test_critic_has_bounded_private_diagnostics():
+    expected = {
+        ROOT / "plugins/gopnik/skills/gopnik-critic/SKILL.md": (
+            "mktemp -d /tmp/gopnik-critic.XXXXXX",
+            "Never use a fixed generic path",
+            "agent/subagent wait mechanism",
+            "exact child PID with a bounded timeout",
+            "once they stop producing new evidence",
+        ),
+        ROOT / "plugins/gopnik/skills/gopnik-critic/SKILL.ru.md": (
+            "mktemp -d /tmp/gopnik-critic.XXXXXX",
+            "Не используйте фиксированный общий путь",
+            "механизм",
+            "точный дочерний PID с ограниченным тайм-аутом",
+            "перестали давать новые доказательства",
         ),
     }
     for path, phrases in expected.items():

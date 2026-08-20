@@ -1791,6 +1791,20 @@ def test_live_setup_oracle_rejects_shortcuts_and_internal_leaks():
             "--stage1 './check.sh' --check"
         ),
     ) != 0
+    assert check(
+        good,
+        stage1_command=(
+            "python3 gopnik_setup.py --defer-artifact-kind --language en "
+            "--timeout-seconds 120 --stage1 './check.sh'"
+        ),
+    ) == 0
+    assert check(
+        good,
+        stage1_command=(
+            "python3 gopnik_setup.py --defer-artifact-kind --language en "
+            "--timeout-seconds 120 --stage1 './check.sh' 2>&1 | tail -40"
+        ),
+    ) != 0
     bare_skill = [
         {"type": "assistant", "message": {"content": [{
             "type": "tool_use",

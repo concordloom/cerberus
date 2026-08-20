@@ -91,6 +91,19 @@ returns you to an unverified claim with more ceremony attached.
    critique reaches the reader through an unchecked link, and the first three
    steps bought nothing.
 
+## Operational bounds
+
+- Keep every scratch copy under one private directory created with
+  `mktemp -d /tmp/gopnik-critic.XXXXXX`. Never use a fixed generic path such as
+  `/tmp/c1`, and remove exactly that owned directory before returning.
+- Use the host's agent/subagent wait mechanism when it exists. Do not invent
+  shell polling by task name or command substring. If only a process is
+  available, wait on its exact child PID with a bounded timeout.
+- A new check must challenge a load-bearing claim or resolve contradictory
+  evidence. Stop repeated variants once they stop producing new evidence.
+- Do not overwrite project files, delete shared paths, or change external
+  state while testing a claim.
+
 ## How to state a claim
 
 **Name the operation, not the conclusion.** "52 files with `guard` in the name"
