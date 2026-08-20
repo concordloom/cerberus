@@ -35,7 +35,7 @@ jobs:
         # path is asserted first. This step silently compiled nothing after the
         # scripts moved under plugins/ and stayed green throughout.
         run: |
-          test -f plugins/cerberus/skills/cerberus-setup/cerberus_setup.py
+          test -f plugins/gopnik/skills/gopnik-setup/gopnik_setup.py
           python3 -m compileall -q plugins scripts tests
 
       # The two slash commands drive the whole working cycle and had no check
@@ -63,6 +63,7 @@ jobs:
         run: |
           python3 tests/test_readme.py
           python3 tests/test_guides.py
+          python3 tests/test_brand.py
 
   docs:
     runs-on: ubuntu-latest
@@ -77,7 +78,7 @@ jobs:
       - name: English and Russian describe the same thing
         run: python3 scripts/check_parity.py
       - name: Example configuration is valid JSON
-        run: python3 -c "import json; json.load(open('cerberus.example.json'))"
+        run: python3 -c "import json; json.load(open('gopnik.example.json'))"
       # A malformed issue form does not error anywhere — GitHub quietly falls
       # back to a blank issue, and the one field the cycle depends on stops
       # being asked for. Nothing else in this repository would notice.
@@ -169,11 +170,11 @@ jobs:
       # pass on someone else's commit.
       - name: The one-liner installs without a clone
         env:
-          CERBERUS_REF: ${{ github.sha }}
+          GOPNIK_REF: ${{ github.sha }}
         run: |
           mkdir -p /tmp/oneliner && cd /tmp/oneliner
           cat "$GITHUB_WORKSPACE/install.sh" | sh -s -- --codex
-          test -f .agents/skills/cerberus/SKILL.md
+          test -f .agents/skills/gopnik/SKILL.md
 
       # The installer is what people run when they are not on Claude Code, and
       # a broken one fails in someone else's repository rather than here.
@@ -181,15 +182,15 @@ jobs:
         run: |
           mkdir -p /tmp/proj && cd /tmp/proj
           sh "$GITHUB_WORKSPACE/install.sh" --claude
-          test -f .claude/skills/cerberus/SKILL.md
-          test -f .claude/skills/cerberus-critic/SKILL.md
-          test -f .claude/skills/cerberus-setup/cerberus_setup.py
-          test -f cerberus.json
-          python3 -c "import json; json.load(open('cerberus.json'))"
+          test -f .claude/skills/gopnik/SKILL.md
+          test -f .claude/skills/gopnik-critic/SKILL.md
+          test -f .claude/skills/gopnik-setup/gopnik_setup.py
+          test -f gopnik.json
+          python3 -c "import json; json.load(open('gopnik.json'))"
 
           # It must be idempotent: people re-run installers.
           sh "$GITHUB_WORKSPACE/install.sh" --claude
-          test -f .claude/skills/cerberus/SKILL.md
+          test -f .claude/skills/gopnik/SKILL.md
 
       # #33: the install takes no decisions for the user. That is an absence,
       # so it is asserted rather than assumed — a version that quietly wired
@@ -206,7 +207,7 @@ jobs:
           test ! -e .codex/hooks.json
           test ! -e .claude/hooks
           test ! -e .codex/hooks
-          test -z "$(find . -name 'cerberus_gate.py' -o -name 'cerberus_mark.py')"
+          test -z "$(find . -name 'gopnik_gate.py' -o -name 'gopnik_mark.py')"
           echo "installing left every file the project owns alone"
 
       # The whole point of setup is that what it writes was run first, and that
@@ -220,7 +221,7 @@ jobs:
           sh "$GITHUB_WORKSPACE/install.sh" --claude --setup
           python3 - <<'PY'
           import json, subprocess
-          body = json.load(open("/tmp/real/cerberus.json"))
+          body = json.load(open("/tmp/real/gopnik.json"))
           stage1 = body["verification"]["stage1"]
           assert stage1, "setup wrote no checks"
           for cmd in stage1:

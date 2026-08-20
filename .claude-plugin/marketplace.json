@@ -9,16 +9,16 @@
   },
   "plugins": [
     {
-      "name": "cerberus",
-      "source": "./plugins/cerberus",
-      "description": "Adversarial verification gate: before an agent says a change works, it has to try to prove it is broken — and fail. Three skills — the cycle, a critic that refutes claims, and a setup step that learns this project's checks by running them.",
-      "version": "3.2.3",
+      "name": "gopnik",
+      "source": "./plugins/gopnik",
+      "description": "Your coding agent says it works. Gopnik tries to prove it doesn't — against the code, the delivered revision, and the checks themselves.",
+      "version": "4.0.0",
       "author": {
         "name": "Concord Loom",
         "url": "https://github.com/concordloom"
       },
-      "homepage": "https://github.com/concordloom/cerberus",
-      "repository": "https://github.com/concordloom/cerberus",
+      "homepage": "https://github.com/concordloom/gopnik",
+      "repository": "https://github.com/concordloom/gopnik",
       "license": "MIT",
       "category": "quality",
       "tags": [
@@ -27,7 +27,8 @@
         "quality",
         "skills",
         "adversarial",
-        "code-review"
+        "code-review",
+        "gopnik"
       ]
     }
   ]

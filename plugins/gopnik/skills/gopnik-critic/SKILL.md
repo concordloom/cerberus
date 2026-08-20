@@ -1,5 +1,5 @@
 ---
-name: cerberus-critic
+name: gopnik-critic
 description: >
   Adversarial review of a claim before it is published. Use before publishing a
   diagnosis, an explanation of a mechanism, a conclusion that implies work, or
@@ -13,7 +13,7 @@ A mandatory attempt to **refute the claim**, run before publishing it. The
 companion to the gate, and not a substitute for it: the gate examines the
 **work**, this examines what you **say about** it.
 
-Use the top-level `language` value from `cerberus.json` (`en` or `ru`) for the
+Use the top-level `language` value from `gopnik.json` (`en` or `ru`) for the
 operator-facing review. If it is absent, keep the current conversation
 language.
 
@@ -53,7 +53,7 @@ Before publishing — to an issue tracker, a commit message, a rule, or a person
    among them a recommendation inverted into its opposite.
 
 Readiness claims about executable work are a different gate — that is
-[cerberus](../cerberus/SKILL.md). Run both; neither covers the other.
+[gopnik](../gopnik/SKILL.md). Run both; neither covers the other.
 
 ## When it is not needed
 

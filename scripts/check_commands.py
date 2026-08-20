@@ -36,7 +36,7 @@ What this checks, and why each rule earns its place:
    check this; measured before eeec1d9.
 
 4. **Backticked repository paths exist.** Both commands send the reader to
-   `plugins/cerberus/skills/*/SKILL.md`; a move that misses them turns a step
+   `plugins/gopnik/skills/*/SKILL.md`; a move that misses them turns a step
    into a dead end.
 
 5. **Named placeholders are declared.** An undeclared `$name` expands to an

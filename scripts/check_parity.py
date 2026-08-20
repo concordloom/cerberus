@@ -102,11 +102,11 @@ def compare_pages() -> list[str]:
     # Commands are not prose: a route documented in one language and not the
     # other is a reader who cannot install, and that is exactly how the
     # installer's update path came to exist only in English.
-    for token in ("/plugin marketplace add", "/plugin install", "/plugin uninstall",
-                  "codex plugin marketplace add", "codex plugin add",
-                  "codex plugin remove", "install.sh", "--draft-stage2",
-                  "docs/install.md", "docs/uninstall.md",
-                  "stage2_unreachable", "artifact_kind", "verification"):
+    # README is now a short front door. Platform commands and configuration
+    # vocabulary live in the linked guides, so only routes a reader can click
+    # from either language belong in this parity check.
+    for token in ("docs/install.md", "docs/uninstall.md", "gopnik.example.json",
+                  "plugins/gopnik/skills/gopnik/"):
         in_en = token in en.read_text(encoding="utf-8")
         in_ru = token in ru.read_text(encoding="utf-8")
         if in_en != in_ru:

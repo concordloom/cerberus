@@ -3,8 +3,9 @@
 
 Run it from the project root:
 
-    python3 cerberus_setup.py           # find the checks, run them, save them
-    python3 cerberus_setup.py --check   # run them and print them, write nothing
+    python3 gopnik_setup.py           # find the checks, run them, save them
+    python3 gopnik_setup.py --check   # run them and print them, write nothing
+    python3 gopnik_setup.py --defer-artifact-kind  # save Stage 1, wait for confirmation
 
 Why it exists: the skills need to know two things this repository cannot know —
 the commands that check this project, and where the change stops being under
@@ -88,18 +89,28 @@ KIND_SIGNALS = [
 #: Where the configuration is looked for, in order. The first two are where
 #: earlier versions put it; new projects get the third, which belongs to no
 #: agent in particular — the file is read by whoever is working, not by a hook.
-CONFIG_PATHS = (".claude/cerberus.json", ".codex/cerberus.json", "cerberus.json")
+CONFIG_PATHS = (".claude/gopnik.json", ".codex/gopnik.json", "gopnik.json")
 
-# The installer's own copy of cerberus.example.json, identified by the two
+# The installer's own copy of gopnik.example.json, identified by the two
 # strings it ships. This is the only existing configuration that can be
 # rewritten without guessing whether a human chose its values — everything else
-# is left alone, because `cerberus.json` records no distinction between "the
+# is left alone, because `gopnik.json` records no distinction between "the
 # user set this" and "the installer did", and three rounds of proxies for that
 # distinction each produced a defect.
 #
 # tests/test_setup.py asserts these still match the shipped example.
-EXAMPLE_MARKER_COMMENT = 'Copy to cerberus.json in your project root. Safe to use as-is: the only key set is the one with no sensible default, and the checks below are placeholders until setup runs.'
+EXAMPLE_MARKER_COMMENT = 'Copy to gopnik.json in your project root. Safe to use as-is: the only key set is the one with no sensible default, and the checks below are placeholders until setup runs.'
 EXAMPLE_MARKER_STAGE1 = ["echo 'replace with this project: tests, lint, type check'"]
+
+SETUP_MARKER_COMMENT = (
+    "Every command in stage1 was run once, in this project, before being written here."
+)
+PENDING_KIND_COMMENT = (
+    "Pending confirmation of how people use this project after delivery."
+)
+PENDING_KIND_NOTES = (
+    "Stage 1 is configured. Delivery surfaces still need user confirmation before Stage 2."
+)
 
 
 STAGE2_HINT_BY_KIND = {
@@ -321,9 +332,15 @@ def run(cmd: str, cwd: pathlib.Path, timeout: int = 120) -> tuple[int, str]:
         return 124, "timed out"
 
 
-def detect(root: pathlib.Path) -> tuple[list[dict], str | None]:
-    """Which toolchains are here, and what does this project ship?"""
+def detect(
+    root: pathlib.Path,
+    detect_kind: bool = True,
+) -> tuple[list[dict], str | None]:
+    """Find toolchains and, unless guided setup deferred it, a shipped kind."""
     found = [r for r in RUNNERS if any((root / f).exists() for f in r["files"])]
+
+    if not detect_kind:
+        return found, None
 
     kind = None
     for candidate, signals in KIND_SIGNALS:
@@ -434,7 +451,7 @@ def resolve_config(root: pathlib.Path) -> pathlib.Path:
     for relative in CONFIG_PATHS:
         if (root / relative).exists():
             return root / relative
-    return root / "cerberus.json"
+    return root / "gopnik.json"
 
 
 def is_the_installers_copy(existing: dict) -> bool:
@@ -453,13 +470,25 @@ def is_the_installers_copy(existing: dict) -> bool:
     )
 
 
+def is_pending_kind_config(existing: dict) -> bool:
+    """Return true only when setup explicitly marked the kind as provisional."""
+    verification = existing.get("verification")
+    return (
+        isinstance(verification, dict)
+        and verification.get("//artifact_kind") == PENDING_KIND_COMMENT
+        and isinstance(verification.get("stage1"), list)
+        and bool(verification["stage1"])
+    )
+
+
 def write_config(
     root: pathlib.Path,
-    kind: str,
+    kind: str | None,
     checks: list[str],
     dry: bool,
     existing: dict | None = None,
     language: str | None = None,
+    defer_artifact_kind: bool = False,
 ) -> pathlib.Path:
     """Merge into whatever is there rather than replacing it.
 
@@ -470,7 +499,7 @@ def write_config(
     body = dict(existing) if isinstance(existing, dict) else {}
     if language is not None:
         body["language"] = language
-    body["//"] = "Every command in stage1 was run once, in this project, before being written here."
+    body["//"] = SETUP_MARKER_COMMENT
     prior = body.get("verification")
     verification = dict(prior) if isinstance(prior, dict) else {}
     # The rule that top-level keys are not to be removed applies one level down
@@ -479,21 +508,62 @@ def write_config(
     # were destroyed without a word.
     # Reached only for an absent config or the installer's own copy, so these
     # are never anybody's choice.
-    verification["artifact_kind"] = kind
     verification["stage1"] = checks
     # Left empty on purpose: a comment line in a list of commands exits 0
     # unconditionally, which is the placeholder this script exists to remove.
     verification["stage2"] = []
-    verification["notes"] = (
-        "stage2 is still empty. Put here what proves it works where it really runs: "
-        + STAGE2_HINT_BY_KIND.get(
-            verification["artifact_kind"], STAGE2_HINT_BY_KIND["library"]
+    if defer_artifact_kind:
+        verification.pop("artifact_kind", None)
+        verification["//artifact_kind"] = PENDING_KIND_COMMENT
+        verification["notes"] = PENDING_KIND_NOTES
+    else:
+        verification["artifact_kind"] = kind
+        verification.pop("//artifact_kind", None)
+        verification["notes"] = (
+            "stage2 is still empty. Put here what proves it works where it really runs: "
+            + STAGE2_HINT_BY_KIND.get(kind, STAGE2_HINT_BY_KIND["library"])
+            + "."
         )
-        + "."
-    )
     body["verification"] = verification
     if not dry:
         path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(body, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
+def confirm_artifact_kind(
+    root: pathlib.Path,
+    kind: str,
+    dry: bool = False,
+) -> pathlib.Path:
+    """Finalize only the provisional kind; preserve the proven Stage 1 checks."""
+    path = resolve_config(root)
+    try:
+        body = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise ValueError("no readable provisional configuration to confirm") from exc
+    if not is_pending_kind_config(body):
+        raise ValueError(
+            "artifact kind can only be confirmed for a setup that explicitly deferred it"
+        )
+
+    verification = dict(body["verification"])
+    fresh_setup = (
+        body.get("//") == SETUP_MARKER_COMMENT
+        and "artifact_kind" not in verification
+        and verification.get("stage2") == []
+        and verification.get("notes") == PENDING_KIND_NOTES
+    )
+    verification["artifact_kind"] = kind
+    verification.pop("//artifact_kind", None)
+    if fresh_setup:
+        verification["notes"] = (
+            "stage2 is still empty. Put here what proves it works where it really runs: "
+            + STAGE2_HINT_BY_KIND.get(kind, STAGE2_HINT_BY_KIND["library"])
+            + "."
+        )
+    body["verification"] = verification
+    if not dry:
         path.write_text(json.dumps(body, indent=2) + "\n", encoding="utf-8")
     return path
 
@@ -513,7 +583,7 @@ def report_state(root: pathlib.Path, kind: str = "library", first_run: bool = Tr
 
     if first_run:
         print()
-        print("No hook was installed — ask for the cerberus skill by name when it matters.")
+        print("No hook was installed — ask for the gopnik skill by name when it matters.")
     try:
         body = json.loads(config.read_text(encoding="utf-8"))
         stage2 = body["verification"]["stage2"]
@@ -565,8 +635,11 @@ def print_draft(root: pathlib.Path, config: pathlib.Path, detected: str | None) 
     kind = detected or "library"
     if config.exists():
         try:
-            kind = json.loads(config.read_text(encoding="utf-8"))[
-                "verification"].get("artifact_kind") or kind
+            existing = json.loads(config.read_text(encoding="utf-8"))
+            if is_pending_kind_config(existing):
+                print("Delivery surfaces still need confirmation. Nothing was drafted.")
+                return 2
+            kind = existing["verification"].get("artifact_kind") or kind
         except Exception:
             pass
 
@@ -629,9 +702,20 @@ def main(argv: list[str] | None = None) -> int:
         help="override artifact detection after inspecting how this project ships",
     )
     parser.add_argument(
+        "--defer-artifact-kind",
+        action="store_true",
+        help="save passing Stage 1 checks but wait for critic and user confirmation before choosing the delivery kind",
+    )
+    parser.add_argument(
+        "--confirm-artifact-kind",
+        choices=sorted(STAGE2_HINT_BY_KIND),
+        metavar="KIND",
+        help="finalize a kind previously deferred by guided setup without rerunning Stage 1",
+    )
+    parser.add_argument(
         "--language",
         choices=("en", "ru"),
-        help="persist the selected operator-facing language in cerberus.json",
+        help="persist the selected operator-facing language in gopnik.json",
     )
     parser.add_argument(
         "--timeout-seconds",
@@ -649,7 +733,39 @@ def main(argv: list[str] | None = None) -> int:
     root = pathlib.Path(args.dir).resolve()
     config = resolve_config(root)
 
-    runners, kind = detect(root)
+    if args.confirm_artifact_kind:
+        incompatible = (
+            args.stage1
+            or args.artifact_kind
+            or args.defer_artifact_kind
+            or args.draft_stage2
+            or args.language
+        )
+        if incompatible:
+            parser.error(
+                "--confirm-artifact-kind is a separate finalization step; "
+                "do not combine it with setup options"
+            )
+        try:
+            confirmed = confirm_artifact_kind(
+                root, args.confirm_artifact_kind, dry=args.check
+            )
+        except ValueError as exc:
+            print(f"Cannot confirm artifact kind: {exc}.")
+            return 2
+        action = "Would confirm" if args.check else "Confirmed"
+        print(
+            f"{action} artifact kind '{args.confirm_artifact_kind}' in {confirmed.name}. "
+            "Stage 1 checks were preserved and not rerun."
+        )
+        return 0
+
+    if args.defer_artifact_kind and args.artifact_kind:
+        parser.error(
+            "--defer-artifact-kind and --artifact-kind are mutually exclusive"
+        )
+
+    runners, kind = detect(root, detect_kind=not args.defer_artifact_kind)
     kind = args.artifact_kind or kind
 
     if args.draft_stage2:
@@ -670,6 +786,20 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{config} has a 'verification' that is not an object. Fix it, then run this again.")
             return 2
         verification = verification or {}
+
+        if is_pending_kind_config(existing):
+            language_saved = (
+                args.language is not None
+                and existing.get("language") != args.language
+            )
+            if language_saved and not args.check:
+                existing = dict(existing)
+                existing["language"] = args.language
+                config.write_text(
+                    json.dumps(existing, indent=2) + "\n", encoding="utf-8"
+                )
+            print("Stage 1 already set up. Delivery surfaces still need confirmation.")
+            return 0
 
         if not is_the_installers_copy(existing):
             language_saved = args.language is not None and existing.get("language") != args.language
@@ -700,6 +830,22 @@ def main(argv: list[str] | None = None) -> int:
                         still_failing = True
             else:
                 print("It lists no checks at all, so there is nothing to run.")
+            if args.defer_artifact_kind:
+                if still_failing:
+                    print()
+                    print("Stage 1 is not green, so delivery surfaces were not classified.")
+                    return 2
+                if not args.check:
+                    body = dict(existing)
+                    pending = dict(verification)
+                    pending["//artifact_kind"] = PENDING_KIND_COMMENT
+                    body["verification"] = pending
+                    config.write_text(
+                        json.dumps(body, indent=2) + "\n", encoding="utf-8"
+                    )
+                print()
+                print("Stage 1 already set up. Delivery surfaces still need confirmation.")
+                return 0
             if runners and not project_instructions(root):
                 # Only what the configuration does not already have. Offering a
                 # project a check it already lists reads as a suggestion, costs
@@ -729,15 +875,17 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Project instructions found: {names}.")
         print("Nothing was run or changed. Read those rules, then pass only their")
         print("project-owned checks with --stage1 COMMAND (repeat as needed).")
-        print("Use --artifact-kind too if the shipped artifact is still ambiguous.")
         return 2
 
-    if (not runners and not explicit) or kind is None:
+    if not runners and not explicit:
+        print("I could not find this project's Stage 1 check.")
+        print("Nothing was changed. Tell me the project-owned fast local check command.")
+        return 2
+
+    if kind is None and not args.defer_artifact_kind:
         print("I could not tell what kind of project this is.")
-        print("Nothing was changed. Tell me two things and I can finish:")
-        print("  1. the command that runs your tests")
-        print("  2. how someone else gets this — a running service, an installed")
-        print("     package, a command they type")
+        print("Nothing was changed. Tell me how someone else gets this — a running")
+        print("service, an installed package, or a command they type.")
         return 2
 
     results = (
@@ -772,9 +920,19 @@ def main(argv: list[str] | None = None) -> int:
         print("Nothing was changed. Fix one of those, or tell me the right command.")
         return 2
 
-    written = write_config(root, kind, passing, args.check, existing, args.language)
+    written = write_config(
+        root,
+        kind,
+        passing,
+        args.check,
+        existing,
+        args.language,
+        defer_artifact_kind=args.defer_artifact_kind,
+    )
 
-    if explicit:
+    if args.defer_artifact_kind:
+        print("Stage 1 set up. Delivery surfaces still need confirmation.")
+    elif explicit:
         print(f"Set up: project-defined {kind} — change that if it is wrong.")
     elif len(runners) > 1:
         others = ", ".join(r["name"] for r in runners[1:])
@@ -794,6 +952,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.check:
         print()
         print(f"Nothing was written. Drop --check to save this to {written}.")
+        return 0
+
+    if args.defer_artifact_kind:
         return 0
 
     return report_state(root, kind, first_run=True)

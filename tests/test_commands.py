@@ -90,7 +90,7 @@ def test_catches_a_missing_frontmatter():
 def test_catches_a_reference_to_a_file_that_does_not_exist():
     rc, out = run({"c.md": command(
         "description: x",
-        "Read `plugins/cerberus/skills/ghost/SKILL.md` before starting.",
+        "Read `plugins/gopnik/skills/ghost/SKILL.md` before starting.",
     )})
     assert rc == 1, out
     assert "does not exist" in out, out

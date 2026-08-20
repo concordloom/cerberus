@@ -1,0 +1,4 @@
+interface:
+  display_name: "Gopnik Critic"
+  short_description: "Try to refute an engineering claim"
+  default_prompt: "Use $gopnik-critic to challenge this claim before I publish it."

@@ -5,7 +5,7 @@ arguments: [issue]
 allowed-tools: Bash(gh issue view:*), Bash(gh issue comment:*), Bash(gh issue close:*), Bash(gh pr create:*), Read, Agent
 ---
 
-Take issue **$issue** through the cycle in `plugins/cerberus/skills/cerberus/SKILL.md`.
+Take issue **$issue** through the cycle in `plugins/gopnik/skills/gopnik/SKILL.md`.
 Read that skill before starting; what follows is the order of operations, not a
 replacement for it.
 
@@ -22,7 +22,7 @@ replacement for it.
 
 4. **Run the critic if the work produced a claim** — a diagnosis, an explanation
    of a mechanism, a statement about the codebase. Follow
-   `plugins/cerberus/skills/cerberus-critic/SKILL.md`: an adversary whose mandate is to
+   `plugins/gopnik/skills/gopnik-critic/SKILL.md`: an adversary whose mandate is to
    refute, then verify its load-bearing claim yourself, then have it confirm
    your retelling. A change that asserts nothing beyond "this now behaves as the
    issue asked" skips this.

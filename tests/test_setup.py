@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for cerberus_setup.py and for what install.sh leaves behind.
+"""Tests for gopnik_setup.py and for what install.sh leaves behind.
 
 Three kinds of assertion here, and the last two are the unusual ones.
 
@@ -33,9 +33,10 @@ import sys
 import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-SKILLS = ROOT / "plugins" / "cerberus" / "skills"
-SETUP = SKILLS / "cerberus-setup" / "cerberus_setup.py"
+SKILLS = ROOT / "plugins" / "gopnik" / "skills"
+SETUP = SKILLS / "gopnik-setup" / "gopnik_setup.py"
 INSTALL = ROOT / "install.sh"
+LIVE_SETUP_ORACLE = ROOT / "scripts" / "check_live_setup_turn.py"
 
 # Load-bearing internally, meaningless to someone being set up. The whole point
 # of the amendment on #13 is that this list is checked rather than intended.
@@ -46,7 +47,7 @@ JARGON = [
     "oracle", "delivery boundary", "stage 0", "stage 1", "stage 2",
     "counterexample", "counter example", "blast radius", "artifact kind",
     "adversary", "marker", "cartesian", "sentinel", "predicate", "idempotent",
-    "topology", "semantics", "verdict", "cerberus_", "falsifier", "adjudicate",
+    "topology", "semantics", "verdict", "gopnik_", "falsifier", "adjudicate",
     "persisted", "vector", "contract",
 ]
 
@@ -84,9 +85,9 @@ DEAD_KEYS = [
 def project(files: dict[str, str]) -> pathlib.Path:
     """Build a throwaway project with the setup script beside its skill."""
     tmp = pathlib.Path(tempfile.mkdtemp())
-    target = tmp / ".claude" / "skills" / "cerberus-setup"
+    target = tmp / ".claude" / "skills" / "gopnik-setup"
     target.mkdir(parents=True)
-    (target / "cerberus_setup.py").write_text(SETUP.read_text(encoding="utf-8"), encoding="utf-8")
+    (target / "gopnik_setup.py").write_text(SETUP.read_text(encoding="utf-8"), encoding="utf-8")
     # `_write` rather than a loop here: some fixtures need a directory, which a
     # signal like `charts` or `k8s` actually is, and writing it as a file made
     # those kinds untestable through this helper.
@@ -96,7 +97,7 @@ def project(files: dict[str, str]) -> pathlib.Path:
 
 def run_setup(root: pathlib.Path, *args: str) -> tuple[int, str]:
     proc = subprocess.run(
-        [sys.executable, str(root / ".claude" / "skills" / "cerberus-setup" / "cerberus_setup.py"), *args],
+        [sys.executable, str(root / ".claude" / "skills" / "gopnik-setup" / "gopnik_setup.py"), *args],
         cwd=str(root),
         capture_output=True,
         text=True,
@@ -116,7 +117,7 @@ def run_install(target: pathlib.Path, *args: str) -> tuple[int, str]:
 
 
 def config_of(root: pathlib.Path) -> dict:
-    for relative in (".claude/cerberus.json", ".codex/cerberus.json", "cerberus.json"):
+    for relative in (".claude/gopnik.json", ".codex/gopnik.json", "gopnik.json"):
         if (root / relative).exists():
             return json.loads((root / relative).read_text(encoding="utf-8"))
     raise AssertionError(f"no configuration anywhere under {root}")
@@ -142,7 +143,7 @@ def _every_runner() -> dict:
     cannot leave a hole.
     """
     sys.path.insert(0, str(SETUP.parent))
-    import cerberus_setup
+    import gopnik_setup
 
     seeds = {
         "pyproject.toml": '[project]\nname = "d"\nversion = "1"\n',
@@ -151,7 +152,7 @@ def _every_runner() -> dict:
         "go.mod": "module example.com/d\n\ngo 1.21\n",
     }
     out = {}
-    for runner in cerberus_setup.RUNNERS:
+    for runner in gopnik_setup.RUNNERS:
         marker = next((f for f in runner["files"] if f in seeds), None)
         assert marker, f"no fixture seed for runner {runner['name']} — add one"
         out[runner["name"]] = {marker: seeds[marker]}
@@ -191,7 +192,7 @@ def test_an_explicit_language_update_preserves_a_hand_written_verification_block
         },
         "something_else": {"kept": True},
     }
-    root = project({**PY_PROJECT, "cerberus.json": json.dumps(hand)})
+    root = project({**PY_PROJECT, "gopnik.json": json.dumps(hand)})
     code, out = run_setup(root, "--language", "ru")
     assert code == 0, out
     body = config_of(root)
@@ -202,19 +203,19 @@ def test_an_explicit_language_update_preserves_a_hand_written_verification_block
 
 def test_check_mode_does_not_persist_a_language_update():
     hand = {"verification": {"artifact_kind": "library", "stage1": ["true"], "stage2": []}}
-    root = project({**PY_PROJECT, "cerberus.json": json.dumps(hand)})
-    before = (root / "cerberus.json").read_bytes()
+    root = project({**PY_PROJECT, "gopnik.json": json.dumps(hand)})
+    before = (root / "gopnik.json").read_bytes()
     code, out = run_setup(root, "--check", "--language", "ru")
     assert code == 0, out
-    assert (root / "cerberus.json").read_bytes() == before
+    assert (root / "gopnik.json").read_bytes() == before
 
 
 def test_each_skill_reuses_the_persisted_operator_language():
-    for skill in ("cerberus", "cerberus-critic", "cerberus-setup"):
+    for skill in ("gopnik", "gopnik-critic", "gopnik-setup"):
         for suffix in ("SKILL.md", "SKILL.ru.md"):
             text = (SKILLS / skill / suffix).read_text(encoding="utf-8")
             assert "`language`" in text, (skill, suffix)
-            assert "`cerberus.json`" in text, (skill, suffix)
+            assert "`gopnik.json`" in text, (skill, suffix)
 
 
 def test_never_writes_a_check_it_did_not_run():
@@ -242,12 +243,12 @@ def test_never_writes_a_key_that_nothing_reads():
     detection fails writes nothing at all and would pass this vacuously.
     """
     sys.path.insert(0, str(SETUP.parent))
-    import cerberus_setup
+    import gopnik_setup
 
     with tempfile.TemporaryDirectory() as d:
         root = pathlib.Path(d)
-        for kind in list(cerberus_setup.STAGE2_HINT_BY_KIND) + ["library"]:
-            path = cerberus_setup.write_config(root, kind, ["true"], dry=False)
+        for kind in list(gopnik_setup.STAGE2_HINT_BY_KIND) + ["library"]:
+            path = gopnik_setup.write_config(root, kind, ["true"], dry=False)
             body = json.loads(path.read_text(encoding="utf-8"))
             for key in DEAD_KEYS:
                 assert key not in body, f"{kind}: wrote dead key {key}"
@@ -259,8 +260,9 @@ def test_refuses_every_unsupported_build_system_rather_than_guessing():
         root = project(files)
         code, out = run_setup(root)
         assert code == 2, out
-        assert "could not tell" in out.lower(), out
-        assert not (root / "cerberus.json").exists(), "wrote a config for a project it did not recognise"
+        assert "could not find" in out.lower(), out
+        assert "Stage 1 check" in out, out
+        assert not (root / "gopnik.json").exists(), "wrote a config for a project it did not recognise"
 
 
 def test_refuses_a_project_it_cannot_recognise():
@@ -268,6 +270,16 @@ def test_refuses_a_project_it_cannot_recognise():
     code, out = run_setup(root)
     assert code == 2, out
     assert "Nothing was changed" in out, out
+
+
+def test_unknown_guided_project_asks_only_for_stage1():
+    root = project({"README.md": "hello\n"})
+    code, out = run_setup(root, "--defer-artifact-kind", "--language", "en")
+    assert code == 2, out
+    assert "Stage 1 check" in out, out
+    for premature in ("service", "package", "command they type", "delivery surface"):
+        assert premature not in out.lower(), out
+    assert not (root / "gopnik.json").exists()
 
 
 def test_project_instructions_block_generic_toolchain_guesses():
@@ -283,8 +295,9 @@ def test_project_instructions_block_generic_toolchain_guesses():
     assert code == 2, out
     assert "Project instructions found: AGENTS.md" in out, out
     assert "--stage1 COMMAND" in out, out
+    assert "--artifact-kind" not in out, out
     assert not (root / "wrapper.log").exists(), "ran a command before reading project rules"
-    assert not (root / "cerberus.json").exists(), "configured from a forbidden generic guess"
+    assert not (root / "gopnik.json").exists(), "configured from a forbidden generic guess"
 
 
 def test_explicit_project_owned_checks_replace_generic_go_commands():
@@ -307,6 +320,176 @@ def test_explicit_project_owned_checks_replace_generic_go_commands():
     assert not any(command.startswith("go ") for command in stage1), stage1
 
 
+def test_guided_setup_defers_artifact_kind_until_user_confirmation():
+    root = project({
+        "go.mod": "module example.com/hybrid\n\ngo 1.25\n",
+        "AGENTS.md": "Always use `app.sh` for the fast check.\n",
+        "app.sh": "#!/bin/sh\nprintf '%s\\n' \"$1\" >> wrapper.log\n",
+    })
+    (root / "app.sh").chmod(0o755)
+
+    code, out = run_setup(
+        root,
+        "--defer-artifact-kind",
+        "--language", "ru",
+        "--stage1", "./app.sh --smoke",
+    )
+    assert code == 0, out
+    verification = config_of(root)["verification"]
+    assert "artifact_kind" not in verification, verification
+    assert verification["//artifact_kind"], verification
+    assert verification["stage1"] == ["./app.sh --smoke"], verification
+    assert verification["stage2"] == [], verification
+    assert (root / "wrapper.log").read_text(encoding="utf-8") == "--smoke\n"
+
+    code, out = run_setup(root, "--confirm-artifact-kind", "service")
+    assert code == 0, out
+    verification = config_of(root)["verification"]
+    assert verification["artifact_kind"] == "service", verification
+    assert "//artifact_kind" not in verification, verification
+    assert verification["stage1"] == ["./app.sh --smoke"], verification
+    assert (root / "wrapper.log").read_text(encoding="utf-8") == "--smoke\n", (
+        "confirmation reran Stage 1 instead of preserving its evidence"
+    )
+
+
+def test_generic_guided_setup_cannot_skip_surface_confirmation():
+    root = project(PY_PROJECT)
+    code, out = run_setup(
+        root,
+        "--defer-artifact-kind",
+        "--language", "en",
+    )
+    assert code == 0, out
+    verification = config_of(root)["verification"]
+    assert verification["stage1"], verification
+    assert "artifact_kind" not in verification, verification
+    assert verification["stage2"] == [], verification
+    assert "Still missing" not in out, out
+    assert "Delivery surfaces still need confirmation" in out, out
+
+
+def test_artifact_kind_confirmation_refuses_non_provisional_configuration():
+    hand = {
+        "verification": {
+            "artifact_kind": "cli",
+            "stage1": ["true"],
+            "stage2": [],
+            "notes": "hand written",
+        }
+    }
+    root = project({**PY_PROJECT, "gopnik.json": json.dumps(hand)})
+    before = (root / "gopnik.json").read_bytes()
+    code, out = run_setup(root, "--confirm-artifact-kind", "service")
+    assert code == 2, out
+    assert "only be confirmed" in out, out
+    assert (root / "gopnik.json").read_bytes() == before
+
+
+def test_existing_configuration_is_marked_then_reconfirmed_without_data_loss():
+    hand = {
+        "language": "en",
+        "team": {"owner": "platform"},
+        "verification": {
+            "artifact_kind": "cli",
+            "stage1": ["./check.sh"],
+            "stage2": ["./deployed-check.sh"],
+            "notes": "Keep the existing operational note.",
+            "custom": {"preserve": True},
+        },
+    }
+    root = project({
+        "gopnik.json": json.dumps(hand),
+        "check.sh": "#!/bin/sh\nprintf 'run\\n' >> check.log\n",
+    })
+    (root / "check.sh").chmod(0o755)
+
+    code, out = run_setup(root, "--defer-artifact-kind", "--language", "ru")
+    assert code == 0, out
+    pending = config_of(root)
+    assert pending["language"] == "ru", pending
+    assert pending["team"] == hand["team"], pending
+    assert pending["verification"]["artifact_kind"] == "cli", pending
+    assert pending["verification"]["//artifact_kind"], pending
+    assert pending["verification"]["stage2"] == ["./deployed-check.sh"], pending
+    assert pending["verification"]["notes"] == hand["verification"]["notes"], pending
+    assert pending["verification"]["custom"] == {"preserve": True}, pending
+
+    code, out = run_setup(root, "--confirm-artifact-kind", "service")
+    assert code == 0, out
+    confirmed = config_of(root)
+    assert confirmed["verification"]["artifact_kind"] == "service", confirmed
+    assert "//artifact_kind" not in confirmed["verification"], confirmed
+    assert confirmed["verification"]["stage1"] == ["./check.sh"], confirmed
+    assert confirmed["verification"]["stage2"] == ["./deployed-check.sh"], confirmed
+    assert confirmed["verification"]["notes"] == hand["verification"]["notes"], confirmed
+    assert confirmed["verification"]["custom"] == {"preserve": True}, confirmed
+    assert (root / "check.log").read_text(encoding="utf-8") == "run\n"
+
+
+def test_rerunning_a_provisional_setup_does_not_rerun_or_misclassify_it():
+    root = project({
+        "AGENTS.md": "Always use `app.sh` for the fast check.\n",
+        "app.sh": "#!/bin/sh\nprintf 'run\\n' >> wrapper.log\n",
+    })
+    (root / "app.sh").chmod(0o755)
+
+    code, out = run_setup(
+        root,
+        "--defer-artifact-kind",
+        "--language", "en",
+        "--stage1", "./app.sh --smoke",
+    )
+    assert code == 0, out
+    before = (root / "gopnik.json").read_bytes()
+
+    code, out = run_setup(
+        root,
+        "--defer-artifact-kind",
+        "--check",
+        "--stage1", "./app.sh --smoke",
+    )
+    assert code == 0, out
+    assert "Delivery surfaces still need confirmation" in out, out
+    assert "package" not in out.lower(), out
+    assert "Stage 2:" not in out, out
+    assert (root / "wrapper.log").read_text(encoding="utf-8") == "run\n"
+    assert (root / "gopnik.json").read_bytes() == before
+
+
+def test_pending_surface_confirmation_blocks_stage2_drafts():
+    root = project({
+        "Dockerfile": "FROM scratch\n",
+        "check.sh": "#!/bin/sh\nexit 0\n",
+    })
+    (root / "check.sh").chmod(0o755)
+    code, out = run_setup(
+        root,
+        "--defer-artifact-kind",
+        "--language", "en",
+        "--stage1", "./check.sh",
+    )
+    assert code == 0, out
+
+    code, out = run_setup(root, "--draft-stage2")
+    assert code == 2, out
+    assert "Delivery surfaces still need confirmation" in out, out
+    for leaked in ("gopnik.json", "YOUR_URL", "A draft", "verification.stage2"):
+        assert leaked not in out, out
+
+
+def test_defer_and_explicit_artifact_kind_are_mutually_exclusive():
+    root = project(PY_PROJECT)
+    code, out = run_setup(
+        root,
+        "--defer-artifact-kind",
+        "--artifact-kind", "library",
+    )
+    assert code == 2, out
+    assert "mutually exclusive" in out, out
+    assert not (root / "gopnik.json").exists()
+
+
 def test_one_red_project_owned_check_blocks_setup_instead_of_writing_a_subset():
     root = project({
         "go.mod": "module example.com/wrapped-project\n\ngo 1.25\n",
@@ -325,7 +508,7 @@ def test_one_red_project_owned_check_blocks_setup_instead_of_writing_a_subset():
     assert "setup is blocked" in out, out
     assert "ok       ./app.sh --smoke" in out, out
     assert "FAILING  ./app.sh --test" in out, out
-    assert not (root / "cerberus.json").exists(), "wrote a partial required baseline"
+    assert not (root / "gopnik.json").exists(), "wrote a partial required baseline"
 
 
 def test_a_red_smoke_check_stops_before_the_long_project_owned_suite():
@@ -353,7 +536,7 @@ def test_a_red_smoke_check_stops_before_the_long_project_owned_suite():
 
 
 def test_a_configured_project_runs_its_own_checks():
-    root = project({**PY_PROJECT, "cerberus.json": json.dumps(
+    root = project({**PY_PROJECT, "gopnik.json": json.dumps(
         {"verification": {"artifact_kind": "service", "stage1": ["true"], "stage2": ["true"]}})})
     code, out = run_setup(root)
     assert code == 0, out
@@ -361,7 +544,7 @@ def test_a_configured_project_runs_its_own_checks():
 
 
 def test_a_configured_project_reachable_only_by_hand_still_gets_an_answer():
-    root = project({**MAKE_PROJECT, "cerberus.json": json.dumps(
+    root = project({**MAKE_PROJECT, "gopnik.json": json.dumps(
         {"verification": {"artifact_kind": "cli", "stage1": ["true"], "stage2": ["true"]}})})
     code, out = run_setup(root)
     assert code == 0, out
@@ -371,7 +554,7 @@ def test_a_configured_project_reachable_only_by_hand_still_gets_an_answer():
 def test_a_hand_written_step_is_not_mistaken_for_the_placeholder():
     hand = {"//": "mine", "verification": {"artifact_kind": "migration", "stage1": ["true"], "stage2": ["true"],
                                            "notes": "prod account 1234"}}
-    root = project({**PY_PROJECT, "cerberus.json": json.dumps(hand)})
+    root = project({**PY_PROJECT, "gopnik.json": json.dumps(hand)})
     run_setup(root)
     assert config_of(root) == hand, "rewrote a hand-written configuration"
 
@@ -379,15 +562,15 @@ def test_a_hand_written_step_is_not_mistaken_for_the_placeholder():
 def test_leaves_a_hand_written_configuration_alone():
     hand = {"verification": {"artifact_kind": "migration", "stage1": ["true"], "stage2": ["true"]},
             "something_else": {"kept": True}}
-    root = project({**PY_PROJECT, "cerberus.json": json.dumps(hand)})
-    before = (root / "cerberus.json").read_bytes()
+    root = project({**PY_PROJECT, "gopnik.json": json.dumps(hand)})
+    before = (root / "gopnik.json").read_bytes()
     run_setup(root)
-    assert (root / "cerberus.json").read_bytes() == before
+    assert (root / "gopnik.json").read_bytes() == before
 
 
 def test_replaces_the_example_placeholders():
-    example = (ROOT / "cerberus.example.json").read_text(encoding="utf-8")
-    root = project({**PY_PROJECT, "cerberus.json": example})
+    example = (ROOT / "gopnik.example.json").read_text(encoding="utf-8")
+    root = project({**PY_PROJECT, "gopnik.json": example})
     code, out = run_setup(root)
     assert code == 0, out
     stage1 = config_of(root)["verification"]["stage1"]
@@ -396,19 +579,19 @@ def test_replaces_the_example_placeholders():
 
 def test_the_example_markers_still_match_the_shipped_file():
     sys.path.insert(0, str(SETUP.parent))
-    import cerberus_setup
+    import gopnik_setup
 
-    example = json.loads((ROOT / "cerberus.example.json").read_text(encoding="utf-8"))
-    assert cerberus_setup.is_the_installers_copy(example), (
-        "cerberus.example.json drifted from the strings setup recognises it by, "
+    example = json.loads((ROOT / "gopnik.example.json").read_text(encoding="utf-8"))
+    assert gopnik_setup.is_the_installers_copy(example), (
+        "gopnik.example.json drifted from the strings setup recognises it by, "
         "so a fresh install would be treated as hand-configured and left with placeholders"
     )
 
 
 def test_an_existing_configuration_is_never_modified_where_it_was_not_asked():
-    example = json.loads((ROOT / "cerberus.example.json").read_text(encoding="utf-8"))
+    example = json.loads((ROOT / "gopnik.example.json").read_text(encoding="utf-8"))
     example["mine"] = {"keep": "this"}
-    root = project({**PY_PROJECT, "cerberus.json": json.dumps(example)})
+    root = project({**PY_PROJECT, "gopnik.json": json.dumps(example)})
     run_setup(root)
     assert config_of(root)["mine"] == {"keep": "this"}
 
@@ -423,22 +606,22 @@ def test_check_mode_changes_nothing():
     root = project(PY_PROJECT)
     code, out = run_setup(root, "--check")
     assert code == 0, out
-    assert not (root / "cerberus.json").exists(), "wrote a config in --check mode"
+    assert not (root / "gopnik.json").exists(), "wrote a config in --check mode"
 
 
 def test_check_names_the_file_the_real_run_would_write():
     root = project(PY_PROJECT)
     _, out = run_setup(root, "--check")
-    assert "cerberus.json" in out, out
+    assert "gopnik.json" in out, out
     _, _ = run_setup(root)
-    assert (root / "cerberus.json").exists(), "the real run wrote somewhere else"
+    assert (root / "gopnik.json").exists(), "the real run wrote somewhere else"
 
 
 def test_a_failing_check_is_called_failing_not_absent():
     sys.path.insert(0, str(SETUP.parent))
-    import cerberus_setup
+    import gopnik_setup
 
-    passing, missing, timed_out, broken = cerberus_setup.sort_results(
+    passing, missing, timed_out, broken = gopnik_setup.sort_results(
         [("a", 0, ""), ("b", 1, "boom"), ("c", 127, ""), ("d", 124, "")])
     assert passing == ["a"] and missing == ["c"] and timed_out == ["d"]
     assert broken == [("b", "boom")]
@@ -478,22 +661,22 @@ def test_a_failing_check_is_reported_as_failing_end_to_end():
 
 def test_only_a_passing_check_is_ever_written():
     sys.path.insert(0, str(SETUP.parent))
-    import cerberus_setup
+    import gopnik_setup
 
     with tempfile.TemporaryDirectory() as d:
         root = pathlib.Path(d)
-        passing, _, _, _ = cerberus_setup.sort_results(
+        passing, _, _, _ = gopnik_setup.sort_results(
             [("ok", 0, ""), ("fails", 1, ""), ("slow", 124, ""), ("gone", 127, "")])
-        path = cerberus_setup.write_config(root, "library", passing, dry=False)
+        path = gopnik_setup.write_config(root, "library", passing, dry=False)
         assert json.loads(path.read_text(encoding="utf-8"))["verification"]["stage1"] == ["ok"]
 
 
 def test_a_timed_out_check_is_never_written():
     sys.path.insert(0, str(SETUP.parent))
-    import cerberus_setup
+    import gopnik_setup
 
     with tempfile.TemporaryDirectory() as d:
-        code, _ = cerberus_setup.run("sleep 5", pathlib.Path(d), timeout=1)
+        code, _ = gopnik_setup.run("sleep 5", pathlib.Path(d), timeout=1)
         assert code == 124
 
 
@@ -514,43 +697,43 @@ def test_cli_timeout_budget_applies_to_project_owned_checks():
 
     assert code == 2, out
     assert "too slow ./slow-check" in out, out
-    assert not (root / "cerberus.json").exists(), "a timed-out baseline was persisted"
+    assert not (root / "gopnik.json").exists(), "a timed-out baseline was persisted"
 
 
 def test_a_timed_out_check_does_not_leave_the_tree_running():
     sys.path.insert(0, str(SETUP.parent))
-    import cerberus_setup
+    import gopnik_setup
 
     with tempfile.TemporaryDirectory() as d:
         root = pathlib.Path(d)
         stamp = root / "still-alive"
-        cerberus_setup.run(f"sh -c 'sleep 3; touch {stamp}' &  sleep 5", root, timeout=1)
+        gopnik_setup.run(f"sh -c 'sleep 3; touch {stamp}' &  sleep 5", root, timeout=1)
         subprocess.run(["sleep", "4"])
         assert not stamp.exists(), "a grandchild outlived the timeout"
 
 
 def test_a_check_never_inherits_stdin():
     sys.path.insert(0, str(SETUP.parent))
-    import cerberus_setup
+    import gopnik_setup
 
     with tempfile.TemporaryDirectory() as d:
-        code, out = cerberus_setup.run("cat", pathlib.Path(d), timeout=5)
+        code, out = gopnik_setup.run("cat", pathlib.Path(d), timeout=5)
         assert code == 0 and out == "", f"a check read from stdin: {code} {out!r}"
 
 
 def test_a_project_path_with_a_space_is_still_recognised():
     tmp = pathlib.Path(tempfile.mkdtemp()) / "a project"
     tmp.mkdir()
-    target = tmp / ".claude" / "skills" / "cerberus-setup"
+    target = tmp / ".claude" / "skills" / "gopnik-setup"
     target.mkdir(parents=True)
-    (target / "cerberus_setup.py").write_text(SETUP.read_text(encoding="utf-8"), encoding="utf-8")
+    (target / "gopnik_setup.py").write_text(SETUP.read_text(encoding="utf-8"), encoding="utf-8")
     for name, text in PY_PROJECT.items():
         path = tmp / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
     code, out = run_setup(tmp)
     assert code == 0, out
-    assert (tmp / "cerberus.json").exists(), out
+    assert (tmp / "gopnik.json").exists(), out
 
 
 # --------------------------------------------------------- where it writes
@@ -563,7 +746,7 @@ def test_an_earlier_installs_config_is_kept_where_it_is():
     with both, because setup then wrote to a file the reader would not find.
     """
     sys.path.insert(0, str(SETUP.parent))
-    import cerberus_setup
+    import gopnik_setup
 
     for present, expected in (
         ([".claude"], ".claude"),
@@ -574,20 +757,20 @@ def test_an_earlier_installs_config_is_kept_where_it_is():
             root = pathlib.Path(d)
             for agent in present:
                 (root / agent).mkdir()
-                (root / agent / "cerberus.json").write_text("{}", encoding="utf-8")
-            got = cerberus_setup.resolve_config(root)
+                (root / agent / "gopnik.json").write_text("{}", encoding="utf-8")
+            got = gopnik_setup.resolve_config(root)
             assert got.parent.name == expected, f"{present} resolved to {got}"
 
 
 def test_a_project_with_no_earlier_config_gets_one_in_its_root():
     sys.path.insert(0, str(SETUP.parent))
-    import cerberus_setup
+    import gopnik_setup
 
     with tempfile.TemporaryDirectory() as d:
         root = pathlib.Path(d)
         (root / ".claude").mkdir()  # an agent directory is not a config location
-        got = cerberus_setup.resolve_config(root)
-        assert got == root / "cerberus.json", got
+        got = gopnik_setup.resolve_config(root)
+        assert got == root / "gopnik.json", got
 
 
 # --------------------------------------------------------- which kind it is
@@ -603,7 +786,7 @@ def _kind_fixtures() -> list[tuple[str, str, dict]]:
     below rather than quietly widening the gap.
     """
     sys.path.insert(0, str(SETUP.parent))
-    import cerberus_setup
+    import gopnik_setup
 
     base = {"pyproject.toml": '[project]\nname = "d"\nversion = "1"\n'}
     # A seed per signal file, chosen so the file is the ONLY thing that differs.
@@ -617,7 +800,7 @@ def _kind_fixtures() -> list[tuple[str, str, dict]]:
         "deploy": None,
     }
     out = []
-    for kind, signals in cerberus_setup.KIND_SIGNALS:
+    for kind, signals in gopnik_setup.KIND_SIGNALS:
         for signal in signals:
             assert signal in seeds, f"no fixture seed for KIND_SIGNALS entry {signal!r} — add one"
             files = dict(base)
@@ -647,13 +830,13 @@ def _write(root: pathlib.Path, files: dict) -> None:
 def test_every_kind_the_code_can_return_is_pinned():
     """#35. The mutant that started it: CLI detection disabled, 0 failures."""
     sys.path.insert(0, str(SETUP.parent))
-    import cerberus_setup
+    import gopnik_setup
 
     for label, expected, files in _kind_fixtures():
         with tempfile.TemporaryDirectory() as d:
             root = pathlib.Path(d)
             _write(root, files)
-            _, kind = cerberus_setup.detect(root)
+            _, kind = gopnik_setup.detect(root)
             assert kind == expected, f"{label}: detected {kind!r}, expected {expected!r}"
 
 
@@ -665,7 +848,7 @@ def test_the_kind_reaches_the_configuration_and_the_reader():
     sentence is the whole reason the field exists.
     """
     sys.path.insert(0, str(SETUP.parent))
-    import cerberus_setup
+    import gopnik_setup
 
     for label, expected, files in _kind_fixtures():
         root = project(files)
@@ -674,7 +857,7 @@ def test_the_kind_reaches_the_configuration_and_the_reader():
             continue  # that toolchain is not installed here; nothing was written
         got = config_of(root)["verification"]["artifact_kind"]
         assert got == expected, f"{label}: config says {got!r}, expected {expected!r}"
-        hint = cerberus_setup.STAGE2_HINT_BY_KIND[expected]
+        hint = gopnik_setup.STAGE2_HINT_BY_KIND[expected]
         # The hint has to survive the draft offer. It said what stage2 is FOR;
         # an offer to draft one is not a substitute, and replacing it was
         # caught here rather than by reading.
@@ -690,7 +873,7 @@ def test_a_project_that_is_two_things_at_once_resolves_the_documented_way():
     reordering the table changes somebody's Stage 2 advice in silence.
     """
     sys.path.insert(0, str(SETUP.parent))
-    import cerberus_setup
+    import gopnik_setup
 
     with tempfile.TemporaryDirectory() as d:
         root = pathlib.Path(d)
@@ -698,14 +881,14 @@ def test_a_project_that_is_two_things_at_once_resolves_the_documented_way():
             "pyproject.toml": '[project]\nname = "d"\nversion = "1"\n\n[project.scripts]\nd = "d:main"\n',
             "Dockerfile": "FROM scratch\n",
         })
-        _, kind = cerberus_setup.detect(root)
+        _, kind = gopnik_setup.detect(root)
         assert kind == "service", f"a containerised CLI resolved as {kind!r}"
 
     with tempfile.TemporaryDirectory() as d:
         root = pathlib.Path(d)
         _write(root, {"pyproject.toml": '[project]\nname = "d"\nversion = "1"\n',
                       "Dockerfile": "FROM scratch\n", "Chart.yaml": "name: d\n"})
-        _, kind = cerberus_setup.detect(root)
+        _, kind = gopnik_setup.detect(root)
         assert kind == "chart", f"the more specific signal lost: {kind!r}"
 
 
@@ -716,14 +899,14 @@ def test_a_manifest_that_cannot_be_read_is_not_a_command():
     and the swallowed exception means nothing else would ever say so.
     """
     sys.path.insert(0, str(SETUP.parent))
-    import cerberus_setup
+    import gopnik_setup
 
     for name, text in (("package.json", "{not json"),
                        ("pyproject.toml", "[project\nbroken")):
         with tempfile.TemporaryDirectory() as d:
             root = pathlib.Path(d)
             (root / name).write_text(text, encoding="utf-8")
-            assert cerberus_setup._looks_like_a_command(root) is False, name
+            assert gopnik_setup._looks_like_a_command(root) is False, name
 
 
 # ------------------------------------------------------ what a re-run says
@@ -790,7 +973,7 @@ def test_a_check_the_configuration_lacks_is_still_offered():
     feature.
     """
     hand = {"verification": {"artifact_kind": "library", "stage1": ["true"], "stage2": ["true"]}}
-    root = project({**PY_PROJECT, "cerberus.json": json.dumps(hand)})
+    root = project({**PY_PROJECT, "gopnik.json": json.dumps(hand)})
     _, out = run_setup(root)
     assert "not in its list" in out, out
     assert "compileall" in out or "pytest" in out, out
@@ -873,13 +1056,13 @@ def test_a_service_with_no_deployment_evidence_gets_no_draft():
     library.
     """
     sys.path.insert(0, str(SETUP.parent))
-    import cerberus_setup
+    import gopnik_setup
 
-    for kind in cerberus_setup.DEPLOYED_KINDS:
-        assert cerberus_setup.draft_stage2(kind, []) == [], (
+    for kind in gopnik_setup.DEPLOYED_KINDS:
+        assert gopnik_setup.draft_stage2(kind, []) == [], (
             f"{kind} with no evidence was given a draft anyway")
 
-    root = project({**PY_PROJECT, "cerberus.json": json.dumps(
+    root = project({**PY_PROJECT, "gopnik.json": json.dumps(
         {"verification": {"artifact_kind": "service", "stage1": ["true"], "stage2": []}})})
     out = _draft(root)
     assert "will not invent" in out, out
@@ -893,12 +1076,12 @@ def test_a_dockerfile_does_not_make_a_library_a_deployment():
     project treats as worse than saying nothing.
     """
     sys.path.insert(0, str(SETUP.parent))
-    import cerberus_setup
+    import gopnik_setup
 
     evidence = [("image", "Dockerfile"), ("helm", "helm/")]
-    assert cerberus_setup.draft_stage2("library", evidence) == []
-    assert cerberus_setup.draft_stage2("cli", evidence) == []
-    assert cerberus_setup.draft_stage2("service", evidence), "a service got nothing"
+    assert gopnik_setup.draft_stage2("library", evidence) == []
+    assert gopnik_setup.draft_stage2("cli", evidence) == []
+    assert gopnik_setup.draft_stage2("service", evidence), "a service got nothing"
 
 
 def test_the_draft_is_never_written_to_the_configuration():
@@ -908,9 +1091,9 @@ def test_the_draft_is_never_written_to_the_configuration():
     """
     root = project(DEPLOYED_PROJECT)
     run_setup(root)
-    before = (root / "cerberus.json").read_bytes()
+    before = (root / "gopnik.json").read_bytes()
     _draft(root)
-    assert (root / "cerberus.json").read_bytes() == before, "the draft was written"
+    assert (root / "gopnik.json").read_bytes() == before, "the draft was written"
     assert config_of(root)["verification"]["stage2"] == []
 
 
@@ -921,15 +1104,15 @@ def test_no_line_of_the_draft_could_pass_on_a_broken_deploy():
     the draft that cannot fail is caught by the same rule it teaches.
     """
     sys.path.insert(0, str(SETUP.parent))
-    import cerberus_setup
+    import gopnik_setup
 
-    for kind in cerberus_setup.DEPLOYED_KINDS:
+    for kind in gopnik_setup.DEPLOYED_KINDS:
         for evidence in ([("helm", "helm/"), ("image", "Dockerfile")],
                          [("k8s", "k8s/")],
                          [("compose", "docker-compose.yml")],
                          [("ci", ".github/workflows/deploy.yml")]):
-            for line in cerberus_setup.draft_stage2(kind, evidence):
-                why = cerberus_setup.unfailable(line)
+            for line in gopnik_setup.draft_stage2(kind, evidence):
+                why = gopnik_setup.unfailable(line)
                 assert why is None, f"{kind}/{evidence[0][0]}: {line!r} — {why}"
 
 
@@ -945,7 +1128,7 @@ def test_the_draft_names_the_traps_rather_than_only_avoiding_them():
 def test_the_trap_detector_actually_catches_each_trap():
     """The detector is what the test above leans on, so it is checked directly."""
     sys.path.insert(0, str(SETUP.parent))
-    import cerberus_setup
+    import gopnik_setup
 
     for command in ("curl https://x/health",
                     "echo deployed",
@@ -953,11 +1136,11 @@ def test_the_trap_detector_actually_catches_each_trap():
                     "# deploy it",
                     "logcli query '{app=\"x\"}' --since=5m",
                     "YOUR_LOG_QUERY --since=5m"):
-        assert cerberus_setup.unfailable(command), f"missed: {command!r}"
+        assert gopnik_setup.unfailable(command), f"missed: {command!r}"
     for command in ("curl -f https://x/health",
                     "kubectl -n dev rollout status deploy/x",
                     "logcli query '{app=\"x\"}' | grep -q abc"):
-        assert cerberus_setup.unfailable(command) is None, f"false alarm: {command!r}"
+        assert gopnik_setup.unfailable(command) is None, f"false alarm: {command!r}"
 
 
 # ----------------------------------------------- a boundary declared unreachable
@@ -966,7 +1149,7 @@ def test_the_trap_detector_actually_catches_each_trap():
 def _with_unreachable(reason) -> pathlib.Path:
     root = project(PY_PROJECT)
     run_setup(root)
-    path = root / "cerberus.json"
+    path = root / "gopnik.json"
     body = json.loads(path.read_text(encoding="utf-8"))
     body["verification"]["stage2_unreachable"] = reason
     path.write_text(json.dumps(body, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -999,7 +1182,7 @@ def test_declaring_it_unreachable_silences_the_draft_offer():
     """Two answers to the same question, printed together, is one too many."""
     root = project(DEPLOYED_PROJECT)
     run_setup(root)
-    path = root / "cerberus.json"
+    path = root / "gopnik.json"
     body = json.loads(path.read_text(encoding="utf-8"))
     body["verification"]["stage2_unreachable"] = "no cluster of any kind"
     path.write_text(json.dumps(body, indent=2), encoding="utf-8")
@@ -1014,7 +1197,7 @@ CI_PROJECT = {
     **PY_PROJECT,
     ".github/workflows/deploy.yml":
         "name: deploy\njobs:\n  deploy:\n    steps:\n      - run: kubectl apply -f k8s/\n",
-    "cerberus.json": json.dumps(
+    "gopnik.json": json.dumps(
         {"verification": {"artifact_kind": "service", "stage1": ["true"], "stage2": []}}),
 }
 
@@ -1036,14 +1219,14 @@ def test_the_draft_proves_the_running_instance_is_this_commit():
     build.
     """
     sys.path.insert(0, str(SETUP.parent))
-    import cerberus_setup
+    import gopnik_setup
 
     for evidence, forge in (
         ([("ci", ".github/workflows/deploy.yml")], ("github", "gh run watch --exit-status X")),
         ([("helm", "helm/"), ("image", "Dockerfile")], None),
         ([("k8s", "k8s/")], None),
     ):
-        draft = cerberus_setup.draft_stage2("service", evidence, forge)
+        draft = gopnik_setup.draft_stage2("service", evidence, forge)
         assert any("rev-parse HEAD" in line and "version" in line for line in draft), (
             f"{evidence[0][0]}: nothing ties the running instance to this commit:\n" +
             "\n".join(draft))
@@ -1052,21 +1235,21 @@ def test_the_draft_proves_the_running_instance_is_this_commit():
 def test_waiting_for_a_pipeline_is_a_command_that_can_fail():
     """#47, point 3. A wait that cannot go red makes the whole stage green."""
     sys.path.insert(0, str(SETUP.parent))
-    import cerberus_setup
+    import gopnik_setup
 
-    draft = cerberus_setup.draft_stage2(
-        "service", [("ci", ".github/workflows/deploy.yml")], cerberus_setup.FORGES[0][1:])
+    draft = gopnik_setup.draft_stage2(
+        "service", [("ci", ".github/workflows/deploy.yml")], gopnik_setup.FORGES[0][1:])
     for line in draft:
-        why = cerberus_setup.unfailable(line)
+        why = gopnik_setup.unfailable(line)
         assert why is None, f"{line!r} — {why}"
     for cannot in ("sleep 120",
                    "gh run watch 123",
                    "gh run list --limit 1"):
-        assert cerberus_setup.unfailable(cannot), f"missed: {cannot!r}"
-    assert cerberus_setup.unfailable("gh run watch --exit-status 123") is None
+        assert gopnik_setup.unfailable(cannot), f"missed: {cannot!r}"
+    assert gopnik_setup.unfailable("gh run watch --exit-status 123") is None
     # The correct form uses `gh run list` to pick the run for this commit. A
     # rule that condemns it pushes the reader toward watching whatever ran last.
-    assert cerberus_setup.unfailable(
+    assert gopnik_setup.unfailable(
         "gh run watch --exit-status $(gh run list --commit $(git rev-parse HEAD) "
         "--limit 1 --json databaseId --jq '.[0].databaseId')") is None
 
@@ -1074,13 +1257,13 @@ def test_waiting_for_a_pipeline_is_a_command_that_can_fail():
 def test_the_forge_decides_the_wait_and_an_unknown_one_says_so():
     """The one command that cannot be guessed across forges."""
     sys.path.insert(0, str(SETUP.parent))
-    import cerberus_setup
+    import gopnik_setup
 
     with tempfile.TemporaryDirectory() as d:
         root = pathlib.Path(d)
-        assert cerberus_setup.forge_of(root) is None
+        assert gopnik_setup.forge_of(root) is None
         (root / ".gitlab-ci.yml").write_text("stages: [deploy]\n", encoding="utf-8")
-        name, wait = cerberus_setup.forge_of(root)
+        name, wait = gopnik_setup.forge_of(root)
         assert name == "gitlab"
         assert "YOUR_" in wait, "it invented a gitlab command instead of asking"
         assert "non-zero" in wait, "the placeholder never says what it must do"
@@ -1095,7 +1278,7 @@ def test_the_wrong_revision_trap_is_explained_not_only_avoided():
 
 def test_the_skill_states_the_three_answers_to_merge_only_deployment():
     """#47, point 4. Choosing silently is how a verdict covers an undeployed revision."""
-    for path in (SKILLS / "cerberus-setup" / "SKILL.md", SKILLS / "cerberus-setup" / "SKILL.ru.md"):
+    for path in (SKILLS / "gopnik-setup" / "SKILL.md", SKILLS / "gopnik-setup" / "SKILL.ru.md"):
         text = " ".join(path.read_text(encoding="utf-8").lower().split())
         for needle in ("preview", "stage2_unreachable") if path.name.endswith("ru.md") is False \
                 else ("превью", "stage2_unreachable"):
@@ -1105,8 +1288,8 @@ def test_the_skill_states_the_three_answers_to_merge_only_deployment():
 
 def test_the_skill_asks_about_access_before_writing_commands():
     """A stage2 nobody can run returns Not proven forever, for a mechanical reason."""
-    for path, needles in ((SKILLS / "cerberus-setup" / "SKILL.md", ("access", "credentials")),
-                          (SKILLS / "cerberus-setup" / "SKILL.ru.md", ("доступ", "учётные"))):
+    for path, needles in ((SKILLS / "gopnik-setup" / "SKILL.md", ("access", "credentials")),
+                          (SKILLS / "gopnik-setup" / "SKILL.ru.md", ("доступ", "учётные"))):
         text = path.read_text(encoding="utf-8").lower()
         for needle in needles:
             assert needle in text, f"{path.name}: {needle!r}"
@@ -1115,10 +1298,10 @@ def test_the_skill_asks_about_access_before_writing_commands():
 def test_the_skill_asks_about_a_stand_before_inspecting_infrastructure():
     """The operator should answer one product question, not decode a route."""
     for path, needles in (
-        (SKILLS / "cerberus-setup" / "SKILL.md",
+        (SKILLS / "gopnik-setup" / "SKILL.md",
          ("is there a test or staging environment",
           "do not inspect and present its infrastructure first")),
-        (SKILLS / "cerberus-setup" / "SKILL.ru.md",
+        (SKILLS / "gopnik-setup" / "SKILL.ru.md",
          ("есть ли стенд", "не изучай и не показывай инфраструктуру первым делом")),
     ):
         text = " ".join(path.read_text(encoding="utf-8").lower().split())
@@ -1128,11 +1311,11 @@ def test_the_skill_asks_about_a_stand_before_inspecting_infrastructure():
 
 def test_setup_waits_for_stage2_availability_then_delivery_and_access():
     for path, needles in (
-        (SKILLS / "cerberus-setup" / "SKILL.md",
+        (SKILLS / "gopnik-setup" / "SKILL.md",
          ("availability question is a hard turn boundary", "end with it and wait",
           "how does a new version get there", "then wait again",
           "cannot be `configured` until")),
-        (SKILLS / "cerberus-setup" / "SKILL.ru.md",
+        (SKILLS / "gopnik-setup" / "SKILL.ru.md",
          ("этот вопрос — жёсткая граница хода", "закончи им ответ",
           "как новая версия попадает на стенд", "снова дождись ответа",
           "не может получить статус `configured`, пока")),
@@ -1144,26 +1327,26 @@ def test_setup_waits_for_stage2_availability_then_delivery_and_access():
 
 def test_setup_separates_the_recommendation_from_the_tracker_example():
     for path, needles in (
-        (SKILLS / "cerberus-setup" / "SKILL.md",
+        (SKILLS / "gopnik-setup" / "SKILL.md",
          ("if setup is blocked, do not use the configured closing flow below",
           "do not append the recommendation or tracker example to a `setup blocked` response",
           "only after setup reaches `configured`",
           "start the recommendation as a separate paragraph",
           "do not merge the recommendation into a status bullet",
           "do not qualify it with project-specific process or artifact details",
-          "we recommend integrating cerberus into the development cycle",
+          "we recommend integrating gopnik into the development cycle",
           "for example, when work is managed through tasks in a tracker",
           "after the task is defined", "checks its wording and completion criteria",
           "after the solution is prepared", "checks the chosen approach",
           "after implementation", "before the task moves to `done`")),
-        (SKILLS / "cerberus-setup" / "SKILL.ru.md",
+        (SKILLS / "gopnik-setup" / "SKILL.ru.md",
          ("если настройка заблокирована, не используй описанный ниже финал",
           "не добавляй рекомендацию и пример с трекером в ответ со статусом `setup blocked`",
           "только после статуса `configured`",
           "начни рекомендацию с нового абзаца",
           "не сливай рекомендацию с пунктом статуса",
           "не уточняй её деталями процесса или типа артефакта",
-          "рекомендуем встроить cerberus в цикл разработки",
+          "рекомендуем встроить gopnik в цикл разработки",
           "например, если работа ведётся через задачи в трекере",
           "после постановки задачи", "проверяет её формулировку и критерии готовности",
           "после подготовки решения", "проверяет выбранный подход",
@@ -1176,8 +1359,8 @@ def test_setup_separates_the_recommendation_from_the_tracker_example():
             assert rejected not in text, f"{path.name}: {rejected!r}"
 
         recommendation = text.index(
-            "we recommend integrating cerberus" if path.name == "SKILL.md"
-            else "рекомендуем встроить cerberus")
+            "we recommend integrating gopnik" if path.name == "SKILL.md"
+            else "рекомендуем встроить gopnik")
         example = text.index(
             "for example, when work is managed" if path.name == "SKILL.md"
             else "например, если работа ведётся")
@@ -1219,7 +1402,7 @@ def test_setup_closing_contract_contains_no_positive_merge_tailor_or_command_dir
     assert all(is_positive_directive(line) for line in positive_examples)
     assert not any(is_positive_directive(line) for line in negative_guards)
 
-    for path in (SKILLS / "cerberus-setup").glob("SKILL*.md"):
+    for path in (SKILLS / "gopnik-setup").glob("SKILL*.md"):
         for line in path.read_text(encoding="utf-8").splitlines():
             assert not is_positive_directive(line), (path.name, line.strip())
 
@@ -1235,9 +1418,9 @@ def test_the_skill_requires_an_attempt_behind_every_not_proven():
     pinned here and named in the self-check.
     """
     for path, needles in (
-        (SKILLS / "cerberus" / "SKILL.md",
+        (SKILLS / "gopnik" / "SKILL.md",
          ("not proven needs an attempt", "command -v", "carries the attempt")),
-        (SKILLS / "cerberus" / "SKILL.ru.md",
+        (SKILLS / "gopnik" / "SKILL.ru.md",
          ("требует попытки", "command -v", "несёт попытку")),
     ):
         text = path.read_text(encoding="utf-8").lower()
@@ -1251,15 +1434,15 @@ def test_the_rule_names_the_case_that_produced_it():
     "It depends on what an agent does" reads as a property of the world rather
     than as a command anyone could type, so the case is named outright.
     """
-    for path, needle in ((SKILLS / "cerberus" / "SKILL.md", "claude -p"),
-                         (SKILLS / "cerberus" / "SKILL.ru.md", "claude -p")):
+    for path, needle in ((SKILLS / "gopnik" / "SKILL.md", "claude -p"),
+                         (SKILLS / "gopnik" / "SKILL.ru.md", "claude -p")):
         assert needle in path.read_text(encoding="utf-8"), path.name
 
 
 def test_the_self_check_asks_for_it_at_verdict_time():
     """A rule nobody reads at the moment of writing a verdict is decoration."""
-    for path, needle in ((SKILLS / "cerberus" / "SKILL.md", "does every `not proven` carry"),
-                         (SKILLS / "cerberus" / "SKILL.ru.md", "каждое `not proven` несёт")):
+    for path, needle in ((SKILLS / "gopnik" / "SKILL.md", "does every `not proven` carry"),
+                         (SKILLS / "gopnik" / "SKILL.ru.md", "каждое `not proven` несёт")):
         text = path.read_text(encoding="utf-8").lower()
         assert needle in text, path.name
         checklist = [l for l in text.splitlines() if l.startswith("- [ ]")]
@@ -1273,23 +1456,758 @@ def test_this_repository_verifies_it_with_a_live_session():
     command in our own stage2, so the claim cannot be waved through again
     without someone deleting a line.
     """
-    body = json.loads((ROOT / "cerberus.json").read_text(encoding="utf-8"))
+    body = json.loads((ROOT / "gopnik.json").read_text(encoding="utf-8"))
     stage2 = body["verification"]["stage2"]
     live = [c for c in stage2 if "claude -p" in c]
     assert live, f"stage2 has no live agent session:\n" + "\n".join(stage2)
-    assert any("--continue" in c for c in live), (
-        "a single prompt cannot show a conversation happening; the readback and "
-        "the follow-up questions are the part #49 is about")
+    assert len(live) == 10, live
+    assert sum("--session-id" in command for command in live) == 2, live
+    assert sum("--resume" in command for command in live) == 8, live
+    assert not any("--continue" in command for command in live), live
     for command in live:
-        assert "jq -e" in command or "grep -q" in command, (
+        assert (
+            'cd "$GOPNIK_STAGE2_ROOT/scratch-en"' in command
+            or 'cd "$GOPNIK_STAGE2_ROOT/scratch-ru"' in command
+        ), command
+        assert "check_live_setup_turn.py" in command, (
             f"this cannot fail, so it proves nothing: {command}")
+
+    english = [command for command in live if "session-en" in command]
+    russian = [command for command in live if "session-ru" in command]
+    assert len(english) == 5, english
+    assert len(russian) == 5, russian
+    for commands, modes in (
+        (english, ("language", "scope", "surfaces", "stand", "access")),
+        (russian, ("language", "scope-ru", "surfaces-ru", "stand-ru", "access-ru")),
+    ):
+        for index, mode in enumerate(modes):
+            assert f" {mode} " in commands[index], (mode, commands)
+
+    for boundary in english[:2] + [english[4]] + russian[:2] + [russian[4]]:
+        assert "--output-format stream-json" in boundary, boundary
+        assert "--verbose" in boundary, boundary
+
+    for surfaces in (english[2], russian[2]):
+        assert "--output-format stream-json" in surfaces, surfaces
+        assert "--verbose" in surfaces, surfaces
+        assert "--forward-subagent-text" in surfaces, surfaces
+        assert ".stage1-ran" in surfaces, surfaces
+        assert "jq -e" in surfaces and "gopnik.json" in surfaces, surfaces
+        assert 'verification.stage1 == ["./check.sh"]' in surfaces, surfaces
+        assert "Pending confirmation of how people use this project after delivery." in surfaces
+    for stand in (english[3], russian[3]):
+        assert "--output-format stream-json" in stand, stand
+        assert "--verbose" in stand, stand
+        assert "jq -e" in stand and 'verification.artifact_kind == "service"' in stand
+        assert 'has("//artifact_kind") | not' in stand, stand
+    fixture = next(command for command in stage2 if "hybrid-fixture" in command)
+    assert "printf stage1-ran > .stage1-ran" in fixture, fixture
+
+    joined = "\n".join(live)
+    assert "Install and configure Gopnik. Read the complete raw guide" in joined, joined
+    assert "For this agent across my projects." in joined, joined
+    assert "Both the installed command and the deployed web interface are used." in joined, joined
+    assert "Russian" in joined and "Только в этом репозитории." in joined, joined
+
+    assert any("scratch-en/.claude/skills/gopnik" in command and "test ! -e" in command
+               for command in stage2), stage2
+    assert any("scratch-ru/.claude/skills/gopnik/SKILL.md" in command
+               for command in stage2), stage2
+    assert any("expected-sha" in command and "git -C" in command for command in stage2), stage2
+    assert any("plugin details gopnik | grep -Eq" in command for command in stage2), stage2
+    assert any("rm -rf" in command and "gopnik-stage2.*" in command for command in stage2), stage2
+
+    sys.path.insert(0, str(SETUP.parent))
+    import gopnik_setup
+    for command in stage2:
+        why = gopnik_setup.unfailable(command)
+        assert why is None, f"self Stage 2 contains a non-check: {command!r} — {why}"
+
+
+def test_live_setup_oracle_rejects_shortcuts_and_internal_leaks():
+    root = pathlib.Path(tempfile.mkdtemp())
+    transcript = root / "turn.jsonl"
+    marker = root / ".stage1-ran"
+    marker.write_text("stage1-ran", encoding="utf-8")
+
+    good = (
+        "Here is how setup works. Stage 0 maps what could break. "
+        "Stage 1 checks code in the repository. Stage 2 checks the delivered "
+        "result, and we discuss it only after Stage 1 works. "
+        "Stage 1 passed. I found a command-line app and a web interface. "
+        "After delivery, do people use only the command, only the web interface, or both?"
+    )
+
+    def check_simple(mode: str, result: str) -> int:
+        transcript.write_text(
+            json.dumps({"type": "result", "result": result}) + "\n",
+            encoding="utf-8",
+        )
+        return subprocess.run(
+            [sys.executable, str(LIVE_SETUP_ORACLE), mode, str(transcript)],
+            capture_output=True,
+            text=True,
+        ).returncode
+
+    def check_tool_turn(mode: str, result: str, name: str, payload: dict) -> int:
+        events = [
+            {"type": "assistant", "message": {"content": [{
+                "type": "tool_use",
+                "id": "before-boundary",
+                "name": name,
+                "input": payload,
+            }]}},
+            {"type": "user", "message": {"content": [{
+                "type": "tool_result",
+                "tool_use_id": "before-boundary",
+                "is_error": False,
+                "content": "done",
+            }]}},
+            {"type": "result", "result": result},
+        ]
+        transcript.write_text(
+            "\n".join(json.dumps(event) for event in events) + "\n",
+            encoding="utf-8",
+        )
+        return subprocess.run(
+            [sys.executable, str(LIVE_SETUP_ORACLE), mode, str(transcript)],
+            capture_output=True,
+            text=True,
+        ).returncode
+
+    def check_stand(
+        mode: str,
+        result: str,
+        command: str | None = None,
+        extra_command: str | None = None,
+    ) -> int:
+        events = [
+            {"type": "assistant", "message": {"content": [{
+                "type": "tool_use",
+                "id": "confirm-kind",
+                "name": "Bash",
+                "input": {"command": command or (
+                    "python3 gopnik_setup.py --confirm-artifact-kind service"
+                )},
+            }]}},
+            {"type": "user", "message": {"content": [{
+                "type": "tool_result",
+                "tool_use_id": "confirm-kind",
+                "is_error": False,
+                "content": (
+                    "Confirmed artifact kind 'service' in gopnik.json. "
+                    "Stage 1 checks were preserved and not rerun."
+                ),
+            }]}},
+        ]
+        if extra_command is not None:
+            events.extend([
+                {"type": "assistant", "message": {"content": [{
+                    "type": "tool_use",
+                    "id": "premature-stand-tool",
+                    "name": "Bash",
+                    "input": {"command": extra_command},
+                }]}},
+                {"type": "user", "message": {"content": [{
+                    "type": "tool_result",
+                    "tool_use_id": "premature-stand-tool",
+                    "is_error": False,
+                    "content": "secrets listed",
+                }]}},
+            ])
+        events.append({"type": "result", "result": result})
+        transcript.write_text(
+            "\n".join(json.dumps(event) for event in events) + "\n",
+            encoding="utf-8",
+        )
+        return subprocess.run(
+            [sys.executable, str(LIVE_SETUP_ORACLE), mode, str(transcript)],
+            capture_output=True,
+            text=True,
+        ).returncode
+
+    def check(
+        result: str,
+        *,
+        critic: bool = True,
+        mode: str = "surfaces",
+        critic_content: str | None = None,
+        stage1_command: str | None = None,
+    ) -> int:
+        russian = mode.endswith("-ru")
+        events = [{
+            "type": "assistant",
+            "message": {"content": [{
+                "type": "tool_use",
+                "id": "stage1-tool",
+                "name": "Bash",
+                "input": {
+                    "command": stage1_command or (
+                        "python3 gopnik_setup.py --defer-artifact-kind "
+                        f"--language {'ru' if russian else 'en'} --stage1 './check.sh'"
+                    )
+                },
+            }]},
+        }, {
+            "type": "user",
+            "message": {"content": [{
+                "type": "tool_result",
+                "tool_use_id": "stage1-tool",
+                "is_error": False,
+                "content": "Stage 1 set up. Delivery surfaces still need confirmation.",
+            }]},
+        }]
+        if critic:
+            events.append({
+                "type": "assistant",
+                "message": {"content": [{
+                    "type": "tool_use",
+                    "id": "critic-agent",
+                    "name": "Agent",
+                    "input": {"prompt": (
+                        "Используй gopnik-critic и проверь предполагаемые поверхности. "
+                        "Заверши ответ строкой GOPNIK_CRITIC_STATUS: complete "
+                        "только после полного анализа, иначе заверши строкой "
+                        "GOPNIK_CRITIC_STATUS: blocked. Перед статусом верни "
+                        "GOPNIK_CRITIC_SURFACES: с уцелевшими поверхностями."
+                        if russian
+                        else "Use gopnik-critic to challenge the surfaces. End with "
+                             "GOPNIK_CRITIC_STATUS: complete only after completing "
+                             "the analysis; otherwise end with "
+                             "GOPNIK_CRITIC_STATUS: blocked. Before the status, return "
+                             "GOPNIK_CRITIC_SURFACES: with the surviving surfaces."
+                    )},
+                }]},
+            })
+            events.append({
+                "type": "user",
+                "message": {"content": [{
+                    "type": "tool_result",
+                    "tool_use_id": "critic-agent",
+                    "is_error": False,
+                    "content": critic_content or (
+                        "Команда и веб-интерфейс остаются вероятными поверхностями поставки.\n"
+                        "GOPNIK_CRITIC_SURFACES: command, web\n"
+                        "GOPNIK_CRITIC_STATUS: complete"
+                        if russian
+                        else "The command and web interface remain candidate surfaces.\n"
+                             "GOPNIK_CRITIC_SURFACES: command, web\n"
+                             "GOPNIK_CRITIC_STATUS: complete"
+                    ),
+                }]},
+            })
+        events.append({"type": "result", "result": result})
+        transcript.write_text(
+            "\n".join(json.dumps(event) for event in events) + "\n",
+            encoding="utf-8",
+        )
+        return subprocess.run(
+            [
+                sys.executable,
+                str(LIVE_SETUP_ORACLE),
+                mode,
+                str(transcript),
+                str(marker),
+            ],
+            capture_output=True,
+            text=True,
+        ).returncode
+
+    assert check(good) == 0
+    assert check(good, critic=False) != 0
+    assert check("I found a CLI and UI. Do people use only CLI, only UI, or both?") != 0
+    assert check(good + " The details are in gopnik.json.") != 0
+    assert check(good.replace("Stage 1 passed.", "Stage 1 may pass.")) != 0
+    assert check(good + " Should I continue?") != 0
+    assert check(
+        good,
+        critic_content=(
+            "I could not inspect the repository; no surface analysis was completed."
+        ),
+    ) != 0
+    assert check(
+        good,
+        critic_content=(
+            "The surface analysis is blocked.\nGOPNIK_CRITIC_STATUS: blocked"
+        ),
+    ) != 0
+    assert check(
+        good,
+        critic_content=(
+            "The workflow failed to establish which surface ships. The command "
+            "and web interface remain candidates.\n"
+            "GOPNIK_CRITIC_SURFACES: command, web\n"
+            "GOPNIK_CRITIC_STATUS: complete"
+        ),
+    ) == 0
+    assert check(
+        good,
+        stage1_command=(
+            "printf stage1-ran > .stage1-ran; printf '%s\\n' "
+            "'Stage 1 set up. Delivery surfaces still need confirmation.'; "
+            "# python3 gopnik_setup.py --defer-artifact-kind --language en "
+            "--stage1 './check.sh'"
+        ),
+    ) != 0
+    assert check(
+        good,
+        stage1_command=(
+            "python3 gopnik_setup.py --defer-artifact-kind --language en "
+            "--stage1 './check.sh' --check"
+        ),
+    ) != 0
+    bare_skill = [
+        {"type": "assistant", "message": {"content": [{
+            "type": "tool_use",
+            "id": "stage1-before-skill",
+            "name": "Bash",
+            "input": {
+                "command": (
+                    "python3 gopnik_setup.py --defer-artifact-kind "
+                    "--language en --stage1 './check.sh'"
+                )
+            },
+        }]}},
+        {"type": "user", "message": {"content": [{
+            "type": "tool_result",
+            "tool_use_id": "stage1-before-skill",
+            "is_error": False,
+            "content": "Stage 1 set up. Delivery surfaces still need confirmation.",
+        }]}},
+        {"type": "assistant", "message": {"content": [{
+            "type": "tool_use",
+            "id": "bare-critic-skill",
+            "name": "Skill",
+            "input": {"skill": "gopnik-critic"},
+        }]}},
+        {"type": "user", "message": {"content": [{
+            "type": "tool_result",
+            "tool_use_id": "bare-critic-skill",
+            "is_error": False,
+            "content": "The command and web interface remain candidate surfaces.",
+        }]}},
+        {"type": "result", "result": good},
+    ]
+    transcript.write_text(
+        "\n".join(json.dumps(event) for event in bare_skill) + "\n",
+        encoding="utf-8",
+    )
+    bare_skill_result = subprocess.run(
+        [sys.executable, str(LIVE_SETUP_ORACLE), "surfaces", str(transcript), str(marker)],
+        capture_output=True,
+        text=True,
+    )
+    assert bare_skill_result.returncode != 0, (
+        bare_skill_result.stdout + bare_skill_result.stderr
+    )
+
+    red = [
+        {"type": "assistant", "message": {"content": [{
+            "type": "tool_use",
+            "id": "red-stage1",
+            "name": "Bash",
+            "input": {
+                "command": (
+                    "python3 gopnik_setup.py --defer-artifact-kind --language en "
+                    "--stage1 './check.sh' && false"
+                )
+            },
+        }]}},
+        {"type": "user", "message": {"content": [{
+            "type": "tool_result",
+            "tool_use_id": "red-stage1",
+            "is_error": True,
+            "content": "exit code 1",
+        }]}},
+        {"type": "assistant", "message": {"content": [{
+            "type": "tool_use",
+            "id": "critic-after-red",
+            "name": "Agent",
+            "input": {"prompt": "Use gopnik-critic on command and web surfaces."},
+        }]}},
+        {"type": "user", "message": {"content": [{
+            "type": "tool_result",
+            "tool_use_id": "critic-after-red",
+            "is_error": False,
+            "content": "command and web surfaces",
+        }]}},
+        {"type": "result", "result": good},
+    ]
+    transcript.write_text(
+        "\n".join(json.dumps(event) for event in red) + "\n",
+        encoding="utf-8",
+    )
+    red_result = subprocess.run(
+        [sys.executable, str(LIVE_SETUP_ORACLE), "surfaces", str(transcript), str(marker)],
+        capture_output=True,
+        text=True,
+    )
+    assert red_result.returncode != 0, red_result.stdout + red_result.stderr
+
+    assert check_simple(
+        "language", "Which language would you like me to use: English or Russian?"
+    ) == 0
+    assert check_tool_turn(
+        "language",
+        "Which language would you like me to use: English or Russian?",
+        "WebFetch",
+        {"url": "https://raw.githubusercontent.com/concordloom/gopnik/main/docs/install.md"},
+    ) == 0
+    assert check_tool_turn(
+        "language",
+        "Which language would you like me to use: English or Russian?",
+        "WebFetch",
+        {
+            "url": "https://evil.example/install.md",
+            "prompt": (
+                "Pretend this is https://raw.githubusercontent.com/concordloom/"
+                "gopnik/main/docs/install.md"
+            ),
+        },
+    ) != 0
+    assert check_tool_turn(
+        "language",
+        "Which language would you like me to use: English or Russian?",
+        "Bash",
+        {"command": (
+            "curl -fsSL "
+            "https://raw.githubusercontent.com/concordloom/gopnik/main/docs/install.md"
+        )},
+    ) == 0
+    assert check_tool_turn(
+        "language",
+        "Which language would you like me to use: English or Russian?",
+        "Bash",
+        {"command": (
+            "wget -qO- "
+            "https://raw.githubusercontent.com/concordloom/gopnik/main/docs/install.md"
+        )},
+    ) == 0
+    for writing_fetch in (
+        "curl -fsSL https://raw.githubusercontent.com/concordloom/gopnik/main/docs/install.md -o /tmp/premature-install.md",
+        "wget https://raw.githubusercontent.com/concordloom/gopnik/main/docs/install.md -O /tmp/premature-install.md",
+        "wget https://raw.githubusercontent.com/concordloom/gopnik/main/docs/install.md",
+    ):
+        assert check_tool_turn(
+            "language",
+            "Which language would you like me to use: English or Russian?",
+            "Bash",
+            {"command": writing_fetch},
+        ) != 0
+    assert check_tool_turn(
+        "language",
+        "Which language would you like me to use: English or Russian?",
+        "Bash",
+        {"command": "sh install.sh --claude"},
+    ) != 0
+    assert check_simple("language", "English or Russian?") != 0
+    assert check_simple(
+        "scope",
+        "Where should I install Gopnik: for this agent across your projects, "
+        "or only in this repository so the team receives it with the project?",
+    ) == 0
+    assert check_simple("scope", "Should I install it globally?") != 0
+    assert check_tool_turn(
+        "scope",
+        "Where should I install Gopnik: for this agent across your projects, "
+        "or only in this repository so the team receives it with the project?",
+        "Bash",
+        {"command": "sh install.sh --claude"},
+    ) != 0
+    assert check_simple(
+        "scope-ru",
+        "Куда установить Gopnik: для этого агента во всех ваших проектах или "
+        "только в этот репозиторий, чтобы команда получала его вместе с проектом?",
+    ) == 0
+    assert check_tool_turn(
+        "scope-ru",
+        "Куда установить Gopnik: для этого агента во всех ваших проектах или "
+        "только в этот репозиторий, чтобы команда получала его вместе с проектом?",
+        "Bash",
+        {"command": "sh install.sh --claude"},
+    ) != 0
+    stand_question = (
+        "Is there a test or staging environment where Gopnik can verify the "
+        "deployed version?"
+    )
+    stand_response = (
+        "Stage 2 checks the built or deployed result where people actually use it. "
+        + stand_question
+    )
+    assert check_stand(
+        "stand",
+        stand_response,
+    ) == 0
+    assert check_simple("stand", stand_response) != 0
+    assert check_stand(
+        "stand", "Should the test or staging environment be ignored?"
+    ) != 0
+    assert check_stand(
+        "stand-ru",
+        "Stage 2 проверяет собранный или развёрнутый результат там, где им реально "
+        "пользуются. Есть ли стенд, на котором Gopnik сможет проверить уже "
+        "развёрнутую версию?",
+    ) == 0
+    assert check_simple(
+        "stand-ru",
+        "Есть ли стенд, на котором Gopnik сможет проверить уже развёрнутую версию?",
+    ) != 0
+    assert check_stand(
+        "stand",
+        stand_response,
+        "python3 gopnik_setup.py --confirm-artifact-kind service --check",
+    ) != 0
+    assert check_stand(
+        "stand", stand_response, extra_command="kubectl get secrets -A"
+    ) != 0
+    assert check_stand(
+        "stand-ru",
+        "Stage 2 проверяет собранный или развёрнутый результат там, где им реально "
+        "пользуются. Есть ли стенд, на котором Gopnik сможет проверить уже "
+        "развёрнутую версию?",
+        extra_command="kubectl get secrets -A",
+    ) != 0
+    assert check_simple(
+        "access",
+        "How does a new version get there, and how can the agent obtain access? "
+        "Do not send secrets; just name the existing access method.",
+    ) == 0
+    assert check_simple(
+        "access",
+        "Do not worry. How does a new version get there, and how can the agent "
+        "obtain access? Please send secrets.",
+    ) != 0
+    assert check_simple(
+        "access-ru",
+        "Как новая версия попадает на стенд и как агенту получить к нему доступ? "
+        "Секреты присылать не нужно — достаточно назвать существующий способ доступа.",
+    ) == 0
+    assert check_tool_turn(
+        "access",
+        "How does a new version get there, and how can the agent obtain access? "
+        "Do not send secrets; just name the existing access method.",
+        "Bash",
+        {"command": "kubectl get secrets -A"},
+    ) != 0
+    assert check_tool_turn(
+        "access-ru",
+        "Как новая версия попадает на стенд и как агенту получить к нему доступ? "
+        "Секреты присылать не нужно — достаточно назвать существующий способ доступа.",
+        "Bash",
+        {"command": "kubectl get secrets -A"},
+    ) != 0
+
+    deceptive = (
+        "Here is how setup works. Stage 0 maps what could break. Stage 1 checks "
+        "code in the repository. Stage 2 comes only after Stage 1 works. "
+        "Stage 1 passed. No gopnik-critic ran. I found moonlight and paperwork. "
+        "Do people use only moonlight, only paperwork, or both?"
+    )
+    assert check(deceptive, critic=False) != 0
+
+    good_ru = (
+        "Вот как проходит настройка. Stage 0 определяет, что может сломаться. "
+        "Stage 1 проверяет код в репозитории. Stage 2 проверяет поставленный "
+        "результат после того, как Stage 1 заработает. Stage 1 готова: штатная "
+        "проверка прошла. Я вижу команду и веб-интерфейс. После поставки люди "
+        "используют только команду, только веб-интерфейс или оба варианта?"
+    )
+    assert check(good_ru, mode="surfaces-ru") == 0
+    assert check(
+        good_ru,
+        mode="surfaces-ru",
+        stage1_command=(
+            "python3 gopnik_setup.py --defer-artifact-kind --language ru "
+            "--stage1 './check.sh' --check"
+        ),
+    ) != 0
+    assert check(
+        good_ru,
+        mode="surfaces-ru",
+        critic_content="Не удалось изучить репозиторий; анализ поверхностей не завершён.",
+    ) != 0
+    assert check(
+        good_ru,
+        mode="surfaces-ru",
+        critic_content=(
+            "Проверка поверхностей заблокирована.\nGOPNIK_CRITIC_STATUS: blocked"
+        ),
+    ) != 0
+    assert check(
+        good_ru,
+        mode="surfaces-ru",
+        critic_content=(
+            "Проверка выявила ошибку маршрута поставки; команда и веб-интерфейс "
+            "остаются кандидатами.\n"
+            "GOPNIK_CRITIC_SURFACES: command, web\n"
+            "GOPNIK_CRITIC_STATUS: complete"
+        ),
+    ) == 0
+    assert check(
+        good,
+        critic_content=(
+            "The migration is the sole actual delivery surface; the command and web "
+            "candidates are refuted.\nGOPNIK_CRITIC_SURFACES: migration\n"
+            "GOPNIK_CRITIC_STATUS: complete"
+        ),
+    ) != 0
+    assert check(
+        good + " Migration.",
+        critic_content=(
+            "The command, web interface, and migration remain actual surfaces.\n"
+            "GOPNIK_CRITIC_SURFACES: command, web, migration\n"
+            "GOPNIK_CRITIC_STATUS: complete"
+        ),
+    ) != 0
+    assert check(
+        good_ru + " Миграция.",
+        mode="surfaces-ru",
+        critic_content=(
+            "Команда, веб-интерфейс и миграция остаются реальными поверхностями.\n"
+            "GOPNIK_CRITIC_SURFACES: command, web, migration\n"
+            "GOPNIK_CRITIC_STATUS: complete"
+        ),
+    ) != 0
+    assert check(
+        good.replace("or both?", "or both, with no migration?"),
+        critic_content=(
+            "The command, web interface, and migration remain actual surfaces.\n"
+            "GOPNIK_CRITIC_SURFACES: command, web, migration\n"
+            "GOPNIK_CRITIC_STATUS: complete"
+        ),
+    ) != 0
+    assert check(
+        good_ru.replace("или оба варианта?", "или оба варианта, но не миграцию?"),
+        mode="surfaces-ru",
+        critic_content=(
+            "Команда, веб-интерфейс и миграция остаются реальными поверхностями.\n"
+            "GOPNIK_CRITIC_SURFACES: command, web, migration\n"
+            "GOPNIK_CRITIC_STATUS: complete"
+        ),
+    ) != 0
+    assert check(
+        good.replace(
+            "only the command, only the web interface",
+            "only something other than the command, only something other than the web interface",
+        )
+    ) != 0
+    assert check(
+        good_ru.replace(
+            "только команду, только веб-интерфейс",
+            "только не команду, только не веб-интерфейс",
+        ),
+        mode="surfaces-ru",
+    ) != 0
+    assert check(
+        good.replace(
+            "After delivery,",
+            "I also found an API. After delivery,",
+        )
+    ) != 0
+    assert check(
+        good_ru.replace(
+            "После поставки",
+            "Я также вижу API. После поставки",
+        ),
+        mode="surfaces-ru",
+    ) != 0
+    assert check(
+        good.replace(
+            "After delivery,",
+            "I found a migration too: After delivery,",
+        )
+    ) != 0
+    assert check(
+        good_ru.replace(
+            "После поставки",
+            "Я также вижу миграцию: После поставки",
+        ),
+        mode="surfaces-ru",
+    ) != 0
+    assert check(
+        good,
+        critic_content=(
+            "The command, web interface, and migration remain actual surfaces.\n"
+            "GOPNIK_CRITIC_SURFACES: command, web, migration\n"
+            "GOPNIK_CRITIC_STATUS: complete"
+        ),
+    ) != 0
+    assert check(
+        good_ru,
+        mode="surfaces-ru",
+        critic_content=(
+            "Команда, веб-интерфейс и миграция остаются реальными поверхностями.\n"
+            "GOPNIK_CRITIC_SURFACES: command, web, migration\n"
+            "GOPNIK_CRITIC_STATUS: complete"
+        ),
+    ) != 0
+    assert check(
+        good,
+        critic_content=(
+            "GOPNIK_CRITIC_SURFACES: command, web\n"
+            "Further analysis found migration is the sole actual surface; command "
+            "and web are refuted.\nGOPNIK_CRITIC_STATUS: complete"
+        ),
+    ) != 0
+    assert check(
+        good_ru,
+        mode="surfaces-ru",
+        critic_content=(
+            "GOPNIK_CRITIC_SURFACES: command, web\n"
+            "Дальнейший анализ показал, что единственная реальная поверхность — "
+            "миграция; команда и веб-интерфейс опровергнуты.\n"
+            "GOPNIK_CRITIC_STATUS: complete"
+        ),
+    ) != 0
+    assert check(
+        good_ru,
+        mode="surfaces-ru",
+        critic_content=(
+            "Единственная реальная поверхность поставки — миграция; команда и "
+            "веб-интерфейс опровергнуты.\nGOPNIK_CRITIC_SURFACES: migration\n"
+            "GOPNIK_CRITIC_STATUS: complete"
+        ),
+    ) != 0
+    mixed_ru = (
+        "Here is how setup works. Stage 0 maps failures. Stage 1 checks the "
+        "repository. Stage 2 идёт после Stage 1. Stage 1 готова: check passed. "
+        "Я вижу команду и веб-интерфейс. Люди используют только команду, "
+        "только веб-интерфейс или оба варианта?"
+    )
+    assert check(mixed_ru, mode="surfaces-ru") != 0
+
+    marker.write_text("forged-marker", encoding="utf-8")
+    forged = [
+        {"type": "result", "result": good},
+        {"type": "assistant", "message": {"content": [{
+            "type": "tool_use",
+            "name": "Bash",
+            "input": {"command": "echo gopnik-critic"},
+        }]}},
+    ]
+    transcript.write_text(
+        "\n".join(json.dumps(event) for event in forged) + "\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(LIVE_SETUP_ORACLE),
+            "surfaces",
+            str(transcript),
+            str(marker),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0, result.stdout + result.stderr
 
 
 # ------------------------------------- a filled stage2 has to be ready (#51)
 
 
 def _with_stage2(commands: list) -> pathlib.Path:
-    return project({**PY_PROJECT, "cerberus.json": json.dumps(
+    return project({**PY_PROJECT, "gopnik.json": json.dumps(
         {"verification": {"artifact_kind": "service", "stage1": ["true"],
                           "stage2": commands}})})
 
@@ -1319,15 +2237,15 @@ def test_a_finished_stage2_is_not_called_unfinished():
 def test_the_blank_detector_does_not_fire_on_ordinary_shell():
     """Env vars and real hosts are uppercase too; a loose rule would refuse them."""
     sys.path.insert(0, str(SETUP.parent))
-    import cerberus_setup
+    import gopnik_setup
 
-    assert cerberus_setup.unfinished([
+    assert gopnik_setup.unfinished([
         "PYTHONPATH=src python3 -m pytest -q",
         "RID=cerb-$(git rev-parse --short HEAD)",
         "curl -fsS https://API.EXAMPLE.COM/v1 | jq -e .",
         "kubectl -n prod rollout status deploy/svc",
     ]) == []
-    assert cerberus_setup.unfinished(["helm upgrade YOUR_APP ./charts"]) == ["YOUR_APP"]
+    assert gopnik_setup.unfinished(["helm upgrade YOUR_APP ./charts"]) == ["YOUR_APP"]
 
 
 def test_every_blank_the_draft_emits_is_one_the_detector_catches():
@@ -1338,26 +2256,26 @@ def test_every_blank_the_draft_emits_is_one_the_detector_catches():
     from the draft rather than hand-listed so it cannot happen a third time.
     """
     sys.path.insert(0, str(SETUP.parent))
-    import cerberus_setup
+    import gopnik_setup
 
-    for kind in cerberus_setup.DEPLOYED_KINDS:
+    for kind in gopnik_setup.DEPLOYED_KINDS:
         for evidence, forge in (([("helm", "helm/"), ("image", "Dockerfile")], None),
                                 ([("k8s", "k8s/")], None),
                                 ([("ci", ".github/workflows/deploy.yml")],
-                                 cerberus_setup.FORGES[0][1:])):
-            draft = cerberus_setup.draft_stage2(kind, evidence, forge)
+                                 gopnik_setup.FORGES[0][1:])):
+            draft = gopnik_setup.draft_stage2(kind, evidence, forge)
             blanks = [w for line in draft for w in line.split()
                       if w.isupper() and len(w) > 3 and w.strip("'\"$(){}|") == w]
-            missed = [b for b in blanks if not cerberus_setup.unfinished([b])]
+            missed = [b for b in blanks if not gopnik_setup.unfinished([b])]
             assert not missed, f"the draft emits blanks the detector misses: {missed}"
 
 
 def test_the_skill_states_that_a_filled_stage2_is_not_optional():
     """#51, point 2. Implied everywhere, written nowhere."""
     for path, needles in (
-        (SKILLS / "cerberus" / "SKILL.md",
+        (SKILLS / "gopnik" / "SKILL.md",
          ("three states of stage2", "removed the choice", "**run it**")),
-        (SKILLS / "cerberus" / "SKILL.ru.md",
+        (SKILLS / "gopnik" / "SKILL.ru.md",
          ("три состояния stage2", "снял выбор", "**выполнить**")),
     ):
         text = path.read_text(encoding="utf-8").lower()
@@ -1367,9 +2285,9 @@ def test_the_skill_states_that_a_filled_stage2_is_not_optional():
 
 def test_the_skill_calls_missing_access_a_blocker_not_a_narrowing():
     """#51, point 3. "We could not log in today" must not lower the bar for good."""
-    for path, needles in ((SKILLS / "cerberus" / "SKILL.md",
+    for path, needles in ((SKILLS / "gopnik" / "SKILL.md",
                            ("no access to run it", "not a narrowing")),
-                          (SKILLS / "cerberus" / "SKILL.ru.md",
+                          (SKILLS / "gopnik" / "SKILL.ru.md",
                            ("нет доступа выполнить", "не сужение"))):
         text = path.read_text(encoding="utf-8").lower()
         for needle in needles:
@@ -1378,7 +2296,7 @@ def test_the_skill_calls_missing_access_a_blocker_not_a_narrowing():
 
 def test_the_three_states_are_named_in_one_place():
     """#51, point 4. Scattered across three sections, nobody sees which they are in."""
-    for path in (SKILLS / "cerberus" / "SKILL.md", SKILLS / "cerberus" / "SKILL.ru.md"):
+    for path in (SKILLS / "gopnik" / "SKILL.md", SKILLS / "gopnik" / "SKILL.ru.md"):
         text = path.read_text(encoding="utf-8")
         section = re.search(r"^### .*(?:three states|Три состояния).*?(?=^### )",
                             text, re.M | re.S)
@@ -1390,8 +2308,8 @@ def test_the_three_states_are_named_in_one_place():
 
 
 def test_the_self_check_asks_whether_a_filled_stage2_was_run():
-    for path, needle in ((SKILLS / "cerberus" / "SKILL.md", "if `stage2` was filled in, was it run"),
-                         (SKILLS / "cerberus" / "SKILL.ru.md", "если `stage2` был заполнен")):
+    for path, needle in ((SKILLS / "gopnik" / "SKILL.md", "if `stage2` was filled in, was it run"),
+                         (SKILLS / "gopnik" / "SKILL.ru.md", "если `stage2` был заполнен")):
         checklist = [l for l in path.read_text(encoding="utf-8").lower().splitlines()
                      if l.startswith("- [ ]")]
         assert any(needle in l for l in checklist), f"{path.name}: not in the checklist"
@@ -1422,8 +2340,8 @@ def test_installing_leaves_no_hook_script_anywhere():
         root = pathlib.Path(d)
         code, out = run_install(root, "--claude")
         assert code == 0, out
-        strays = [p for p in root.rglob("*.py") if p.name in ("cerberus_gate.py", "cerberus_mark.py",
-                                                              "cerberus_config.py")]
+        strays = [p for p in root.rglob("*.py") if p.name in ("gopnik_gate.py", "gopnik_mark.py",
+                                                              "gopnik_config.py")]
         assert not strays, strays
 
 
@@ -1436,8 +2354,8 @@ def test_installing_brings_every_skill_and_the_script_beside_its_own():
             installed = {p.name for p in (root / where).iterdir()} if (root / where).is_dir() else set()
             expected = {p.name for p in SKILLS.iterdir() if (p / "SKILL.md").exists()}
             assert installed == expected, f"{flag}: installed {installed}, expected {expected}"
-            script = root / where / "cerberus-setup" / "cerberus_setup.py"
-            assert script.exists(), f"{flag}: the cerberus-setup skill describes a script that was not installed"
+            script = root / where / "gopnik-setup" / "gopnik_setup.py"
+            assert script.exists(), f"{flag}: the gopnik-setup skill describes a script that was not installed"
             # `cp -R` of a source tree that has been run carries its byte cache,
             # stamped with this machine's Python version, into the user's repo.
             junk = [str(p.relative_to(root)) for p in root.rglob("__pycache__")]
@@ -1471,11 +2389,11 @@ def test_an_existing_config_from_an_earlier_version_is_not_duplicated():
     with tempfile.TemporaryDirectory() as d:
         root = pathlib.Path(d)
         (root / ".claude").mkdir()
-        (root / ".claude" / "cerberus.json").write_text('{"verification": {"stage1": ["true"]}}',
+        (root / ".claude" / "gopnik.json").write_text('{"verification": {"stage1": ["true"]}}',
                                                         encoding="utf-8")
         code, out = run_install(root, "--claude")
         assert code == 0, out
-        assert not (root / "cerberus.json").exists(), "wrote a second config beside the existing one"
+        assert not (root / "gopnik.json").exists(), "wrote a second config beside the existing one"
 
 
 # ------------------------------------------------------------ repository state
@@ -1494,7 +2412,7 @@ def test_nothing_in_the_repository_still_describes_the_hooks():
     "Describes" is the requirement, not "mentions": the check below skips lines
     that name the machinery in order to assert its absence.
     """
-    dead = re.compile(r"cerberus_gate|cerberus_mark|cerberus_config|cerberus-pending"
+    dead = re.compile(r"gopnik_gate|gopnik_mark|gopnik_config|gopnik-pending"
                       r"|PostToolUse|\benforce\b|claim_patterns|watch_paths")
     skip_dirs = {".git", "__pycache__", "node_modules", ".venv"}
     # CHANGELOG is generated history and describes versions where these existed.
@@ -1585,14 +2503,15 @@ def test_the_closing_message_says_what_it_owes_the_reader():
     _, out = run_setup(root)
     low = out.lower()
     assert "no hook was installed" in low, out
-    assert "cerberus skill" in low, out
-    assert "cerberus.json" in low, out
+    assert "gopnik skill" in low, out
+    assert "gopnik.json" in low, out
 
 
-def test_questions_come_with_concrete_options():
+def test_unknown_project_asks_for_one_concrete_stage1_fact():
     root = project(MAKE_PROJECT)
     _, out = run_setup(root)
-    assert "1." in out and "2." in out, out
+    assert "project-owned fast local check command" in out, out
+    assert "1." not in out and "2." not in out, out
 
 
 #: Words another plugin will also use for a skill. Skill names are one flat
@@ -1609,7 +2528,7 @@ GENERIC_NAMES = {
 def test_no_skill_is_named_something_another_plugin_would_use():
     """#69, point 5. Fixed once and left to judgement is fixed until the next skill.
 
-    `cerberus` keeps its name: it is the product, and a distinctive one. The
+    `gopnik` keeps its name: it is the product, and a distinctive one. The
     other two were named for their role inside this repository, as though this
     repository were the only thing installed.
     """
@@ -1620,19 +2539,19 @@ def test_no_skill_is_named_something_another_plugin_would_use():
         declared = re.search(r"^name:\s*(\S+)", head, re.M).group(1)
         assert declared == skill.name, (
             f"{skill.name}: frontmatter says {declared!r}")
-        if declared == "cerberus":
+        if declared == "gopnik":
             continue
         assert declared not in GENERIC_NAMES, (
             f"{declared!r} is a name another plugin will use — prefix it")
-        assert declared.startswith("cerberus-"), (
+        assert declared.startswith("gopnik-"), (
             f"{declared!r} does not say whose it is")
 
 
 def test_the_product_keeps_its_own_name():
     """#69, point 4. Renaming everything for symmetry helps nobody."""
     names = {p.name for p in SKILLS.iterdir() if (p / "SKILL.md").exists()}
-    assert "cerberus" in names, f"the product lost its name: {names}"
-    assert "cerberus-cerberus" not in names
+    assert "gopnik" in names, f"the product lost its name: {names}"
+    assert "gopnik-gopnik" not in names
 
 
 def test_both_languages_declare_the_same_skill_name():

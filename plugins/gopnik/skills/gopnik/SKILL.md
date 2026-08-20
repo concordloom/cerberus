@@ -1,5 +1,5 @@
 ---
-name: cerberus
+name: gopnik
 description: >
   Adversarial verification before claiming a change works. Use before saying
   "done", "it works", "deployed and working" or "all green" about anything
@@ -7,13 +7,13 @@ description: >
   claim about an executable change, whether requested or reached independently.
 ---
 
-# Cerberus — adversarial verification gate
+# Gopnik — adversarial verification gate
 
 A mandatory attempt to **prove the change is broken**, run before telling anyone
 it works. This is not a happy-path check. Readiness is what is left over when a
 serious attempt to break the thing has failed.
 
-Use the top-level `language` value from `cerberus.json` (`en` or `ru`) for all
+Use the top-level `language` value from `gopnik.json` (`en` or `ru`) for all
 operator-facing questions and reports. If it is absent, keep the current
 conversation language.
 
@@ -79,7 +79,7 @@ independently of what you happened to build.
    needs an independent adversary whose mandate is to *refute* it. Changes that
    assert nothing beyond "this now behaves as the issue asked" skip this step.
 
-5. **Cerberus examines the work.** Both stages, evidence per item.
+5. **Gopnik examines the work.** Both stages, evidence per item.
 
    These two are not interchangeable and neither covers the other. The critic
    asks whether what you *said* is true. The gate asks whether the thing *does*
@@ -273,7 +273,7 @@ dependency range, absent type definitions. It is the same shape as the failure
 that motivated this gate — everything green inside, and it does not work for the
 consumer, because nobody walked the consumption path from outside.
 
-Declare the boundary for your project in `cerberus.json` so this is a
+Declare the boundary for your project in `gopnik.json` so this is a
 fact rather than a guess each time:
 
 ```json
@@ -589,7 +589,7 @@ verdict about one ticket must not be presented as readiness of a whole stage.
 
 ### When the project declares the boundary unreachable
 
-A project with no environment to deploy to can say so once, in `cerberus.json`,
+A project with no environment to deploy to can say so once, in `gopnik.json`,
 instead of deciding it again every run:
 
 ```json

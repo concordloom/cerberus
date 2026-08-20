@@ -25,7 +25,7 @@
         "assets": [
           "CHANGELOG.md",
           ".claude-plugin/marketplace.json",
-          "plugins/cerberus/.claude-plugin/plugin.json"
+          "plugins/gopnik/.claude-plugin/plugin.json"
         ],
         "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
       }

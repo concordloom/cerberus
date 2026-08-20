@@ -13,12 +13,12 @@ UNINSTALL = ROOT / "docs" / "uninstall.md"
 README = ROOT / "README.md"
 README_RU = ROOT / "README.ru.md"
 SETUP_SKILLS = (
-    ROOT / "plugins" / "cerberus" / "skills" / "cerberus-setup" / "SKILL.md",
-    ROOT / "plugins" / "cerberus" / "skills" / "cerberus-setup" / "SKILL.ru.md",
+    ROOT / "plugins" / "gopnik" / "skills" / "gopnik-setup" / "SKILL.md",
+    ROOT / "plugins" / "gopnik" / "skills" / "gopnik-setup" / "SKILL.ru.md",
 )
 RUNNER_SKILLS = (
-    ROOT / "plugins" / "cerberus" / "skills" / "cerberus" / "SKILL.md",
-    ROOT / "plugins" / "cerberus" / "skills" / "cerberus" / "SKILL.ru.md",
+    ROOT / "plugins" / "gopnik" / "skills" / "gopnik" / "SKILL.md",
+    ROOT / "plugins" / "gopnik" / "skills" / "gopnik" / "SKILL.ru.md",
 )
 LANGUAGE_QUESTION = "Which language would you like me to use: English or Russian?"
 
@@ -31,7 +31,7 @@ def test_readme_urls_resolve_to_the_guides_in_this_tree():
     for page in (README, README_RU):
         text = page.read_text(encoding="utf-8")
         urls = re.findall(
-            r"https://raw\.githubusercontent\.com/concordloom/cerberus/main/(docs/(?:install|uninstall)\.md)",
+            r"https://raw\.githubusercontent\.com/concordloom/gopnik/main/(docs/(?:install|uninstall)\.md)",
             text,
         )
         assert urls == ["docs/install.md", "docs/uninstall.md"], (page.name, urls)
@@ -48,6 +48,28 @@ def test_install_opens_with_the_exact_english_language_question():
     assert "Unless" not in first_step
 
 
+def test_install_asks_for_scope_immediately_after_language():
+    text = _flat(INSTALL)
+    phrases = (
+        "Immediately after the language answer",
+        "Where should I install Gopnik: for this agent across your projects, or only in this repository",
+        "Куда установить Gopnik: для этого агента во всех ваших проектах или только в этот репозиторий",
+        "question is a hard turn boundary",
+        "Do not call the first option `global`",
+        "Install in exactly the selected scope, never both",
+        "does not belong in project verification data",
+        "first visible response after the installation-scope answer",
+    )
+    for phrase in phrases:
+        assert phrase in text, phrase
+    language = text.index(LANGUAGE_QUESTION)
+    scope = text.index("Where should I install Gopnik")
+    orient = text.index("**Stage 0** decides")
+    install = text.index("claude plugin marketplace add")
+    assert language < scope < orient < install
+    assert "first visible response after the language answer" not in text
+
+
 def test_uninstall_reuses_the_saved_language_without_asking_again():
     text = _flat(UNINSTALL)
     assert LANGUAGE_QUESTION not in text
@@ -61,17 +83,20 @@ def test_uninstall_reuses_the_saved_language_without_asking_again():
 
 
 def test_install_is_agent_agnostic_and_brings_the_complete_bundle():
-    text = INSTALL.read_text(encoding="utf-8")
-    for skill in ("`cerberus`", "`cerberus-critic`", "`cerberus-setup`"):
+    text = _flat(INSTALL)
+    for skill in ("`gopnik`", "`gopnik-critic`", "`gopnik-setup`"):
         assert skill in text, skill
     for route in (
         "claude plugin marketplace update concordloom",
-        "claude plugin install cerberus@concordloom",
-        "claude plugin update cerberus@concordloom",
+        "claude plugin install gopnik@concordloom",
+        "claude plugin update gopnik@concordloom",
         "codex plugin marketplace upgrade concordloom",
-        "codex plugin add cerberus@concordloom",
+        "codex plugin add gopnik@concordloom",
         "Any other agent",
         "install.sh | sh",
+        "agent-wide installation",
+        "repository installation",
+        "Do not silently fall back to the other scope",
     ):
         assert route in text, route
     assert "Do not install them one at a time" not in text
@@ -102,6 +127,47 @@ def test_install_reads_repository_rules_before_running_checks():
         assert phrase in text, phrase
 
 
+def test_stage2_access_question_is_natural_and_matches_each_localized_skill():
+    english = (
+        "How does a new version get there, and how can the agent obtain access? "
+        "Do not send secrets; just name the existing access method."
+    )
+    russian = (
+        "Как новая версия попадает на стенд и как агенту получить к нему доступ? "
+        "Секреты присылать не нужно — достаточно назвать существующий способ доступа."
+    )
+    install = _flat(INSTALL)
+    assert english in install
+    assert russian in install
+    assert english in _flat(SETUP_SKILLS[0])
+    assert russian in _flat(SETUP_SKILLS[1])
+
+
+def test_stand_turn_explains_stage2_before_the_localized_question():
+    english = (
+        "Stage 2 checks the built or deployed result where people actually use it. "
+        "Is there a test or staging environment where Gopnik can verify the deployed version?"
+    )
+    russian = (
+        "Stage 2 проверяет собранный или развёрнутый результат там, где им реально пользуются. "
+        "Есть ли стенд, на котором Gopnik сможет проверить уже развёрнутую версию?"
+    )
+    install = _flat(INSTALL)
+    assert english in install
+    assert russian in install
+    assert english in _flat(SETUP_SKILLS[0])
+    assert russian in _flat(SETUP_SKILLS[1])
+
+
+def test_surface_sentence_limit_excludes_required_stage_orientation_and_status():
+    for path, phrase in (
+        (INSTALL, "the brief stage orientation and Stage 1 status may precede it"),
+        (SETUP_SKILLS[0], "the brief stage orientation and Stage 1 status may precede it"),
+        (SETUP_SKILLS[1], "перед ними могут стоять краткое объяснение стадий и статус Stage 1"),
+    ):
+        assert phrase in _flat(path), (path.name, phrase)
+
+
 def test_install_persists_the_language_once_for_future_runs_and_uninstall():
     text = _flat(INSTALL)
     for phrase in (
@@ -128,8 +194,8 @@ def test_install_asks_about_a_stand_before_inferring_stage2():
     text = _flat(INSTALL)
     for phrase in (
         "do not infer and present its infrastructure first",
-        "Is there a test or staging environment where Cerberus can verify the deployed version?",
-        "Есть ли стенд, на котором Cerberus сможет проверить уже развёрнутую версию?",
+        "Is there a test or staging environment where Gopnik can verify the deployed version?",
+        "Есть ли стенд, на котором Gopnik сможет проверить уже развёрнутую версию?",
         "How does a new version get there, and how can the agent obtain access?",
         "Do not send secrets",
         "After the answer, inspect CI triggers",
@@ -143,6 +209,9 @@ def test_install_asks_about_a_stand_before_inferring_stage2():
 def test_stage2_confirmation_is_a_hard_turn_boundary():
     text = _flat(INSTALL)
     for phrase in (
+        "confirmation question is a hard turn boundary",
+        "do not finalize the delivery kind",
+        "draft or run Stage 2",
         "availability question is a hard turn boundary",
         "End the response with it and wait",
         "Then wait again",
@@ -151,10 +220,80 @@ def test_stage2_confirmation_is_a_hard_turn_boundary():
         assert phrase in text, phrase
 
 
+def test_delivery_surfaces_are_criticized_then_confirmed_after_stage1():
+    expected = {
+        INSTALL: (
+            "Only after Stage 1 passes, inspect the candidate delivery surfaces",
+            "old configuration, previous conversation, and memory as leads, never as confirmation",
+            "One binary can also run a service and UI",
+            "independent agent using `gopnik-critic`",
+            "mandate to refute the classification",
+            "`GOPNIK_CRITIC_STATUS: complete`",
+            "`GOPNIK_CRITIC_STATUS: blocked`",
+            "`GOPNIK_CRITIC_SURFACES:",
+            "correlated agent result carries the surfaces line and the complete marker",
+            "product-use confirmation, not a defect report",
+            "Do not list packaging errors, missing files, workflow defects",
+            "I found <A> and <B>",
+            "only <A>, only <B>, or both?",
+            "Never discard the other surfaces",
+        ),
+        SETUP_SKILLS[0]: (
+            "Only after Stage 1 passes, inspect the candidate delivery surfaces",
+            "old configuration, previous conversation, and memory as leads, never as confirmation",
+            "One binary can also run a service and UI",
+            "independent agent using `gopnik-critic`",
+            "mandate to refute the classification",
+            "`GOPNIK_CRITIC_STATUS: complete`",
+            "`GOPNIK_CRITIC_STATUS: blocked`",
+            "`GOPNIK_CRITIC_SURFACES:",
+            "correlated agent result carries the surfaces line and the complete marker",
+            "product-use confirmation, not a defect report",
+            "Do not list packaging errors, missing files, workflow defects",
+            "I found <A> and <B>",
+            "only <A>, only <B>, or both?",
+            "Never discard the other surfaces",
+        ),
+        SETUP_SKILLS[1]: (
+            "Только после зелёной Stage 1 изучи возможные поверхности поставки",
+            "старую конфигурацию, прежний диалог и память подсказками, а не подтверждением",
+            "Один бинарник может одновременно запускать сервис и UI",
+            "независимому агенту с `gopnik-critic`",
+            "поручением опровергнуть классификацию",
+            "`GOPNIK_CRITIC_STATUS: complete`",
+            "`GOPNIK_CRITIC_STATUS: blocked`",
+            "`GOPNIK_CRITIC_SURFACES:",
+            "связанный результат агента не содержит строку поверхностей и маркер `complete`",
+            "подтверждение способа использования продукта, а не отчёт о дефектах",
+            "Не перечисляй здесь ошибки упаковки, отсутствующие файлы, дефекты workflow",
+            "Я вижу <A> и <B>",
+            "только <A>, только <B> или оба варианта?",
+            "Не отбрасывай остальные поверхности",
+        ),
+    }
+    for path, phrases in expected.items():
+        text = _flat(path)
+        for phrase in phrases:
+            assert phrase in text, (path.name, phrase)
+
+        stage1 = text.index(
+            "Only after Stage 1 passes" if path.name != "SKILL.ru.md"
+            else "Только после зелёной Stage 1"
+        )
+        critic = text.index("`gopnik-critic`", stage1)
+        question = text.index("<A>", critic)
+        stand = text.index(
+            "Is there a test or staging environment" if path.name != "SKILL.ru.md"
+            else "Есть ли стенд",
+            question,
+        )
+        assert stage1 < critic < question < stand, path.name
+
+
 def test_default_branch_delivery_becomes_an_explicit_post_merge_gate():
     text = _flat(INSTALL)
     for phrase in (
-        "full Cerberus run is post-merge",
+        "full Gopnik run is post-merge",
         "gate moving the task to Done or releasing it",
         "cannot honestly gate that merge",
         "Combine repository evidence with what the person said",
@@ -167,7 +306,7 @@ def test_install_keeps_setup_status_separate_from_product_verdicts():
     text = _flat(INSTALL)
     for phrase in (
         "Installation and setup do not receive a product verdict",
-        "belong only to a Cerberus run against a concrete product change",
+        "belong only to a Gopnik run against a concrete product change",
     ):
         assert phrase in text, phrase
 
@@ -335,7 +474,7 @@ def test_setup_final_report_never_surfaces_internal_record_as_repo_work():
 def test_stage2_is_a_progressive_conversation_not_a_batched_questionnaire():
     text = _flat(INSTALL)
     for phrase in (
-        "Explain Stage 2 in one sentence",
+        "After the person confirms the delivery surfaces, explain Stage 2",
         "do not infer and present its infrastructure first",
         "ask one related follow-up",
         "ask one question about it",
@@ -349,6 +488,7 @@ def test_ui_browser_question_appears_only_after_stage2_surface_discovery():
     text = _flat(INSTALL)
     phrases = (
         "Do not ask about browser tooling merely because frontend files exist",
+        "hard-coded to loopback proves local UI coverage, not a browser route against the stand",
         "Only when the deployed UI is real and neither route exists",
         "may I connect Playwright MCP?",
         "This is another hard turn boundary",
@@ -422,7 +562,7 @@ def test_missing_nested_dependency_uses_safe_local_routes_before_asking():
     assert "continue without another question" in example
     assert "only remaining route requires elevated privileges" in example
     for leaked in ("LoomWatch", "onWatch", "Go", "GOMAXPROCS", "GOMEMLIMIT",
-                   "cerberus.json", "Kubernetes", "namespace", "token", "Helm"):
+                   "gopnik.json", "Kubernetes", "namespace", "token", "Helm"):
         assert leaked not in example, (leaked, example)
 
 
@@ -484,14 +624,14 @@ def test_install_separates_the_universal_recommendation_from_the_tracker_example
         "finish the status report first, then start the recommendation as a separate paragraph",
         "Do not merge the recommendation into a status bullet",
         "Do not qualify it with project-specific process or artifact details",
-        "We recommend integrating Cerberus into the development cycle.",
-        "Рекомендуем встроить Cerberus в цикл разработки.",
+        "We recommend integrating Gopnik into the development cycle.",
+        "Рекомендуем встроить Gopnik в цикл разработки.",
         "For example, when work is managed through tasks in a tracker:",
         "Например, если работа ведётся через задачи в трекере:",
-        "After the task is defined, `cerberus-critic` checks its wording and completion criteria",
-        "После постановки задачи `cerberus-critic` проверяет её формулировку и критерии готовности",
-        "After implementation, `cerberus` checks the completed change before the task moves to `Done`",
-        "После реализации `cerberus` проверяет готовое изменение перед переводом задачи в `Done`",
+        "After the task is defined, `gopnik-critic` checks its wording and completion criteria",
+        "После постановки задачи `gopnik-critic` проверяет её формулировку и критерии готовности",
+        "After implementation, `gopnik` checks the completed change before the task moves to `Done`",
+        "После реализации `gopnik` проверяет готовое изменение перед переводом задачи в `Done`",
     ):
         assert phrase in text, phrase
 
@@ -505,7 +645,7 @@ def test_install_separates_the_universal_recommendation_from_the_tracker_example
 
     blocked = text.index("If setup is blocked")
     configured = text.index("Only after setup reaches `configured`")
-    recommendation = text.index("We recommend integrating Cerberus")
+    recommendation = text.index("We recommend integrating Gopnik")
     example = text.index("For example, when work is managed through tasks in a tracker")
     assert blocked < configured < recommendation < example
 
@@ -526,15 +666,33 @@ def test_installed_setup_skills_enforce_the_same_progressive_flow():
         assert stage1_gate < stage2_intro, path.name
 
 
+def test_every_guided_setup_entry_defers_surface_classification():
+    expected_language = {
+        SETUP_SKILLS[0]: "--language en",
+        SETUP_SKILLS[1]: "--language ru",
+    }
+    for skill, language in expected_language.items():
+        text = skill.read_text(encoding="utf-8")
+        invocations = [
+            line for line in text.splitlines()
+            if "gopnik_setup.py" in line and "--confirm-artifact-kind" not in line
+        ]
+        assert invocations, skill.name
+        for invocation in invocations:
+            assert "--defer-artifact-kind" in invocation, (skill.name, invocation)
+            if "PATH/gopnik_setup.py" not in invocation:
+                assert language in invocation, (skill.name, invocation)
+
+
 def test_uninstall_preserves_configuration_unless_separately_confirmed():
     text = _flat(UNINSTALL)
     for phrase in (
         "preserve project verification knowledge by default",
         "Configuration is preserved by default",
         "separate explicit confirmation",
-        "cerberus.json",
-        ".claude/cerberus.json",
-        ".codex/cerberus.json",
+        "gopnik.json",
+        ".claude/gopnik.json",
+        ".codex/gopnik.json",
     ):
         assert phrase in text, phrase
 
@@ -542,12 +700,12 @@ def test_uninstall_preserves_configuration_unless_separately_confirmed():
 def test_uninstall_is_narrow_and_verifiable():
     text = UNINSTALL.read_text(encoding="utf-8")
     for command in (
-        "claude plugin uninstall cerberus@concordloom",
-        "codex plugin remove cerberus@concordloom",
+        "claude plugin uninstall gopnik@concordloom",
+        "codex plugin remove gopnik@concordloom",
     ):
         assert command in text, command
     for root in (".claude/skills", ".agents/skills"):
-        for skill in ("cerberus", "cerberus-critic", "cerberus-setup"):
+        for skill in ("gopnik", "gopnik-critic", "gopnik-setup"):
             assert f"{root}/{skill}/" in text, (root, skill)
     for phrase in (
         "remove only the link",

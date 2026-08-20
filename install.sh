@@ -1,19 +1,19 @@
 #!/bin/sh
-# Put the cerberus skills into a project.
+# Put the gopnik skills into a project.
 #
 # Most people do not need this script.
 #
-#   Claude Code: `/plugin marketplace add concordloom/cerberus` then
-#                `/plugin install cerberus@concordloom`
-#   Codex:       `codex plugin marketplace add concordloom/cerberus` then
-#                `codex plugin add cerberus@concordloom`
+#   Claude Code: `/plugin marketplace add concordloom/gopnik` then
+#                `/plugin install gopnik@concordloom`
+#   Codex:       `codex plugin marketplace add concordloom/gopnik` then
+#                `codex plugin add gopnik@concordloom`
 #
 # What those do not do is put the files in your repository, or leave you a
-# cerberus.json to edit and commit. That is what this is for.
+# gopnik.json to edit and commit. That is what this is for.
 #
 # Nothing has to be cloned first. From inside your project:
 #
-#   curl -fsSL https://raw.githubusercontent.com/concordloom/cerberus/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/concordloom/gopnik/main/install.sh | sh
 #
 # or, from a clone:
 #
@@ -24,7 +24,7 @@
 #   sh install.sh --dir PATH   # install into PATH instead of the current directory
 #
 # Piped through sh, arguments go after -s --, e.g. `| sh -s -- --codex`.
-# Set CERBERUS_REF to install from a branch or tag other than main.
+# Set GOPNIK_REF to install from a branch or tag other than main.
 #
 # Nothing here runs by itself afterwards. No hook is installed, no settings file
 # is edited, and no file you own is merged into: the skills are yours to invoke
@@ -35,19 +35,19 @@
 
 set -eu
 
-REF=${CERBERUS_REF:-main}
+REF=${GOPNIK_REF:-main}
 SRC=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
 resolve() {
-  SKILLS_SRC="$SRC/plugins/cerberus/skills"
-  SKILL_SRC="$SKILLS_SRC/cerberus"
+  SKILLS_SRC="$SRC/plugins/gopnik/skills"
+  SKILL_SRC="$SKILLS_SRC/gopnik"
 }
 
 # Every skill under the plugin, not just the gate: the critic is the other half
 # of the same cycle, and installing one of them is worse than installing
 # neither, because the missing half is the one nobody notices is missing.
 #
-# Whole directories rather than SKILL.md alone — the cerberus-setup skill ships a script
+# Whole directories rather than SKILL.md alone — the gopnik-setup skill ships a script
 # beside its text, and copying only the text left it describing a file that was
 # never installed.
 copy_skills() {
@@ -100,7 +100,7 @@ say() { printf '  %s\n' "$1"; }
 if [ ! -f "$SKILL_SRC/SKILL.md" ]; then
   TMP=$(mktemp -d)
   trap 'rm -rf "$TMP"' EXIT INT TERM
-  URL="https://codeload.github.com/concordloom/cerberus/tar.gz/$REF"
+  URL="https://codeload.github.com/concordloom/gopnik/tar.gz/$REF"
 
   if command -v curl >/dev/null 2>&1; then
     curl -fsSL "$URL" -o "$TMP/src.tar.gz"
@@ -112,7 +112,7 @@ if [ ! -f "$SKILL_SRC/SKILL.md" ]; then
   fi
 
   tar -xzf "$TMP/src.tar.gz" -C "$TMP"
-  # Not `-name 'cerberus-*'`: GitHub names the extracted directory after
+  # Not `-name 'gopnik-*'`: GitHub names the extracted directory after
   # the repository, so pinning the repository name here means renaming the
   # repository breaks the one-liner — the install path the README puts first —
   # while the redirect works and every static check passes. There is exactly
@@ -122,30 +122,30 @@ if [ ! -f "$SKILL_SRC/SKILL.md" ]; then
 
   if [ ! -f "$SKILL_SRC/SKILL.md" ]; then
     echo "fetched $REF but the skill is not in it — report this at" >&2
-    echo "https://github.com/concordloom/cerberus/issues" >&2
+    echo "https://github.com/concordloom/gopnik/issues" >&2
     exit 1
   fi
 fi
 
-echo "Installing cerberus into $TARGET"
+echo "Installing gopnik into $TARGET"
 
 if [ "$WANT_CLAUDE" -eq 1 ]; then
   mkdir -p "$TARGET/.claude/skills"
   copy_skills "$TARGET/.claude/skills"
-  SETUP_SCRIPT=".claude/skills/cerberus-setup/cerberus_setup.py"
+  SETUP_SCRIPT=".claude/skills/gopnik-setup/gopnik_setup.py"
 fi
 
 if [ "$WANT_CODEX" -eq 1 ]; then
   mkdir -p "$TARGET/.agents/skills"
   copy_skills "$TARGET/.agents/skills"
-  SETUP_SCRIPT=".agents/skills/cerberus-setup/cerberus_setup.py"
+  SETUP_SCRIPT=".agents/skills/gopnik-setup/gopnik_setup.py"
 fi
 
 # One config for the project, not one per agent: nothing reads it but whoever is
 # doing the work, so it has no business living in an agent's directory. Existing
 # installs keep theirs where it is.
 CONFIG=""
-for candidate in .claude/cerberus.json .codex/cerberus.json cerberus.json; do
+for candidate in .claude/gopnik.json .codex/gopnik.json gopnik.json; do
   if [ -f "$TARGET/$candidate" ]; then
     CONFIG=$candidate
     break
@@ -155,8 +155,8 @@ done
 if [ -n "$CONFIG" ]; then
   say "$CONFIG  (kept — already present)"
 else
-  cp "$SRC/cerberus.example.json" "$TARGET/cerberus.json"
-  say "cerberus.json  (edit the verification block to describe this project)"
+  cp "$SRC/gopnik.example.json" "$TARGET/gopnik.json"
+  say "gopnik.json  (edit the verification block to describe this project)"
 fi
 
 echo
@@ -185,5 +185,5 @@ else
   echo
   echo "    python3 $SETUP_SCRIPT"
   echo
-  echo "Then invoke the cerberus skill by name before claiming a change works."
+  echo "Then invoke the gopnik skill by name before claiming a change works."
 fi

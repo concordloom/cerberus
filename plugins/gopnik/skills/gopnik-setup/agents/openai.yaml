@@ -1,0 +1,4 @@
+interface:
+  display_name: "Gopnik Setup"
+  short_description: "Learn the project's real verification route"
+  default_prompt: "Use $gopnik-setup to configure this project's verified Stage 1 and Stage 2 routes."

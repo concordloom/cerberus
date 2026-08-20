@@ -19,7 +19,7 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 MARKETPLACE = ROOT / ".claude-plugin" / "marketplace.json"
-PLUGIN = ROOT / "plugins" / "cerberus" / ".claude-plugin" / "plugin.json"
+PLUGIN = ROOT / "plugins" / "gopnik" / ".claude-plugin" / "plugin.json"
 
 SEMVER = re.compile(r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$")
 

@@ -1,181 +1,109 @@
-# Contributing
+# Contributing to Gopnik
 
-## This repository runs its own cycle
+Gopnik verifies its own changes. Before claiming that a contribution works,
+run the repository checks and then cross the delivery boundary named in
+[`gopnik.json`](gopnik.json).
 
-Cerberus is used here, on itself, and since #33 that means the same thing it
-means for everyone else: somebody invokes it. Nothing in this repository fires
-it automatically, and nothing checks that you did.
+## Development loop
 
-That is not a gimmick either way. A verification tool nobody verifies is the
-thing it warns about, and the two worst defects this project has shipped so far
-were both readiness claims made without crossing the boundary.
+Work starts from a falsifiable claim: what observation would settle the task,
+including the result that would prove the proposed change wrong.
 
-Before saying a change works, run the skill and finish both stages. The commands
-for this repository are declared in [`cerberus.json`](cerberus.json).
+The repository ships two Claude commands for its own workflow:
 
-## From discussion to issue to work
+| Command | Purpose |
+| --- | --- |
+| `/issue` | turn a discussion into a testable work item |
+| `/work <n>` | run matrix → work → critic → Gopnik → verdict |
 
-Work here starts from an issue, and the issue is written **before** the work.
-That is not process for its own sake: the gate is only as good as the claim it
-is aimed at, and a claim written afterwards is whatever the change happened to
-do.
+The command is convenience, not enforcement. No hook or daemon runs the cycle
+automatically.
 
-The mechanics are two commands, both of which read the skills rather than
-repeating them:
+For a normal change:
 
-| | |
-|---|---|
-| `/issue` | ends a discussion by opening the issue it was heading towards |
-| `/work <n>` | takes that issue through matrix → work → critic → gate → verdict |
+1. State the Stage 0 matrix before editing.
+2. Implement the change without overwriting unrelated worktree changes.
+3. Run `gopnik-critic` on any important diagnosis or design claim.
+4. Run Stage 1.
+5. Run the relevant Stage 2 cells on the exact delivered revision.
+6. Publish a scoped Gopnik verdict with evidence and anything not proven.
 
-[The issue form](.github/ISSUE_TEMPLATE/work.yml) requires one field that the
-rest of the cycle depends on: **what would settle it** — the observation that
-decides, stated so it could come back negative. An issue that cannot answer it
-is not ready to be worked, and saying so is a real answer. Blank issues are
-disabled so nothing skips the field; questions belong in Discussions.
+If a blocker is fixed, the old verdict is void. Run a fresh round on the new
+fingerprint.
 
-Two things then happen in the open, on the issue itself:
+## Stage 1
 
-- **the Stage 0 matrix is posted before the work.** This is what makes the tell
-  checkable rather than a matter of memory — if someone adds cases after your
-  matrix, you skipped Stage 0;
-- **the verdict is posted after it**, with the evidence. An issue closed without
-  one is a claim nobody checked.
-
-One caveat worth knowing, because it bit this repository. Nothing will remind
-you: the discipline is the only mechanism there is now, which is exactly the
-trade #33 made. If that feels thin, read the verdict on that issue — it is the
-argument, with the counter-argument left in.
-
-## Stage 1 — what the working tree can prove
+Run the same commands recorded in `gopnik.json`:
 
 ```console
 python3 -m compileall -q plugins scripts tests
 python3 tests/test_setup.py
 python3 tests/test_commands.py
+python3 tests/test_readme.py
+python3 tests/test_guides.py
+python3 tests/test_brand.py
 python3 scripts/check_parity.py
 sh -n install.sh
 ```
 
-## Stage 2 — what only the loader can prove
+`git diff --check` should also be clean. Run the skill validator for every
+shipped skill after changing its frontmatter or layout.
 
-The delivery boundary of this artifact is the **plugin loader**, not a server.
-No static check reaches it: validating the manifests confirms one reading of the
-documentation, and the loader has its own.
+## Stage 2
 
-Both defects found on 2026-08-15 passed every static check.
+This repository ships a plugin. Its delivery boundaries are the native plugin
+loader, the repository-local installer, and a real agent session. Static tests
+cannot prove those surfaces.
 
-- `"source": "cerberus"` with `metadata.pluginRoot` — a form the documentation
-  permits and the loader rejects with `source: Invalid input`.
-- `"hooks": "./hooks/hooks.json"` in the manifest — `hooks/hooks.json` is loaded
-  by convention, so declaring it registered the same file twice and the plugin
-  failed to load *after installing successfully*.
+The executable Stage 2 route lives in `gopnik.json`. It uses isolated temporary
+host configuration, verifies the exact pushed revision, installs all three
+skills, exercises English and Russian onboarding, and removes its temporary
+state. Never point this route at an operator's real host configuration.
 
-So:
+Do not call a local clone or unpushed commit full Stage 2: the marketplace and
+raw installer consume GitHub. The remote revision must match the local commit
+under verdict.
 
-```console
-export CLAUDE_CONFIG_DIR=$(mktemp -d)     # never the real one: it changes your own session
-claude plugin marketplace add concordloom/cerberus
-claude plugin install cerberus@concordloom
-claude plugin list                        # Status must read: ✔ enabled
-claude plugin details cerberus            # Skills (1), Hooks (2)
-```
+## Product identity
 
-Two traps worth stating, because both have already cost time:
+The canonical public and runtime identifiers are:
 
-- The marketplace installs **from GitHub**. Verifying an unpushed fix proves
-  nothing. Push first.
-- Run `claude plugin marketplace update` before reinstalling, or you are testing
-  the cached copy of the previous version.
+- repository: `concordloom/gopnik`;
+- plugin: `gopnik@concordloom`;
+- skills: `gopnik`, `gopnik-critic`, `gopnik-setup`;
+- configuration: `gopnik.json`;
+- setup helper: `gopnik_setup.py`;
+- protocol variables and markers: `GOPNIK_*`.
 
-Then check the installer, which is a second and independent boundary — it does
-not go through the loader at all:
+The retired identity is allowed only in the historical changelog and the
+version 4 migration guides. `tests/test_brand.py` enforces that boundary.
 
-```console
-git clone https://github.com/concordloom/cerberus /tmp/src
-mkdir /tmp/proj && cd /tmp/proj && sh /tmp/src/install.sh
-```
+## English and Russian
 
-…then check what is **not** there, which is now the load-bearing property: no
-`settings.json` written or merged into, no wiring file, no scripts outside the
-skill directories. An install that quietly took a decision for the user would
-pass every check that only looks at what it created.
+English is canonical for code, comments, issues, commits, and release notes.
+Public README and skill instructions have full Russian editorial versions.
 
-Then run the setup step and confirm the two things it owes: every command it
-wrote passes when run by hand, and the configuration carries nothing but the
-`verification` block.
+Change each EN/RU pair together. `scripts/check_parity.py` compares structure,
+fences, and checklist length; editorial review must still check meaning and
+natural language.
 
-## Russian text
+Russian text uses guillemets, em dashes, non-breaking spaces after single-letter
+prepositions and conjunctions, and a single-character ellipsis.
 
-The Russian documents are translations of the English ones, which are canonical.
-CI checks that their structure matches; it cannot check that they are well
-written.
+## Release
 
-Run Russian text through [`ru-text`](https://github.com/talkstream/ru-text)
-before committing it. At minimum, the typography rules it enforces:
+[semantic-release](https://semantic-release.gitbook.io) runs on pushes to
+`main`, derives the next version from commit messages, updates both manifests,
+writes the changelog, tags the commit, and creates a GitHub Release.
 
-- guillemets `«…»` for quotes, `„…“` nested;
-- em dash `—` in prose, en dash `–` in ranges, hyphen only in compounds;
-- a non-breaking space after the single-letter prepositions and conjunctions
-  `в к с о у и а`, so they do not end up stranded at the end of a line;
-- `…` as one character.
-
-The last one is not cosmetic at this length: the skill text runs to several
-hundred lines, and a stranded preposition on every third line reads as
-carelessness in a document whose whole subject is care.
-
-## Language
-
-The project is English. Code, comments, documentation, CI, issues and **commit
-messages** are written in English.
-
-The one exception is the translated skill: `SKILL.ru.md` and `README.ru.md`
-exist so the method is usable by people who work in Russian, and they are the
-only Russian prose here. Russian also appears as *data* — the claim patterns the
-gate matches, and the fixtures that test them — which is not the same thing.
-
-Commit messages are not a matter of taste in this repository: the changelog and
-the release notes are **generated from them**, so a Russian commit would put
-Russian into an English changelog.
-
-Commits before the policy was set are in Russian. History is not being rewritten
-for it — a force-push over published commits costs more than the inconsistency.
-
-## Releasing
-
-Releases are automatic. [semantic-release](https://semantic-release.gitbook.io)
-runs on every push to `main`, works out the next version from the commit
-messages, writes the changelog, tags, and publishes a GitHub Release.
-
-Which means the commit type decides the version:
-
-| Commit | Version |
-|---|---|
+| Commit | Release |
+| --- | --- |
 | `fix: …` | patch |
 | `feat: …` | minor |
-| `feat!: …` or a `BREAKING CHANGE:` footer | major |
-| `docs:`, `chore:`, `test:`, `ci:`, `refactor:` | no release |
+| `feat!: …` or `BREAKING CHANGE:` | major |
+| `docs:`, `test:`, `ci:`, `chore:` | none |
 
-What deserves which, for this project:
+An identity or installation cutover is a breaking release. A new capability is
+minor; a compatible defect fix is patch.
 
-- **major** — the verdict contract changes, or an installation stops working
-  without manual steps.
-- **minor** — the skill gains a requirement, a stage or an axis; the setup step
-  gains behaviour.
-- **patch** — wording, typography, packaging and defect fixes that leave what the
-  gate demands unchanged.
-
-The release writes the new version into **both** manifests
-(`scripts/set_version.py`) and commits them back. That is not bookkeeping: a
-marketplace plugin is pinned to the `version` in its entry, so an existing
-installation receives an update **only when that string changes**. A release that
-merely tagged would reach nobody, silently.
-
-## Changing the skill text
-
-Both language versions must change together. `scripts/check_parity.py` compares
-heading structure, checklist length and code-block count — it will fail the build
-if one version grows a section the other does not have.
-
-It deliberately says nothing about the prose. Two translations should differ in
-wording; they must not differ in what they require.
+Do not edit only one manifest version. `scripts/set_version.py` owns both.

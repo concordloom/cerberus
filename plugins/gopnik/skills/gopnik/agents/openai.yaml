@@ -1,0 +1,4 @@
+interface:
+  display_name: "Gopnik"
+  short_description: "Attack a change before calling it ready"
+  default_prompt: "Use $gopnik to attack this completed change and return a scoped verdict."

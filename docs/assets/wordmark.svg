@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 100" width="860" height="200" role="img" aria-label="Gopnik wordmark with Cat Gate mark">
+  <title>Gopnik</title>
+  <rect width="430" height="100" rx="18" fill="#0B0D0F"/>
+  <g transform="translate(8 8) scale(.84)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20 78V34L35 16L43 34H57L65 16L80 34V78" stroke="#F29B38" stroke-width="6"/>
+    <path d="M32 48L43 54L34 58M68 48L57 54L66 58" stroke="#F3EEE6" stroke-width="4.5"/>
+    <path d="M46 66L50 70L56 63" stroke="#F29B38" stroke-width="4.5"/>
+  </g>
+  <g transform="translate(110 24)" fill="none" stroke="#F3EEE6" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M34 10H19C9 10 4 17 4 27S9 44 19 44H34V55C34 64 28 70 18 70H8"/>
+    <circle cx="63" cy="27" r="17"/>
+    <path d="M91 68V10H106C116 10 122 17 122 27S116 44 106 44H91"/>
+    <path d="M149 44V10M149 13C156 8 166 8 172 13C176 17 177 22 177 29V44"/>
+    <path d="M207 44V10M207 2V1"/>
+    <path d="M236 44V2M236 30L258 10M243 23L263 44"/>
+  </g>
+  <path d="M391 72L414 49" stroke="#F29B38" stroke-width="6" stroke-linecap="round"/>
+</svg>

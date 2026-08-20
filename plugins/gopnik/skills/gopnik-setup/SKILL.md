@@ -1,6 +1,6 @@
 ---
-name: cerberus-setup
-description: Discover and verify this project's real Stage 1 and Stage 2 mechanics, then record them in cerberus.json so Cerberus does not guess. Use during installation, when the config still has placeholders, or when delivery changed.
+name: gopnik-setup
+description: Discover and verify this project's real Stage 1 and Stage 2 mechanics, then record them in gopnik.json so Gopnik does not guess. Use during installation, when the config still has placeholders, or when delivery changed.
 ---
 
 # Setup - learn how this project is really verified
@@ -13,7 +13,7 @@ actually execute.
 ## Select the language once
 
 During first onboarding, the installation guide already selected the
-conversation language. Reuse a valid top-level `language` from `cerberus.json`
+conversation language. Reuse a valid top-level `language` from `gopnik.json`
 without asking. If setup is invoked on its own and neither the config nor the
 conversation provides a language, first ask exactly in English:
 
@@ -35,7 +35,7 @@ internal work:
 
 Keep this to three short points, then say you will find and run the project's
 own fast Stage 1 check. The person should understand the current step without
-having to understand Cerberus internals.
+having to understand Gopnik internals.
 
 Do not narrate tool or skill selection, raw-guide fetching, marketplace or
 version mechanics, installation paths, configuration files, JSON, keys, or
@@ -69,16 +69,17 @@ Do not inspect or discuss Stage 2 yet. Finish Stage 1 first.
 Use whichever installed path exists:
 
 ```sh
-python3 "$CLAUDE_PLUGIN_ROOT"/skills/cerberus-setup/cerberus_setup.py
-python3 .claude/skills/cerberus-setup/cerberus_setup.py
-python3 .agents/skills/cerberus-setup/cerberus_setup.py
+python3 "$CLAUDE_PLUGIN_ROOT"/skills/gopnik-setup/gopnik_setup.py --defer-artifact-kind --language en
+python3 .claude/skills/gopnik-setup/gopnik_setup.py --defer-artifact-kind --language en
+python3 .agents/skills/gopnik-setup/gopnik_setup.py --defer-artifact-kind --language en
 ```
 
-When the project defines its own checks, pass exactly those commands and the
-observed artifact kind:
+When the project defines its own checks, pass exactly those commands and defer
+the delivery kind until Stage 1 passes, a critic has challenged the candidate
+surfaces, and the person has confirmed how the result is used:
 
 ```sh
-python3 PATH/cerberus_setup.py --artifact-kind service \
+python3 PATH/gopnik_setup.py --defer-artifact-kind \
   --language en \
   --stage1 './app.sh --smoke' \
   --stage1 './app.sh --test'
@@ -91,7 +92,7 @@ Run fast, read-only checks automatically. Ask before a lengthy suite or a
 command that mutates shared state. Pass explicit checks from fastest to
 slowest; the script stops at the first failure.
 
-The request to install or set up Cerberus authorizes one continuous local setup
+The request to install or set up Gopnik authorizes one continuous local setup
 goal. Approval attaches to the goal, not to each command. Within that goal,
 continue autonomously through local, reversible diagnostics, including:
 
@@ -154,16 +155,19 @@ After Stage 1 succeeds, report the result in one short sentence.
 
 ## Preserve internal configuration without exposing it
 
-The script writes the selected language as the top-level `language` value and
-writes the `verification` block: `artifact_kind`, `stage1`, `stage2`, and
-`notes`. It merges rather than replaces existing data. A hand-written artifact
-kind, operational note, or legacy config path must survive.
+The script writes the selected language and the passing Stage 1 commands, but
+guided setup leaves the delivery kind unset until the confirmation step below.
+After the person answers, finalize the primary kind with
+`--confirm-artifact-kind KIND`; this preserves the Stage 1 evidence without
+running it again. The script merges rather than replaces existing data. A
+hand-written artifact kind, operational note, or legacy config path must
+survive.
 
 Only Stage 1 commands that were actually run and passed may be written.
 `stage2` stays empty until its real route is inferred and confirmed. A comment,
 `echo`, or another always-green command is not a check.
 
-`cerberus.json` stores stable project mechanics, not a feature-specific test
+`gopnik.json` stores stable project mechanics, not a feature-specific test
 plan. Never mention this file, its path, format, keys, or contents during normal
 onboarding. Reveal those details only if the person explicitly asks or a
 malformed hand-written file requires manual repair. Never store credentials.
@@ -179,15 +183,75 @@ absolute home-directory path into a file intended for the team.
 A package smoke test, build, or `--version` call is only a Stage 2 prerequisite
 unless it crosses the actual delivery boundary.
 
+## Confirm how the project is used after delivery
+
+Only after Stage 1 passes, inspect the candidate delivery surfaces. Treat an
+old configuration, previous conversation, and memory as leads, never as
+confirmation. Enumerate what the repository can produce or expose: installed
+commands, packages, libraries, plugins, HTTP services and APIs, web or mobile
+interfaces, background jobs, charts, migrations, and deployment or release
+routes.
+
+Do not let the packaging label end the search. One binary can also run a
+service and UI; one repository can ship several artifacts. A clean installed
+CLI check proves only the CLI surface, not a service deployed from the same
+binary.
+
+Form a provisional classification and a compact inventory of its evidence.
+Give both to an independent agent using `gopnik-critic`, with the mandate to
+refute the classification by finding omitted delivery surfaces or conflicting
+evidence. Give that agent an explicit completion contract: only after it has
+inspected the evidence and completed the challenge, its penultimate line must
+be `GOPNIK_CRITIC_SURFACES: <comma-separated surviving surface identifiers>`
+and its last line must be exactly `GOPNIK_CRITIC_STATUS: complete`; if it
+cannot complete the analysis, its last line must instead be
+`GOPNIK_CRITIC_STATUS: blocked`. Do not continue to the user question unless
+the correlated agent result carries the surfaces line and the complete marker.
+Use the surviving surfaces from that line in the question; do not restore a
+candidate the critic refuted. The critic does not decide how the product is really operated and
+does not question the person directly. Fold its surviving candidates into one
+short question. Keep the critic's technical findings internal: this is a
+product-use confirmation, not a defect report. Keep that product-use
+confirmation to at most two short sentences; the brief stage orientation and
+Stage 1 status may precede it.
+Name the plausible surfaces in plain language and, when necessary, add only one
+brief uncertainty such as `the delivery route does not prove which one ships`.
+Do not list packaging errors, missing files, workflow defects, or implementation
+details here. Handle a finding separately only when it blocks Stage 1 or leaves
+no plausible surface to confirm.
+
+Do not ask the person to choose an internal `artifact_kind`. Name only the
+concrete surfaces found in this repository. When several are plausible, ask:
+
+> I found <A> and <B>. After delivery, do people use only <A>, only <B>, or both?
+
+When only one is visible, ask:
+
+> I found <A>. Is that the only way people use the project after delivery, or should I include another deployed or consumed surface?
+
+This confirmation question is a hard turn boundary. End with it and wait.
+Until the answer arrives, do not finalize the delivery kind, inspect or present
+infrastructure, draft or run Stage 2, or ask about a stand, access, or browser
+tooling.
+
+After the answer, finalize the primary kind. For a hybrid project, choose the
+kind at the farthest confirmed delivery boundary, then cover every confirmed
+surface in Stage 2 and the operational notes. Never discard the other surfaces
+because the internal record has one primary kind.
+
 ## Ask whether Stage 2 has somewhere real to run
 
-Only after Stage 1 passes, explain in one sentence that Stage 2 checks the built
-or deployed result where people actually use it.
+After the person confirms the delivery surfaces, explain in one sentence that
+Stage 2 checks the built or deployed result where people actually use it.
 
 For a deployed service or application, do not inspect and present its
 infrastructure first. Ask only:
 
-> Is there a test or staging environment where Cerberus can verify the deployed version?
+> Is there a test or staging environment where Gopnik can verify the deployed version?
+
+The visible response must combine the explanation and question exactly:
+
+> Stage 2 checks the built or deployed result where people actually use it. Is there a test or staging environment where Gopnik can verify the deployed version?
 
 This availability question is a hard turn boundary. End with it and wait.
 
@@ -198,21 +262,24 @@ If the answer is yes, ask one related follow-up:
 Then wait again. Do not ask for infrastructure fields or present a command
 route before the person answers.
 
-For a package, CLI, plugin, or another artifact that can be checked safely in a
-clean consumer environment, create that environment yourself instead of asking
-an irrelevant staging question. Ask only when the real consumer environment
-cannot be created or reached automatically.
+For a package, CLI, plugin, or another artifact used only through a clean
+consumer environment, create that environment yourself instead of asking an
+irrelevant staging question. If any confirmed surface is deployed, ask the
+stand question; a clean consumer check may remain another Stage 2 cell, but it
+does not cover the deployment.
 
 After the answer, inspect CI triggers, deploy jobs, manifests, release scripts,
 service URLs, and version metadata. Combine repository evidence with what the
 person said. Verify access and all read-only prerequisites you can, then silently
-record only a route a future Cerberus run can execute.
+record only a route a future Gopnik run can execute.
 
 During that investigation, inspect the real product surfaces Stage 2 must
 exercise. Do not ask about browser tooling merely because frontend files exist.
 If the deployed product has a UI, first look for a project-owned browser route
 such as Playwright or Cypress against the stand, then for a browser or
-computer-use tool already available to the agent.
+computer-use tool already available to the agent. A route counts only when it
+can target the stand without tracked-file edits. A test hard-coded to loopback
+proves local UI coverage, not a browser route against the stand.
 
 Only when the deployed UI is real and neither route exists, explain the missing
 capability and ask one contextual question:
@@ -274,7 +341,7 @@ one-next-step, one-question pattern.
 ## Close with a human-sized status and recommendation, not a verdict
 
 Installation has `installed` or `not installed`. Project setup has `configured`
-or `setup blocked`. `READY` and `NOT READY` belong only to a Cerberus run against
+or `setup blocked`. `READY` and `NOT READY` belong only to a Gopnik run against
 a concrete product change.
 
 Setup cannot be `configured` until the Stage 2 target and access are verified,
@@ -290,7 +357,7 @@ below. Keep them as two distinct parts: finish the status report first, then
 start the recommendation as a separate paragraph. Do not merge the
 recommendation into a status bullet.
 
-Use at most three short points: whether Cerberus is installed; whether the
+Use at most three short points: whether Gopnik is installed; whether the
 project's local check is ready and what was observed; and whether the real
 delivery path is ready or the one remaining blocker. Mention a restart only if
 required.
@@ -308,8 +375,8 @@ After the configured status report, give one universal recommendation. Keep it
 separate from the example. Do not qualify it with project-specific process or
 artifact details. Use the exact first sentence for the selected language:
 
-- English: `We recommend integrating Cerberus into the development cycle.`
-- Russian: `Рекомендуем встроить Cerberus в цикл разработки.`
+- English: `We recommend integrating Gopnik into the development cycle.`
+- Russian: `Рекомендуем встроить Gopnik в цикл разработки.`
 
 Then give the tracker flow separately as an example in the selected language:
 
@@ -317,17 +384,17 @@ English:
 
 > For example, when work is managed through tasks in a tracker:
 >
-> 1. After the task is defined, `cerberus-critic` checks its wording and completion criteria.
-> 2. After the solution is prepared, `cerberus-critic` checks the chosen approach.
-> 3. After implementation, `cerberus` checks the completed change before the task moves to `Done`.
+> 1. After the task is defined, `gopnik-critic` checks its wording and completion criteria.
+> 2. After the solution is prepared, `gopnik-critic` checks the chosen approach.
+> 3. After implementation, `gopnik` checks the completed change before the task moves to `Done`.
 
 Russian:
 
 > Например, если работа ведётся через задачи в трекере:
 >
-> 1. После постановки задачи `cerberus-critic` проверяет её формулировку и критерии готовности.
-> 2. После подготовки решения `cerberus-critic` проверяет выбранный подход.
-> 3. После реализации `cerberus` проверяет готовое изменение перед переводом задачи в `Done`.
+> 1. После постановки задачи `gopnik-critic` проверяет её формулировку и критерии готовности.
+> 2. После подготовки решения `gopnik-critic` проверяет выбранный подход.
+> 3. После реализации `gopnik` проверяет готовое изменение перед переводом задачи в `Done`.
 
 Do not turn the recommendation into a mandatory workflow or add command-style
 prompts for the person to copy.
@@ -344,10 +411,14 @@ prompts for the person to copy.
 - [ ] Did I treat approval as applying to the setup goal rather than each safe command?
 - [ ] Did I continue safe local diagnostics without repeated permission questions?
 - [ ] Did every first Stage 1 command have time and memory safety limits?
+- [ ] Did I defer the delivery kind until Stage 1 passed, the critic challenged it, and the person confirmed it?
+- [ ] Did `gopnik-critic` try to find omitted or conflicting delivery surfaces?
+- [ ] For a hybrid project, does Stage 2 cover every confirmed surface rather than only the primary kind?
 - [ ] For a deployed service, did I first ask only whether a stand is available?
 - [ ] If yes, did I ask how delivery and access work without requesting secrets?
 - [ ] Before an authenticated production read or secret access, did I obtain
       target-specific confirmation for one read-only probe?
+- [ ] Did any project-owned browser route actually target the stand without tracked-file edits?
 - [ ] If a deployed UI had no browser route, did I offer Playwright MCP only after discovering that gap?
 - [ ] After connecting MCP, did I state and respect the host's restart boundary?
 - [ ] Did I avoid batching unrelated Stage 2 questions?

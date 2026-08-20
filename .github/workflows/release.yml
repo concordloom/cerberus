@@ -39,11 +39,12 @@ jobs:
       # so the same checks CI runs are run here before anything is published.
       - name: Verify before releasing
         run: |
-          test -d plugins/cerberus/skills
+          test -d plugins/gopnik/skills
           python3 -m compileall -q plugins scripts tests
           python3 tests/test_setup.py
           python3 tests/test_readme.py
           python3 tests/test_guides.py
+          python3 tests/test_brand.py
           python3 scripts/check_parity.py
           sh -n install.sh
 
