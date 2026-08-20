@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.0.3](https://github.com/concordloom/gopnik/compare/v4.0.2...v4.0.3) (2026-08-20)
+
+
+### Bug Fixes
+
+* keep guide bootstrap read-only ([bfbcfc4](https://github.com/concordloom/gopnik/commit/bfbcfc4a37d365906d4183b246006d57167f5f7a))
+
 ## [4.0.2](https://github.com/concordloom/gopnik/compare/v4.0.1...v4.0.2) (2026-08-20)
 
 
