@@ -191,6 +191,22 @@ def test_kind_confirmation_is_one_exact_helper_call():
             assert phrase in text, (path.name, phrase)
 
 
+def test_surface_to_kind_mapping_is_complete_and_localized():
+    expected = ("service", "cli", "library", "chart", "plugin", "migration", "model-boundary")
+    for path, anchor in (
+        (INSTALL, "without inspecting the helper or rediscovering its choices"),
+        (SETUP_SKILLS[0], "without inspecting the helper or rediscovering its choices"),
+        (SETUP_SKILLS[1], "не изучая helper и не выясняя его варианты заново"),
+    ):
+        text = _flat(path)
+        assert anchor in text, (path.name, anchor)
+        for kind in expected:
+            assert f"`{kind}`" in text, (path.name, kind)
+        assert "deployed web UI plus an installed command has primary kind `service`" in text or (
+            "развёрнутого веб-интерфейса вместе с установленной командой основной тип — `service`" in text
+        )
+
+
 def test_install_persists_the_language_once_for_future_runs_and_uninstall():
     text = _flat(INSTALL)
     for phrase in (

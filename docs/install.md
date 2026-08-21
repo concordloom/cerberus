@@ -343,6 +343,16 @@ farthest confirmed delivery boundary, then cover every confirmed surface in
 Stage 2 and the operational notes. Never discard the other surfaces because the
 internal record has one primary kind.
 
+Choose that kind from this complete mapping without inspecting the helper or
+rediscovering its choices: a deployed web UI, API, or always-on application is
+`service`; an installed command is `cli`; an imported package or SDK is
+`library`; a cluster or infrastructure bundle is `chart`; a host-loaded
+extension is `plugin`; a schema or data transition is `migration`; and a
+production model-call boundary is `model-boundary`. For several confirmed
+surfaces, select the farthest delivery boundary; for example, a deployed web UI
+plus an installed command has primary kind `service`. Reuse the exact helper
+path that succeeded for Stage 1 and run the confirmation immediately.
+
 ## 8. Ask whether Stage 2 has somewhere real to run
 
 After the person confirms the delivery surfaces, explain Stage 2 in one

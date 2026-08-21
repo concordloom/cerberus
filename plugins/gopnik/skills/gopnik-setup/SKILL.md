@@ -170,6 +170,16 @@ running it again. The script merges rather than replaces existing data. A
 hand-written artifact kind, operational note, or legacy config path must
 survive.
 
+Choose that kind from this complete mapping without inspecting the helper or
+rediscovering its choices: a deployed web UI, API, or always-on application is
+`service`; an installed command is `cli`; an imported package or SDK is
+`library`; a cluster or infrastructure bundle is `chart`; a host-loaded
+extension is `plugin`; a schema or data transition is `migration`; and a
+production model-call boundary is `model-boundary`. For several confirmed
+surfaces, select the farthest delivery boundary; for example, a deployed web UI
+plus an installed command has primary kind `service`. Reuse the exact helper
+path that succeeded for Stage 1 and run the confirmation immediately.
+
 Only Stage 1 commands that were actually run and passed may be written.
 `stage2` stays empty until its real route is inferred and confirmed. A comment,
 `echo`, or another always-green command is not a check.
