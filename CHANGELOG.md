@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.0.13](https://github.com/concordloom/gopnik/compare/v4.0.12...v4.0.13) (2026-08-21)
+
+
+### Bug Fixes
+
+* name Stage 1 in setup status ([570f939](https://github.com/concordloom/gopnik/commit/570f9397f018eb778cc7a58e832f8d5612d47eee))
+
 ## [4.0.12](https://github.com/concordloom/gopnik/compare/v4.0.11...v4.0.12) (2026-08-21)
 
 
