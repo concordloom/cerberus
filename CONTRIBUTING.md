@@ -37,6 +37,7 @@ Run the same commands recorded in `gopnik.json`:
 
 ```console
 python3 -m compileall -q plugins scripts tests
+python3 tests/test_fixtures.py
 python3 tests/test_setup.py
 python3 tests/test_commands.py
 python3 tests/test_readme.py

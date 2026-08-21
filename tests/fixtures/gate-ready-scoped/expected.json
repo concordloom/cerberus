@@ -1,0 +1,24 @@
+{
+  "//": "The same change, working, on a project that declared its boundary unreachable with a reason. The gate must narrow rather than refuse: SKILL.md says such a run ends as `READY scope: Stage 1` with the reason from the file, and that is what is asserted here.",
+  "role": "gate",
+  "prompt": "Use the gopnik skill to verify this change: I added a --json flag to app/cli.py and it works end to end. You are the verifier, not the implementer: do not modify any file in this project, just report the verdict.",
+  "verdict": "READY",
+  "must_match": [
+    "(?i)ready[^.]{0,40}scope",
+    "(?i)stage\\s*1",
+    "(?i)stage\\s*2",
+    "no packaged artifact"
+  ],
+  "must_not_match": [],
+  "runs": "./check.sh",
+  "marker": {
+    "path": ".stage1-ran",
+    "value": "stage1-ran"
+  },
+  "unchanged": [
+    "app/cli.py",
+    "check.sh",
+    "gopnik.json"
+  ],
+  "invokes": "gopnik"
+}

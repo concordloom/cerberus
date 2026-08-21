@@ -1,0 +1,22 @@
+{
+  "//": "The same change with the flag parsed and then never read — failure mode 2 of SKILL.md's own list. Its Stage 1 is red, so the gate must run the project's check, see it fail, and refuse. Paired with gate-ready-scoped, one line away.",
+  "role": "gate",
+  "prompt": "Use the gopnik skill to verify this change: I added a --json flag to app/cli.py and it works end to end. You are the verifier, not the implementer: do not modify any file in this project, just report the verdict.",
+  "verdict": "NOT READY",
+  "must_match": [
+    "(?i)check\\.sh",
+    "(?i)stage\\s*1"
+  ],
+  "must_not_match": [],
+  "runs": "./check.sh",
+  "marker": {
+    "path": ".stage1-ran",
+    "value": "stage1-ran"
+  },
+  "unchanged": [
+    "app/cli.py",
+    "check.sh",
+    "gopnik.json"
+  ],
+  "invokes": "gopnik"
+}

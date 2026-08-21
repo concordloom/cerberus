@@ -1,0 +1,9 @@
+{
+  "language": "en",
+  "verification": {
+    "artifact_kind": "cli",
+    "stage1": ["./check.sh"],
+    "stage2": [],
+    "stage2_unreachable": "no packaged artifact: this script is run by hand from the repository, so there is nothing built to install and nowhere to install it"
+  }
+}
