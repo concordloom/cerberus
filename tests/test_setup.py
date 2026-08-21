@@ -1817,6 +1817,12 @@ def test_live_setup_oracle_rejects_shortcuts_and_internal_leaks():
         "After delivery, do people use only the command-line tool, only the dashboard, or both?"
     ) == 0
     assert check(
+        "Stage 1 готова — штатная проверка проекта прошла. "
+        "Я вижу консольную команду и веб-страницу оператора. После поставки люди "
+        "используют только команду, только веб-страницу или оба варианта?",
+        mode="surfaces-ru",
+    ) == 0
+    assert check(
         good,
         critic_content=[
             {
@@ -2128,6 +2134,15 @@ def test_live_setup_oracle_rejects_shortcuts_and_internal_leaks():
         "только в этот репозиторий, чтобы команда получала его вместе с проектом?",
         "Bash",
         safe_fetch,
+    ) == 0
+    assert check_tool_chain(
+        "scope-ru",
+        "Куда установить Gopnik: для этого агента во всех ваших проектах или "
+        "только в этот репозиторий, чтобы команда получала его вместе с проектом?",
+        [
+            ("Bash", safe_fetch),
+            ("ToolSearch", {"query": "select:WebFetch", "max_results": 1}),
+        ],
     ) == 0
     assert check_tool_turn(
         "scope-ru",

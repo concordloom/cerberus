@@ -229,8 +229,16 @@ def safe_raw_guide_bootstrap(calls: list[dict]) -> bool:
         or (len(calls) == 1 and raw_guide_fetch(calls[0]))
         or (
             len(calls) == 2
-            and raw_guide_tool_discovery(calls[0])
-            and raw_guide_fetch(calls[1])
+            and (
+                (
+                    raw_guide_tool_discovery(calls[0])
+                    and raw_guide_fetch(calls[1])
+                )
+                or (
+                    raw_guide_fetch(calls[0])
+                    and raw_guide_tool_discovery(calls[1])
+                )
+            )
         )
     )
 
@@ -365,11 +373,11 @@ def candidate_is_named(candidate: str, result: str, russian: bool) -> bool:
         "command": r"\b(?:command|command-line|cli)\b" if not russian else r"\b(?:команд\w*|cli)\b",
         "command-line": r"\b(?:command|command-line|cli)\b" if not russian else r"\b(?:команд\w*|cli)\b",
         "cli": r"\b(?:command|command-line|cli)\b" if not russian else r"\b(?:команд\w*|cli)\b",
-        "web": r"\b(?:web interface|web ui|dashboard)\b" if not russian else r"\b(?:веб-интерфейс\w*|интерфейс\w*|web ui|dashboard)\b",
-        "web-ui": r"\b(?:web interface|web ui|dashboard)\b" if not russian else r"\b(?:веб-интерфейс\w*|интерфейс\w*|web ui|dashboard)\b",
-        "web-interface": r"\b(?:web interface|web ui|dashboard)\b" if not russian else r"\b(?:веб-интерфейс\w*|интерфейс\w*|web ui|dashboard)\b",
-        "dashboard": r"\b(?:web interface|web ui|dashboard)\b" if not russian else r"\b(?:веб-интерфейс\w*|интерфейс\w*|web ui|dashboard)\b",
-        "ui": r"\b(?:web interface|web ui|dashboard|ui)\b" if not russian else r"\b(?:веб-интерфейс\w*|интерфейс\w*|web ui|dashboard|ui)\b",
+        "web": r"\b(?:web interface|web ui|web page|dashboard)\b" if not russian else r"\b(?:веб-(?:интерфейс|страниц)\w*|интерфейс\w*|web ui|dashboard)\b",
+        "web-ui": r"\b(?:web interface|web ui|web page|dashboard)\b" if not russian else r"\b(?:веб-(?:интерфейс|страниц)\w*|интерфейс\w*|web ui|dashboard)\b",
+        "web-interface": r"\b(?:web interface|web ui|web page|dashboard)\b" if not russian else r"\b(?:веб-(?:интерфейс|страниц)\w*|интерфейс\w*|web ui|dashboard)\b",
+        "dashboard": r"\b(?:web interface|web ui|web page|dashboard)\b" if not russian else r"\b(?:веб-(?:интерфейс|страниц)\w*|интерфейс\w*|web ui|dashboard)\b",
+        "ui": r"\b(?:web interface|web ui|web page|dashboard|ui)\b" if not russian else r"\b(?:веб-(?:интерфейс|страниц)\w*|интерфейс\w*|web ui|dashboard|ui)\b",
         "migration": r"\bmigration\w*\b" if not russian else r"\bмиграц\w*\b",
         "package": r"\bpackage\w*\b" if not russian else r"\bпакет\w*\b",
         "library": r"\blibrar\w*\b" if not russian else r"\bбиблиотек\w*\b",
@@ -561,7 +569,7 @@ def main(argv: list[str]) -> int:
         command_shape = r"\b(команд\w*|cli)\b" if russian else r"\b(command|command-line|cli)\b"
         if not re.search(command_shape, lower):
             return fail("the fixture's command surface is absent")
-        web_shape = r"\b(веб-интерфейс\w*|интерфейс\w*|web ui)\b" if russian else r"\b(web interface|dashboard|web ui)\b"
+        web_shape = r"\b(веб-(?:интерфейс|страниц)\w*|интерфейс\w*|web ui)\b" if russian else r"\b(web interface|web page|dashboard|web ui)\b"
         if not re.search(web_shape, lower):
             return fail("the fixture's web surface is absent")
         if not one_question(result):
