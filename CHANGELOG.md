@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.0.16](https://github.com/concordloom/gopnik/compare/v4.0.15...v4.0.16) (2026-08-21)
+
+
+### Bug Fixes
+
+* define the delivery kind mapping ([99c9f18](https://github.com/concordloom/gopnik/commit/99c9f18bd8823b926f3b64f3c1b5011c150a49db))
+
 ## [4.0.15](https://github.com/concordloom/gopnik/compare/v4.0.14...v4.0.15) (2026-08-21)
 
 
