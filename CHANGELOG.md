@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.0.12](https://github.com/concordloom/gopnik/compare/v4.0.11...v4.0.12) (2026-08-21)
+
+
+### Bug Fixes
+
+* accept a natural Stage 1 status ([ad932a4](https://github.com/concordloom/gopnik/commit/ad932a454b8fae76a4e72cff689849e035e18db2))
+
 ## [4.0.11](https://github.com/concordloom/gopnik/compare/v4.0.10...v4.0.11) (2026-08-21)
 
 
