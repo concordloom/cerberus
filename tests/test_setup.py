@@ -1460,20 +1460,50 @@ def test_this_repository_verifies_it_with_a_live_session():
     stage2 = body["verification"]["stage2"]
     live = [c for c in stage2 if "claude -p" in c]
     assert live, f"stage2 has no live agent session:\n" + "\n".join(stage2)
-    assert len(live) == 10, live
-    assert sum("--session-id" in command for command in live) == 2, live
-    assert sum("--resume" in command for command in live) == 8, live
+    # #73 added the gate's own pair. Ten setup turns, two gate runs, and every
+    # one of them handed to an oracle — a live session nothing reads is an
+    # expensive way to prove nothing.
+    assert len(live) == 12, live
+    setup_live = [c for c in live if "check_live_setup_turn.py" in c]
+    gate_live = [c for c in live if "check_live_gate_turn.py" in c]
+    assert len(setup_live) == 10, setup_live
+    assert len(gate_live) == 2, gate_live
+    unchecked = [c for c in live if c not in setup_live and c not in gate_live]
+    assert not unchecked, f"a live session with no oracle: {unchecked}"
+
+    assert sum("--session-id" in command for command in setup_live) == 2, setup_live
+    assert sum("--resume" in command for command in setup_live) == 8, setup_live
     assert not any("--continue" in command for command in live), live
-    for command in live:
+    for command in setup_live:
         assert (
             'cd "$GOPNIK_STAGE2_ROOT/scratch-en"' in command
             or 'cd "$GOPNIK_STAGE2_ROOT/scratch-ru"' in command
         ), command
-        assert "check_live_setup_turn.py" in command, (
-            f"this cannot fail, so it proves nothing: {command}")
+        # The oracle no longer holds this fixture's strings, so the route has to
+        # say which fixture it is checking.
+        assert '--fixture "$GOPNIK_STAGE2_ROOT/src/tests/fixtures/hybrid"' in command, command
 
-    english = [command for command in live if "session-en" in command]
-    russian = [command for command in live if "session-ru" in command]
+    # The gate pair. Opposite verdicts from one line of product code is the
+    # whole check: two fixtures that agreed would pass a gate stuck on either
+    # answer, so the verdicts are read from the files rather than assumed.
+    verdicts = {}
+    for name, command in zip(("gate-red-stage1", "gate-ready-scoped"), gate_live):
+        assert f'cd "$GOPNIK_STAGE2_ROOT/{name}"' in command, command
+        assert f"src/tests/fixtures/{name}" in command, command
+        assert "jq -r .prompt" in command, (
+            f"the prompt belongs to the fixture, not to this file: {command}")
+        assert "--output-format stream-json" in command and "--verbose" in command, command
+        verdicts[name] = json.loads(
+            (ROOT / "tests" / "fixtures" / name / "expected.json").read_text(encoding="utf-8")
+        )["verdict"]
+    assert set(verdicts.values()) == {"READY", "NOT READY"}, verdicts
+
+    materialise = next(c for c in stage2 if "gate-red-stage1 gate-ready-scoped" in c)
+    assert 'test ! -e "$GOPNIK_STAGE2_ROOT/$GOPNIK_FIXTURE/.stage1-ran"' in materialise, (
+        f"without a clean start the marker proves nothing: {materialise}")
+
+    english = [command for command in setup_live if "session-en" in command]
+    russian = [command for command in setup_live if "session-ru" in command]
     assert len(english) == 5, english
     assert len(russian) == 5, russian
     for commands, modes in (
@@ -1500,10 +1530,17 @@ def test_this_repository_verifies_it_with_a_live_session():
         assert "--verbose" in stand, stand
         assert "jq -e" in stand and 'verification.artifact_kind == "service"' in stand
         assert 'has("//artifact_kind") | not' in stand, stand
-    fixture = next(command for command in stage2 if "hybrid-fixture" in command)
-    assert "printf stage1-ran > .stage1-ran" in fixture, fixture
+    # #73: the fixture is a tree in tests/fixtures, copied from the clone at the
+    # revision under test. It used to be a 1179-character printf chain here,
+    # which is why there was only ever one of it.
+    fixture = next(command for command in stage2 if "scratch-en scratch-ru" in command)
+    assert "src/tests/fixtures/hybrid/repo" in fixture, fixture
+    assert "printf" not in fixture, f"the printf chain is back: {fixture}"
+    assert 'test ! -e "$GOPNIK_STAGE2_ROOT/$GOPNIK_FIXTURE/.stage1-ran"' in fixture, fixture
+    assert (ROOT / "tests" / "fixtures" / "hybrid" / "repo" / "check.sh").is_file(), (
+        "stage2 copies a fixture that is not in the tree")
 
-    joined = "\n".join(live)
+    joined = "\n".join(setup_live)
     assert "read this complete raw guide via stdout only" in joined, joined
     assert "прочитай эту полную raw-инструкцию только через stdout" in joined, joined
     assert "For this agent across my projects." in joined, joined

@@ -1,0 +1,6 @@
+[project]
+name = "hybrid-fixture"
+version = "0.1.0"
+
+[project.scripts]
+hybrid-fixture = "app.cli:main"

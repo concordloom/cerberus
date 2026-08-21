@@ -56,9 +56,34 @@ SURFACES_QUESTION_RU = (
 )
 
 
+#: Where the fixture facts live when the caller names no fixture. This is a
+#: path rather than a table of literals on purpose: the strings below used to be
+#: spelled out in this file, which is what made a second fixture impossible.
+DEFAULT_FIXTURE = (
+    pathlib.Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "hybrid"
+)
+
+#: Keys a setup fixture owes. Absent, each one would weaken a check rather than
+#: fail it.
+REQUIRED = ("role", "stage1", "artifact_kind", "surfaces", "marker", "internal_details")
+
+
 def fail(message: str) -> int:
     print(message, file=sys.stderr)
     return 1
+
+
+def expectations(directory: pathlib.Path) -> dict:
+    """What this fixture, rather than this script, says about itself."""
+    body = json.loads((directory / "expected.json").read_text(encoding="utf-8"))
+    if body.get("role") != "setup":
+        raise ValueError(f"{directory}: expected.json is not a setup fixture")
+    missing = [key for key in REQUIRED if key not in body]
+    if missing:
+        raise ValueError(f"{directory}: expected.json is missing {missing}")
+    if len(body["stage1"]) != 1:
+        raise ValueError(f"{directory}: this oracle reads one Stage 1 command")
+    return body
 
 
 def records(path: pathlib.Path) -> list[object]:
@@ -280,7 +305,9 @@ def pure_python_helper_argv(command: object) -> list[str] | None:
     return argv
 
 
-def stage1_events(items: list[object], expected_language: str) -> list[tuple[int, str]]:
+def stage1_events(
+    items: list[object], expected_language: str, stage1: str
+) -> list[tuple[int, str]]:
     found = []
     for index, item in enumerate(items):
         for value in nested_dicts(item):
@@ -318,7 +345,7 @@ def stage1_events(items: list[object], expected_language: str) -> list[tuple[int
                 and valid
                 and flags.get("--defer-artifact-kind") is True
                 and flags.get("--language") == expected_language
-                and flags.get("--stage1") == "./check.sh"
+                and flags.get("--stage1") == stage1
                 and flags.get("--timeout-seconds", "120") == "120"
                 and set(flags) <= {
                     "--defer-artifact-kind",
@@ -332,7 +359,7 @@ def stage1_events(items: list[object], expected_language: str) -> list[tuple[int
     return found
 
 
-def confirmation_events(items: list[object]) -> list[tuple[int, str]]:
+def confirmation_events(items: list[object], kind: str) -> list[tuple[int, str]]:
     found = []
     for index, item in enumerate(items):
         for value in nested_dicts(item):
@@ -346,7 +373,7 @@ def confirmation_events(items: list[object]) -> list[tuple[int, str]]:
                 name == "bash"
                 and argv is not None
                 and len(argv) == 4
-                and argv[2:] == ["--confirm-artifact-kind", "service"]
+                and argv[2:] == ["--confirm-artifact-kind", kind]
                 and isinstance(value.get("id"), str)
             ):
                 found.append((index, value["id"]))
@@ -386,6 +413,54 @@ def successful_result(value: dict, required: str | None = None) -> bool:
     )
 
 
+#: One entry per surface a project can have, with how each is worded. The rule
+#: that reads it is "never name a surface the critic refuted"; which surfaces
+#: survived is a fact about the fixture, so the two are combined rather than
+#: written out as one list. Before #73 this was a fixed denylist, which was only
+#: correct for the one fixture that existed: it banned `library` and `migration`
+#: outright, so a project whose real surface is a library could not be checked.
+SURFACE_TERMS = {
+    "command": (r"command\w*|command-line|cli", r"команд\w*|cli"),
+    "web": (r"web interface|web ui|web page|dashboard", r"веб-\w*|дашборд\w*"),
+    "migration": (r"migration\w*", r"миграц\w*"),
+    "package": (r"package\w*", r"пакет\w*"),
+    "library": (r"librar\w*", r"библиотек\w*"),
+    "plugin": (r"plugin\w*", r"плагин\w*"),
+    "service": (r"service\w*|api|http", r"сервис\w*|api|http"),
+    "mobile": (r"mobile\w*", r"мобильн\w*"),
+    "job": (r"background\w*|job\w*", r"фонов\w*|задач\w*"),
+    "chart": (r"chart\w*", r"чарт\w*"),
+    "release": (r"release\w*|deploy\w*", r"релиз\w*|разв[её]рт\w*"),
+}
+
+#: The spellings a critic may use for the same surface.
+SURFACE_ALIASES = {
+    "command-line": "command",
+    "cli": "command",
+    "web-ui": "web",
+    "web-interface": "web",
+    "dashboard": "web",
+    "ui": "web",
+    "mobile-ui": "mobile",
+}
+
+
+def canonical_surface(name: str) -> str:
+    name = name.strip().lower().replace("_", "-")
+    return SURFACE_ALIASES.get(name, name)
+
+
+def refuted_surface_shape(surfaces: set[str], russian: bool) -> str:
+    """Every surface this fixture does not have, as one alternation."""
+    survived = {canonical_surface(name) for name in surfaces}
+    terms = [
+        pair[1 if russian else 0]
+        for name, pair in SURFACE_TERMS.items()
+        if name not in survived
+    ]
+    return r"\b(?:" + "|".join(terms) + r")\b"
+
+
 def candidate_is_named(candidate: str, result: str, russian: bool) -> bool:
     candidate = candidate.replace("_", "-").strip().lower()
     patterns = {
@@ -414,7 +489,9 @@ def candidate_is_named(candidate: str, result: str, russian: bool) -> bool:
     return candidate.replace("-", " ") in result.lower()
 
 
-def completed_fixture_critic_result(value: dict, result: str, russian: bool) -> bool:
+def completed_fixture_critic_result(
+    value: dict, result: str, russian: bool, expected: set[str]
+) -> bool:
     if not successful_result(value):
         return False
     payload = value.get("content")
@@ -443,16 +520,8 @@ def completed_fixture_critic_result(value: dict, result: str, russian: bool) -> 
         return False
     surfaces = lines[-2][len(CRITIC_SURFACES_MARKER):].strip().lower()
     candidates = {item.strip() for item in surfaces.split(",") if item.strip()}
-    canonical = set()
-    for candidate in candidates:
-        candidate = candidate.replace("_", "-")
-        if candidate in {"command", "command-line", "cli"}:
-            canonical.add("command")
-        elif candidate in {"web", "web-ui", "web-interface", "dashboard", "ui"}:
-            canonical.add("web")
-        else:
-            canonical.add(candidate)
-    if canonical != {"command", "web"}:
+    canonical = {canonical_surface(candidate) for candidate in candidates}
+    if canonical != {canonical_surface(name) for name in expected}:
         return False
     if not result.endswith("?"):
         return False
@@ -463,12 +532,26 @@ def completed_fixture_critic_result(value: dict, result: str, russian: bool) -> 
 
 
 def main(argv: list[str]) -> int:
+    argv = list(argv)
+    fixture_dir = DEFAULT_FIXTURE
+    if "--fixture" in argv:
+        at = argv.index("--fixture")
+        if at + 1 >= len(argv):
+            return fail("--fixture needs a directory")
+        fixture_dir = pathlib.Path(argv[at + 1])
+        del argv[at : at + 2]
+
     if len(argv) not in (3, 4):
         return fail(
-            "usage: check_live_setup_turn.py "
+            "usage: check_live_setup_turn.py [--fixture DIR] "
             "LANGUAGE|SCOPE|SURFACES|STAND|ACCESS and -RU variants "
             "TRANSCRIPT [STAGE1_MARKER]"
         )
+
+    try:
+        fixture = expectations(fixture_dir)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        return fail(str(exc))
 
     mode = argv[1].lower()
     path = pathlib.Path(argv[2])
@@ -504,9 +587,11 @@ def main(argv: list[str]) -> int:
             marker = pathlib.Path(argv[3]).read_text(encoding="utf-8")
         except OSError:
             return fail("Stage 1 marker is absent")
-        if marker != "stage1-ran":
+        if marker != fixture["marker"]["value"]:
             return fail("Stage 1 marker has the wrong value")
-        stage1_calls = stage1_events(items, "ru" if russian else "en")
+        stage1_calls = stage1_events(
+            items, "ru" if russian else "en", fixture["stage1"][0]
+        )
         if not stage1_calls:
             return fail("the live trace does not show the Stage 1 setup command")
         stage1_call_index, stage1_id = stage1_calls[0]
@@ -543,7 +628,9 @@ def main(argv: list[str]) -> int:
         critic_results = [
             (index, value)
             for index, value in tool_results(items, critic_id)
-            if completed_fixture_critic_result(value, result, russian)
+            if completed_fixture_critic_result(
+                value, result, russian, set(fixture["surfaces"])
+            )
         ]
         if not critic_results:
             return fail("the independent critic has no completed surface analysis")
@@ -556,17 +643,11 @@ def main(argv: list[str]) -> int:
             < result_index
         ):
             return fail("Stage 1, independent critic, and user question are out of order")
-        banned_terms = [
-            "gopnik.json",
-            "artifact_kind",
-            "setuptools",
-            "package discovery",
-            "workflow has no checkout",
-            "missing deploy",
-            "deploy.sh",
-        ]
-        if russian:
-            banned_terms.extend(("ошибк", "отсутствующ", "дефект workflow"))
+        # The first two are internal vocabulary and belong to the product;
+        # the rest are defects of this particular tree and belong to it.
+        banned_terms = ["gopnik.json", "artifact_kind"] + list(
+            fixture["internal_details"]["ru" if russian else "en"]
+        )
         for banned in banned_terms:
             if banned in lower:
                 return fail(f"internal defect detail leaked: {banned}")
@@ -582,6 +663,12 @@ def main(argv: list[str]) -> int:
         )
         if not green:
             return fail("the response does not report the green Stage 1 result")
+        # SKILL.md fixes the wording for two plausible surfaces. A fixture with
+        # a different count needs its own rule from the skill, not a guess here.
+        if len(fixture["surfaces"]) != 2:
+            return fail(
+                f"no question shape is defined for {len(fixture['surfaces'])} surfaces"
+            )
         question_shape = (
             r"только .+только .+или оба"
             if russian
@@ -589,12 +676,9 @@ def main(argv: list[str]) -> int:
         )
         if not re.search(question_shape, lower):
             return fail("the response does not ask one concrete surfaces question")
-        command_shape = r"\b(команд\w*|cli)\b" if russian else r"\b(command|command-line|cli)\b"
-        if not re.search(command_shape, lower):
-            return fail("the fixture's command surface is absent")
-        web_shape = r"\b(веб-(?:интерфейс|страниц)\w*|интерфейс\w*|web ui)\b" if russian else r"\b(web interface|web page|dashboard|web ui)\b"
-        if not re.search(web_shape, lower):
-            return fail("the fixture's web surface is absent")
+        for candidate in fixture["surfaces"]:
+            if not candidate_is_named(candidate, result, russian):
+                return fail(f"the fixture's {candidate} surface is absent")
         if not one_question(result):
             return fail("the surfaces turn must contain exactly one question")
         if not result.endswith("?"):
@@ -610,16 +694,7 @@ def main(argv: list[str]) -> int:
         )
         if re.search(forbidden_question_terms, question.lower()):
             return fail("the surfaces question negates or excludes a surviving candidate")
-        extra_surface_terms = (
-            r"\b(?:миграц\w*|пакет\w*|библиотек\w*|плагин\w*|сервис\w*|"
-            r"api|http|мобильн\w*|фонов\w*|задач\w*|чарт\w*|релиз\w*|"
-            r"разв[её]рт\w*)\b"
-            if russian
-            else r"\b(?:migration\w*|package\w*|librar\w*|plugin\w*|service\w*|"
-                 r"api|http|mobile\w*|background\w*|job\w*|chart\w*|release\w*|"
-                 r"deploy\w*)\b"
-        )
-        if re.search(extra_surface_terms, lower):
+        if re.search(refuted_surface_shape(set(fixture["surfaces"]), russian), lower):
             return fail("a non-surviving fixture surface leaked into the user turn")
         if len(result.split()) > 140:
             return fail("the surfaces turn is too long")
@@ -649,7 +724,7 @@ def main(argv: list[str]) -> int:
             return fail("the stand turn is not the one focused question")
         if len(tool_uses(items)) != 1:
             return fail("the stand turn contains tool activity beyond kind confirmation")
-        calls = confirmation_events(items)
+        calls = confirmation_events(items, fixture["artifact_kind"])
         if len(calls) != 1:
             return fail("the stand turn does not show one exact artifact-kind confirmation")
         call_index, tool_id = calls[0]
@@ -658,8 +733,8 @@ def main(argv: list[str]) -> int:
             for index, value in tool_results(items, tool_id)
             if successful_result(
                 value,
-                "Confirmed artifact kind 'service' in gopnik.json. "
-                "Stage 1 checks were preserved and not rerun.",
+                f"Confirmed artifact kind '{fixture['artifact_kind']}' in "
+                "gopnik.json. Stage 1 checks were preserved and not rerun.",
             )
         ]
         if len(completed) != 1 or not (call_index < completed[0][0] < result_index):

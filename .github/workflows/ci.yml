@@ -48,6 +48,13 @@ jobs:
           python3 scripts/check_commands.py
           python3 tests/test_commands.py
 
+      # The fixture pack is what both stages point the skills at, and the
+      # oracles are what read the result. An oracle that cannot fail costs a
+      # billed agent session and proves nothing, so every rejection it owes is
+      # exercised here against a synthetic transcript.
+      - name: Fixtures agree with their expectations, and the oracles can fail
+        run: python3 tests/test_fixtures.py
+
       # Setup is the first thing a new user meets, and two of its properties
       # are usually untestable: that it writes down only checks it actually
       # ran, and that what the user reads is free of vocabulary that means

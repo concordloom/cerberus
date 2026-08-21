@@ -1,0 +1,28 @@
+{
+  "//": "The onboarding fixture: a Python command that also serves a web interface, deployed by a workflow. Until this file existed these values were literals inside scripts/check_live_setup_turn.py, which is why a second fixture could not be added without forking the oracle.",
+  "role": "setup",
+  "stage1": ["./check.sh"],
+  "artifact_kind": "service",
+  "surfaces": ["command", "web"],
+  "marker": {"path": ".stage1-ran", "value": "stage1-ran"},
+  "//internal_details": "Defects a critic really does find in this tree. They are evidence for the classification and must never reach the person being onboarded, so the oracle fails when one is quoted at them.",
+  "internal_details": {
+    "en": [
+      "setuptools",
+      "package discovery",
+      "workflow has no checkout",
+      "missing deploy",
+      "deploy.sh"
+    ],
+    "ru": [
+      "setuptools",
+      "package discovery",
+      "workflow has no checkout",
+      "missing deploy",
+      "deploy.sh",
+      "ошибк",
+      "отсутствующ",
+      "дефект workflow"
+    ]
+  }
+}
