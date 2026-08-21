@@ -1799,6 +1799,11 @@ def test_live_setup_oracle_rejects_shortcuts_and_internal_leaks():
         "After delivery, do people use only the command, only the web interface, or both?"
     ) == 0
     assert check(
+        "Stage 1 passes: the project's own check ran green. "
+        "I found a command-line app and a web interface. "
+        "After delivery, do people use only the command, only the web interface, or both?"
+    ) == 0
+    assert check(
         "Stage 1 is ready — the project's own check runs and passes. "
         "I found a command-line tool and an operator dashboard web page. "
         "After delivery, do people use only the command-line tool, only the dashboard, or both?"

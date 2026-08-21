@@ -539,7 +539,7 @@ def main(argv: list[str]) -> int:
         green = (
             re.search(r"(?:^|[.!?]\s+)stage 1 (?:готова|прошла)\s*(?:[.!?:—–-]|$)", lower)
             if russian
-            else re.search(r"(?:^|[.!?]\s+)stage 1 (?:passed|is ready)\s*(?:[.!?:—–-]|$)", lower)
+            else re.search(r"(?:^|[.!?]\s+)stage 1 (?:passed|passes|is ready)\s*(?:[.!?:—–-]|$)", lower)
         )
         if not green:
             return fail("the response does not report the green Stage 1 result")
