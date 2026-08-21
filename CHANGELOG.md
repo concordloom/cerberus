@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.0.14](https://github.com/concordloom/gopnik/compare/v4.0.13...v4.0.14) (2026-08-21)
+
+
+### Bug Fixes
+
+* recognize bounded Stage 2 phrasing ([91606b0](https://github.com/concordloom/gopnik/commit/91606b04161197587f9fa3541bbf0852bdbc3d2d))
+
 ## [4.0.13](https://github.com/concordloom/gopnik/compare/v4.0.12...v4.0.13) (2026-08-21)
 
 
