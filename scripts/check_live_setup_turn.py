@@ -488,7 +488,15 @@ def main(argv: list[str]) -> int:
         stages = [orientation.find(label) for label in ("stage 0", "stage 1", "stage 2")]
         if any(index < 0 for index in stages) or stages != sorted(stages):
             return fail("the three-stage orientation is absent or out of order")
-        bounded = "после" in orientation if russian else "after stage 1" in orientation
+        bounded = (
+            "после" in orientation
+            if russian
+            else bool(re.search(
+                r"\b(?:after stage 1|only (?:once|when) stage 1 "
+                r"(?:works|passes|is ready))\b",
+                orientation,
+            ))
+        )
         if orientation.count("stage 2") != 1 or not bounded:
             return fail("Stage 2 was not bounded behind Stage 1")
         stage1_results = [

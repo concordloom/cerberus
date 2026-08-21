@@ -1670,6 +1670,7 @@ def test_live_setup_oracle_rejects_shortcuts_and_internal_leaks():
         critic_content: object | None = None,
         stage1_command: str | None = None,
         orientation: bool = True,
+        orientation_text: str | None = None,
     ) -> int:
         russian = mode.endswith("-ru")
         events = []
@@ -1678,7 +1679,7 @@ def test_live_setup_oracle_rejects_shortcuts_and_internal_leaks():
                 "type": "assistant",
                 "message": {"content": [{
                     "type": "text",
-                    "text": (
+                    "text": orientation_text or (
                         "Stage 0 определяет возможные сбои. Stage 1 проверяет код. "
                         "Stage 2 проверяет поставленный результат только после Stage 1."
                         if russian
@@ -1793,6 +1794,13 @@ def test_live_setup_oracle_rejects_shortcuts_and_internal_leaks():
         ),
     ) == 0
     assert check(good, orientation=False) != 0
+    assert check(
+        good,
+        orientation_text=(
+            "Stage 0 maps possible failures. Stage 1 checks the code. "
+            "Stage 2 checks the delivered result; discuss it only once Stage 1 works."
+        ),
+    ) == 0
     assert check(
         "Stage 1 is ready — the project's own check runs and passes. "
         "I found a command-line app and a web interface. "
