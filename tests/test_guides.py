@@ -180,6 +180,17 @@ def test_surface_turn_names_the_green_stage1_status_before_the_question():
             assert phrase in text, (path.name, phrase)
 
 
+def test_kind_confirmation_is_one_exact_helper_call():
+    for path, phrases in (
+        (INSTALL, ("Invoke the setup helper exactly once", "do not probe `--help`", "repeat `--language`")),
+        (SETUP_SKILLS[0], ("Invoke the setup helper exactly once", "do not probe `--help`", "repeat `--language`")),
+        (SETUP_SKILLS[1], ("вызови setup-helper ровно один раз", "не проверяй `--help`", "не повторяй `--language`")),
+    ):
+        text = _flat(path)
+        for phrase in phrases:
+            assert phrase in text, (path.name, phrase)
+
+
 def test_install_persists_the_language_once_for_future_runs_and_uninstall():
     text = _flat(INSTALL)
     for phrase in (

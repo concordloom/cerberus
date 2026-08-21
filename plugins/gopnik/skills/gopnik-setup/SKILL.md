@@ -162,7 +162,10 @@ After Stage 1 succeeds, report the result in one short sentence.
 The script writes the selected language and the passing Stage 1 commands, but
 guided setup leaves the delivery kind unset until the confirmation step below.
 After the person answers, finalize the primary kind with
-`--confirm-artifact-kind KIND`; this preserves the Stage 1 evidence without
+`--confirm-artifact-kind KIND`. Invoke the setup helper exactly once in this
+step, with that as its only option: do not probe `--help`, repeat `--language`,
+or combine it with any setup option. The selected language is already stored;
+this preserves the Stage 1 evidence without
 running it again. The script merges rather than replaces existing data. A
 hand-written artifact kind, operational note, or legacy config path must
 survive.

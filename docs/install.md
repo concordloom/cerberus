@@ -335,7 +335,10 @@ infrastructure, draft or run Stage 2, or ask about a stand, access, or browser
 tooling.
 
 After the answer, finalize the primary kind with
-`--confirm-artifact-kind KIND`. For a hybrid project, choose the kind at the
+`--confirm-artifact-kind KIND`. Invoke the setup helper exactly once in this
+step, with that as its only option: do not probe `--help`, repeat `--language`,
+or combine it with any setup option. The selected language and Stage 1 evidence
+are already stored. For a hybrid project, choose the kind at the
 farthest confirmed delivery boundary, then cover every confirmed surface in
 Stage 2 and the operational notes. Never discard the other surfaces because the
 internal record has one primary kind.
