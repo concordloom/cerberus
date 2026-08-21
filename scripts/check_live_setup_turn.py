@@ -479,11 +479,10 @@ def main(argv: list[str]) -> int:
         return fail(str(exc))
 
     if mode == "language":
-        calls = tool_uses(items)
         if result != LANGUAGE_QUESTION:
             return fail(result)
-        if calls:
-            return fail("tool activity occurred before the language hard boundary")
+        if not safe_raw_guide_bootstrap(tool_uses(items)):
+            return fail("activity beyond reading the raw guide occurred before the language question")
         return 0
 
     if mode == "scope":

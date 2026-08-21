@@ -22,9 +22,7 @@ tree—and reports exactly what was and was not proven.
 Paste this into your coding agent:
 
 ```text
-Before using any tools, ask me exactly:
-Which language would you like me to use: English or Russian?
-Wait for my answer. Then install and configure Gopnik by reading the complete raw guide without saving it to a file, and follow it exactly:
+Before anything else, read this complete raw guide via stdout only—do not save it—then follow it exactly:
 https://raw.githubusercontent.com/concordloom/gopnik/main/docs/install.md
 ```
 
