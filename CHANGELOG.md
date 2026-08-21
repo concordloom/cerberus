@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.0.18](https://github.com/concordloom/gopnik/compare/v4.0.17...v4.0.18) (2026-08-21)
+
+
+### Bug Fixes
+
+* recognize progressive Stage 1 status ([cff9284](https://github.com/concordloom/gopnik/commit/cff92846f530e4a05ea6b1c9fbef302405b0fea1))
+
 ## [4.0.17](https://github.com/concordloom/gopnik/compare/v4.0.16...v4.0.17) (2026-08-21)
 
 
