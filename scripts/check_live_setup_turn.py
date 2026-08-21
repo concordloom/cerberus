@@ -153,6 +153,25 @@ def assistant_text_before(items: list[object], limit: int) -> str:
     return " ".join(blocks)
 
 
+def assistant_text_between(items: list[object], start: int, end: int) -> str:
+    blocks = []
+    for index, item in enumerate(items):
+        if index <= start or index >= end or not isinstance(item, dict) or item.get("type") != "assistant":
+            continue
+        message = item.get("message")
+        content = message.get("content") if isinstance(message, dict) else None
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if (
+                isinstance(block, dict)
+                and block.get("type") == "text"
+                and isinstance(block.get("text"), str)
+            ):
+                blocks.append(block["text"])
+    return " ".join(blocks)
+
+
 def raw_guide_fetch(value: dict) -> bool:
     name = str(value.get("name") or "").lower()
     payload = value.get("input")
@@ -552,10 +571,15 @@ def main(argv: list[str]) -> int:
         for banned in banned_terms:
             if banned in lower:
                 return fail(f"internal defect detail leaked: {banned}")
+        status_text = (
+            assistant_text_between(items, stage1_result_index, critic_call_index)
+            + " "
+            + result
+        ).strip().lower()
         green = (
-            re.search(r"(?:^|[.!?]\s+)stage 1 (?:готова|прошла)\s*(?:[.!?:—–-]|$)", lower)
+            re.search(r"(?:^|[.!?]\s+)stage 1 (?:готова|прошла)\s*(?:[.!?:—–-]|$)", status_text)
             if russian
-            else re.search(r"(?:^|[.!?]\s+)stage 1 (?:passed|passes|is ready)\s*(?:[.!?:—–-]|$)", lower)
+            else re.search(r"(?:^|[.!?]\s+)stage 1 (?:passed|passes|is ready)\s*(?:[.!?:—–-]|$)", status_text)
         )
         if not green:
             return fail("the response does not report the green Stage 1 result")

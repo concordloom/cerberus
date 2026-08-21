@@ -1671,6 +1671,7 @@ def test_live_setup_oracle_rejects_shortcuts_and_internal_leaks():
         stage1_command: str | None = None,
         orientation: bool = True,
         orientation_text: str | None = None,
+        status_before_critic: str | None = None,
     ) -> int:
         russian = mode.endswith("-ru")
         events = []
@@ -1710,6 +1711,14 @@ def test_live_setup_oracle_rejects_shortcuts_and_internal_leaks():
                 "content": "Stage 1 set up. Delivery surfaces still need confirmation.",
             }]},
         }])
+        if status_before_critic is not None:
+            events.append({
+                "type": "assistant",
+                "message": {"content": [{
+                    "type": "text",
+                    "text": status_before_critic,
+                }]},
+            })
         if critic:
             events.append({
                 "type": "assistant",
@@ -1769,6 +1778,11 @@ def test_live_setup_oracle_rejects_shortcuts_and_internal_leaks():
     assert check(good) == 0
     assert check(good, critic=False) != 0
     assert check("I found a CLI and UI. Do people use only CLI, only UI, or both?") != 0
+    assert check(
+        "I found a command and a web interface. After delivery, do people use "
+        "only the command, only the web interface, or both?",
+        status_before_critic="Stage 1 is ready — the project's local check passed.",
+    ) == 0
     assert check(good + " The details are in gopnik.json.") != 0
     assert check(good.replace("Stage 1 passed.", "Stage 1 may pass.")) != 0
     assert check(good + " Should I continue?") != 0
