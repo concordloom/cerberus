@@ -1504,7 +1504,8 @@ def test_this_repository_verifies_it_with_a_live_session():
     assert "printf stage1-ran > .stage1-ran" in fixture, fixture
 
     joined = "\n".join(live)
-    assert "Read the complete raw guide without saving it to a file" in joined, joined
+    assert "Before using any tools, ask me exactly" in joined, joined
+    assert "reading the complete raw guide without saving it to a file" in joined, joined
     assert "For this agent across my projects." in joined, joined
     assert "Both the installed command and the deployed web interface are used." in joined, joined
     assert "Russian" in joined and "Только в этом репозитории." in joined, joined
@@ -1953,7 +1954,7 @@ def test_live_setup_oracle_rejects_shortcuts_and_internal_leaks():
         "Which language would you like me to use: English or Russian?",
         "WebFetch",
         {"url": "https://raw.githubusercontent.com/concordloom/gopnik/main/docs/install.md"},
-    ) == 0
+    ) != 0
     assert check_tool_turn(
         "language",
         "Which language would you like me to use: English or Russian?",
@@ -1980,7 +1981,7 @@ def test_live_setup_oracle_rejects_shortcuts_and_internal_leaks():
             ("ToolSearch", {"query": "select:WebFetch", "max_results": 5}),
             ("Bash", safe_fetch),
         ],
-    ) == 0
+    ) != 0
     assert check_tool_chain(
         "language",
         language_question,
@@ -1994,7 +1995,7 @@ def test_live_setup_oracle_rejects_shortcuts_and_internal_leaks():
                 "description": "Fetch raw install guide",
             }),
         ],
-    ) == 0
+    ) != 0
     assert check_tool_chain(
         "language",
         language_question,
@@ -2019,7 +2020,7 @@ def test_live_setup_oracle_rejects_shortcuts_and_internal_leaks():
             "curl -fsSL "
             "https://raw.githubusercontent.com/concordloom/gopnik/main/docs/install.md"
         )},
-    ) == 0
+    ) != 0
     assert check_tool_turn(
         "language",
         "Which language would you like me to use: English or Russian?",
@@ -2028,7 +2029,7 @@ def test_live_setup_oracle_rejects_shortcuts_and_internal_leaks():
             "curl -sL --max-time 30 "
             "https://raw.githubusercontent.com/concordloom/gopnik/main/docs/install.md"
         )},
-    ) == 0
+    ) != 0
     assert check_tool_turn(
         "language",
         "Which language would you like me to use: English or Russian?",
@@ -2037,7 +2038,7 @@ def test_live_setup_oracle_rejects_shortcuts_and_internal_leaks():
             "curl -sSL --max-time 60 "
             "https://raw.githubusercontent.com/concordloom/gopnik/main/docs/install.md"
         )},
-    ) == 0
+    ) != 0
     assert check_tool_turn(
         "language",
         "Which language would you like me to use: English or Russian?",
@@ -2055,7 +2056,7 @@ def test_live_setup_oracle_rejects_shortcuts_and_internal_leaks():
             "wget -qO- "
             "https://raw.githubusercontent.com/concordloom/gopnik/main/docs/install.md"
         )},
-    ) == 0
+    ) != 0
     for writing_fetch in (
         "curl -fsSL https://raw.githubusercontent.com/concordloom/gopnik/main/docs/install.md -o /tmp/premature-install.md",
         "wget https://raw.githubusercontent.com/concordloom/gopnik/main/docs/install.md -O /tmp/premature-install.md",
@@ -2079,6 +2080,22 @@ def test_live_setup_oracle_rejects_shortcuts_and_internal_leaks():
         "Where should I install Gopnik: for this agent across your projects, "
         "or only in this repository so the team receives it with the project?",
     ) == 0
+    assert check_tool_turn(
+        "scope",
+        "Where should I install Gopnik: for this agent across your projects, "
+        "or only in this repository so the team receives it with the project?",
+        "WebFetch",
+        {"url": "https://raw.githubusercontent.com/concordloom/gopnik/main/docs/install.md"},
+    ) == 0
+    assert check_tool_chain(
+        "scope",
+        "Where should I install Gopnik: for this agent across your projects, "
+        "or only in this repository so the team receives it with the project?",
+        [
+            ("ToolSearch", {"query": "select:WebFetch", "max_results": 5}),
+            ("Bash", safe_fetch),
+        ],
+    ) == 0
     assert check_simple("scope", "Should I install it globally?") != 0
     assert check_tool_turn(
         "scope",
@@ -2091,6 +2108,13 @@ def test_live_setup_oracle_rejects_shortcuts_and_internal_leaks():
         "scope-ru",
         "Куда установить Gopnik: для этого агента во всех ваших проектах или "
         "только в этот репозиторий, чтобы команда получала его вместе с проектом?",
+    ) == 0
+    assert check_tool_turn(
+        "scope-ru",
+        "Куда установить Gopnik: для этого агента во всех ваших проектах или "
+        "только в этот репозиторий, чтобы команда получала его вместе с проектом?",
+        "Bash",
+        safe_fetch,
     ) == 0
     assert check_tool_turn(
         "scope-ru",

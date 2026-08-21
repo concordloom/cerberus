@@ -223,6 +223,18 @@ def raw_guide_tool_discovery(value: dict) -> bool:
     )
 
 
+def safe_raw_guide_bootstrap(calls: list[dict]) -> bool:
+    return (
+        not calls
+        or (len(calls) == 1 and raw_guide_fetch(calls[0]))
+        or (
+            len(calls) == 2
+            and raw_guide_tool_discovery(calls[0])
+            and raw_guide_fetch(calls[1])
+        )
+    )
+
+
 def pure_python_helper_argv(command: object) -> list[str] | None:
     if not isinstance(command, str):
         return None
@@ -443,27 +455,18 @@ def main(argv: list[str]) -> int:
         calls = tool_uses(items)
         if result != LANGUAGE_QUESTION:
             return fail(result)
-        safe_bootstrap = (
-            not calls
-            or (len(calls) == 1 and raw_guide_fetch(calls[0]))
-            or (
-                len(calls) == 2
-                and raw_guide_tool_discovery(calls[0])
-                and raw_guide_fetch(calls[1])
-            )
-        )
-        if not safe_bootstrap:
+        if calls:
             return fail("tool activity occurred before the language hard boundary")
         return 0
 
     if mode == "scope":
-        if tool_uses(items):
-            return fail("tool activity occurred before the installation-scope answer")
+        if not safe_raw_guide_bootstrap(tool_uses(items)):
+            return fail("activity beyond reading the raw guide occurred before the installation-scope answer")
         return 0 if result == SCOPE_QUESTION else fail(result)
 
     if mode == "scope-ru":
-        if tool_uses(items):
-            return fail("tool activity occurred before the Russian installation-scope answer")
+        if not safe_raw_guide_bootstrap(tool_uses(items)):
+            return fail("activity beyond reading the raw guide occurred before the Russian installation-scope answer")
         return 0 if result == SCOPE_QUESTION_RU else fail(result)
 
     lower = result.lower()

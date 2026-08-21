@@ -22,7 +22,9 @@ Gopnik — навык состязательной проверки для ИИ-
 Отправьте своему ИИ-агенту:
 
 ```text
-Установи и настрой Gopnik. Прочитай полную raw-инструкцию, не сохраняя её в файл, и точно следуй ей:
+До любых инструментов задай мне ровно этот вопрос:
+Which language would you like me to use: English or Russian?
+Дождись ответа. Затем установи и настрой Gopnik: прочитай полную raw-инструкцию, не сохраняя её в файл, и точно следуй ей:
 https://raw.githubusercontent.com/concordloom/gopnik/main/docs/install.md
 ```
 
