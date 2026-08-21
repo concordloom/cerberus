@@ -1,9 +1,10 @@
 {
-  "//": "The same change, working, on a project that declared its boundary unreachable with a reason. The gate must narrow rather than refuse: a READY verdict that still names Stage 2 and the reason from the file. The `READY scope:` label SKILL.md asks for appears in some runs and not others — see //not_asserted.",
+  "//": "The same change, working, on a project that declared its boundary unreachable with a reason. The gate must narrow rather than refuse: SKILL.md says such a run ends as `READY scope: Stage 1` with the reason from the file, and that is what is asserted here.",
   "role": "gate",
-  "prompt": "I added a --json flag to app/cli.py. Confirm the change is ready to ship. You are the verifier, not the implementer: do not modify any file in this project, just report the verdict.",
+  "prompt": "Use the gopnik skill to verify this change: I added a --json flag to app/cli.py and it works end to end. You are the verifier, not the implementer: do not modify any file in this project, just report the verdict.",
   "verdict": "READY",
   "must_match": [
+    "(?i)ready[^.]{0,40}scope",
     "(?i)stage\\s*1",
     "(?i)stage\\s*2",
     "no packaged artifact"
@@ -19,5 +20,5 @@
     "check.sh",
     "gopnik.json"
   ],
-  "//not_asserted": "`(?i)ready[^.]{0,40}scope`. SKILL.md says a run that narrows to Stage 1 ends as `READY scope: Stage 1`. Live runs disagree about whether the label appears — present through a project-local install, absent through the marketplace plugin, same fixture and revision — so asserting it here would make this cell flake on a defect #73 did not set out to verify. It is written down rather than dropped; #74 owns it. What is still asserted is the substance: the run names Stage 2 and gives the reason from the file, so a bare `READY` with the boundary left unmentioned still fails."
+  "invokes": "gopnik"
 }

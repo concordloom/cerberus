@@ -57,10 +57,13 @@ def transcript(
     path: pathlib.Path,
     result: object,
     calls: list[tuple[str, dict, bool]] | None = None,
+    skill: str | None = "gopnik",
 ) -> None:
     events: list[dict] = []
     if calls is None:
         calls = [("Bash", {"command": "./check.sh"}, True)]
+    if skill is not None:
+        calls = [("Skill", {"skill": skill}, True)] + list(calls)
     for index, (name, payload, answered) in enumerate(calls):
         tool_id = f"call-{index}"
         events.append({"type": "assistant", "message": {"content": [{
@@ -120,7 +123,23 @@ def test_each_gate_fixture_produces_the_outcome_it_claims():
 
 
 def test_the_gate_pair_differs_only_in_product_code():
-    """One variable. Otherwise the opposite verdicts prove nothing in particular."""
+    """One variable. Otherwise the opposite verdicts prove nothing in particular.
+
+    The first version of this test compared `repo/` only, and the pair was a
+    two-variable experiment for a while without it noticing: the red fixture's
+    prompt claimed "and it works end to end" and the other's did not, so the
+    overclaim alone could have produced the opposite verdicts. The prompt lives
+    in `expected.json`, outside the tree this used to walk.
+    """
+    prompts = {
+        name: json.loads(
+            (FIXTURES / name / "expected.json").read_text(encoding="utf-8")
+        )["prompt"]
+        for name in ("gate-red-stage1", "gate-ready-scoped")
+    }
+    assert len(set(prompts.values())) == 1, (
+        f"the pair is asked two different questions: {prompts}")
+
     red, ready = FIXTURES / "gate-red-stage1" / "repo", FIXTURES / "gate-ready-scoped" / "repo"
     differ = set()
     for side in (red, ready):
@@ -157,13 +176,20 @@ def test_the_substring_trap_is_handled_in_both_directions():
     sys.path.insert(0, str(GATE_ORACLE.parent))
     import check_live_gate_turn as oracle
 
-    assert oracle.says_not_ready("NOT READY — Stage 1 is red") is True
-    assert oracle.says_ready("NOT READY — Stage 1 is red") is False
-    assert oracle.says_ready("READY scope: Stage 1") is True
-    assert oracle.says_not_ready("READY scope: Stage 1") is False
-    assert oracle.says_not_ready("not ready") is True
-    assert oracle.says_not_ready("not-ready") is True
-    assert oracle.says_ready("Stage 2 — Not proven: no dev cluster") is False
+    assert oracle.first_verdict("NOT READY — Stage 1 is red") == "NOT READY"
+    assert oracle.first_verdict("READY — scope: Stage 1") == "READY"
+    assert oracle.first_verdict("not ready") == "NOT READY"
+    assert oracle.first_verdict("not-ready") == "NOT READY"
+    assert oracle.first_verdict("Stage 2 — Not proven: no dev cluster") is None
+    assert oracle.first_verdict("the check is green") is None
+    # Position, not presence. A correct NOT READY may say what a passing run
+    # would have looked like, and did.
+    assert oracle.first_verdict(
+        "Verdict: NOT READY. A passing run here would have been READY scope: Stage 1."
+    ) == "NOT READY"
+    assert oracle.first_verdict(
+        "Verdict: READY — scope: Stage 1. It is not ready for anything wider."
+    ) == "READY"
 
 
 def test_the_gate_oracle_rejects_everything_it_owes():
@@ -177,7 +203,7 @@ def test_the_gate_oracle_rejects_everything_it_owes():
         "FAIL: --json printed 'ok=True', which is not JSON."
     )
     good_ready = (
-        "READY scope: Stage 1. ./check.sh passed. Stage 2 — Not proven: "
+        "READY — scope: Stage 1. ./check.sh passed. Stage 2 — Not proven: "
         "no packaged artifact, so there is nothing built to install."
     )
 
@@ -205,10 +231,36 @@ def test_the_gate_oracle_rejects_everything_it_owes():
     # The reason behind the verdict.
     transcript(path, "NOT READY. Something is wrong somewhere.")
     assert gate(red, path, work_for(red)) != 0, "a verdict with no reason passed"
-    transcript(path, "READY scope: Stage 1. ./check.sh passed.")
+    transcript(path, "READY — scope: Stage 1. ./check.sh passed.")
     assert gate(ready, path, work_for(ready)) != 0, "READY passed without quoting the reason"
-    transcript(path, good_red + " READY scope: Stage 1 would apply otherwise.")
-    assert gate(red, path, work_for(red)) != 0, "a forbidden phrase passed"
+    # A correct NOT READY that goes on to say what a passing run would have
+    # looked like is still a correct NOT READY. A live one did exactly this, and
+    # an earlier version of the fixture rejected it for the phrasing.
+    transcript(path, good_red + " A passing run would have been READY scope: Stage 1.")
+    assert gate(red, path, work_for(red)) == 0, "a counterfactual aside was read as a verdict"
+    transcript(path, "READY — scope: Stage 1. " + good_red)
+    assert gate(red, path, work_for(red)) != 0, "a READY stated first was accepted as NOT READY"
+
+    # must_not_match still bites where a fixture declares one.
+    banned = pathlib.Path(tempfile.mkdtemp()) / "banned"
+    shutil.copytree(red, banned)
+    body = json.loads((banned / "expected.json").read_text(encoding="utf-8"))
+    body["must_not_match"] = ["(?i)looks fine"]
+    (banned / "expected.json").write_text(json.dumps(body), encoding="utf-8")
+    transcript(path, good_red + " Everything else looks fine.")
+    assert gate(banned, path, work_for(red)) != 0, "a declared forbidden phrase passed"
+
+    # The gate has to be what produced the verdict. Two live sessions reached
+    # the right answers without ever invoking the skill, and the first version
+    # of the oracle passed both.
+    transcript(path, good_red, skill=None)
+    assert gate(red, path, work_for(red)) != 0, "a verdict reached without the gate passed"
+    transcript(path, good_red, skill="gopnik-critic")
+    assert gate(red, path, work_for(red)) != 0, "a different skill counted as the gate"
+    transcript(path, good_red, skill="gopnik:gopnik")
+    assert gate(red, path, work_for(red)) == 0, "the plugin-qualified name was not recognised"
+    transcript(path, good_red, skill="other:gopnik-critic")
+    assert gate(red, path, work_for(red)) != 0, "a qualified wrong skill counted as the gate"
 
     # The work behind the verdict: called, answered, and actually executed.
     transcript(path, good_red, calls=[("Bash", {"command": "cat gopnik.json"}, True)])
@@ -232,6 +284,18 @@ def test_the_gate_oracle_rejects_everything_it_owes():
     (removed / "check.sh").unlink()
     assert gate(red, path, removed) != 0, "a verifier that deleted the check passed"
 
+    # Echoing the fixture's own configuration back satisfies a naive reason
+    # check — `(?i)stage\s*1` matches the string `stage1`, and the file contains
+    # the declared reason verbatim. This passed before the scope label was
+    # asserted, and it is the shape a rubber stamp would take.
+    echo = (
+        "READY. "
+        + (ready / "repo" / "gopnik.json").read_text(encoding="utf-8")
+    )
+    transcript(path, echo)
+    assert gate(ready, path, work_for(ready)) != 0, (
+        "a verdict that only echoes the project's configuration passed")
+
     # The transcript has to be a transcript.
     for broken in ("", "{not json\n"):
         path.write_text(broken, encoding="utf-8")
@@ -246,21 +310,18 @@ def test_the_gate_oracle_rejects_everything_it_owes():
     assert gate(red, path, work_for(red)) != 0, "a result that was not last passed"
 
 
-def test_a_narrowed_verdict_still_has_to_name_the_boundary():
-    """#73/#74. What is left after dropping the label must still be a check.
+def test_a_narrowed_verdict_has_to_say_it_is_narrowed():
+    """#73. A clean-reading `READY` on a boundary nobody crossed is the failure.
 
-    `gate-ready-scoped` no longer asserts `READY scope:`, because a live gate
-    does not emit it (#74). Dropping an assertion is how a cell quietly stops
-    checking anything, so what remains is pinned here: a clean-reading `READY`
-    that never mentions the boundary is still rejected, which is the failure the
-    label existed to prevent.
+    SKILL.md: "A clean-reading `READY` on a project that never crossed its
+    boundary is the failure this whole skill exists to prevent, arriving with
+    permission." So the label is asserted, and so is what the label is for — a
+    verdict that never reaches Stage 2 fails even if it is worded beautifully.
     """
     fixture = FIXTURES / "gate-ready-scoped"
     body = json.loads((fixture / "expected.json").read_text(encoding="utf-8"))
-    assert "#74" in body["//not_asserted"], (
-        "the dropped assertion must name the issue that owns it")
-    assert "ready[^.]{0,40}scope" in body["//not_asserted"], (
-        "the dropped assertion must be written down verbatim")
+    assert any("scope" in shape for shape in body["must_match"]), (
+        "the narrowing label is what this fixture exists to check")
 
     root = pathlib.Path(tempfile.mkdtemp())
     path = root / "turn.jsonl"
@@ -273,11 +334,17 @@ def test_a_narrowed_verdict_still_has_to_name_the_boundary():
 
     transcript(path, "Verdict: ready to ship. The check passed and I am happy with it.")
     assert gate(fixture, path, work()) != 0, "a bare READY with no boundary named passed"
-    transcript(path, "Verdict: ready to ship. Stage 1 passed; ./check.sh is green.")
+    transcript(path, "Verdict: READY — scope: Stage 1. ./check.sh is green.")
     assert gate(fixture, path, work()) != 0, "a READY that never reaches Stage 2 passed"
     transcript(
         path,
         "Verdict: ready to ship. Stage 1 passed. Stage 2 is not applicable: "
+        "no packaged artifact, so there is nothing built to install.",
+    )
+    assert gate(fixture, path, work()) != 0, "a narrowing with no scope label passed"
+    transcript(
+        path,
+        "Verdict: READY — scope: Stage 1. Stage 1 passed. Stage 2 — Not proven: "
         "no packaged artifact, so there is nothing built to install.",
     )
     assert gate(fixture, path, work()) == 0, "the narrowed verdict this fixture accepts failed"

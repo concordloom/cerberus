@@ -48,14 +48,6 @@ CRITIC_SURFACES_MARKER = "GOPNIK_CRITIC_SURFACES:"
 RAW_INSTALL_URL = (
     "https://raw.githubusercontent.com/concordloom/gopnik/main/docs/install.md"
 )
-SURFACES_QUESTION = (
-    "After delivery, do people use only the command, only the web interface, or both?"
-)
-SURFACES_QUESTION_RU = (
-    "После поставки люди используют только команду, только веб-интерфейс или оба варианта?"
-)
-
-
 #: Where the fixture facts live when the caller names no fixture. This is a
 #: path rather than a table of literals on purpose: the strings below used to be
 #: spelled out in this file, which is what made a second fixture impossible.
