@@ -159,13 +159,25 @@ def test_stand_turn_explains_stage2_before_the_localized_question():
     assert russian in _flat(SETUP_SKILLS[1])
 
 
-def test_surface_sentence_limit_excludes_required_stage_orientation_and_status():
-    for path, phrase in (
-        (INSTALL, "the brief stage orientation and Stage 1 status may precede it"),
-        (SETUP_SKILLS[0], "the brief stage orientation and Stage 1 status may precede it"),
-        (SETUP_SKILLS[1], "перед ними могут стоять краткое объяснение стадий и статус Stage 1"),
+def test_surface_turn_names_the_green_stage1_status_before_the_question():
+    for path, phrases in (
+        (INSTALL, (
+            "the brief stage orientation and Stage 1 status may precede it",
+            "Stage 1 is ready — the project's local check passed.",
+            "Stage 1 готова — штатная проверка проекта прошла.",
+        )),
+        (SETUP_SKILLS[0], (
+            "the brief stage orientation and Stage 1 status may precede it",
+            "Stage 1 is ready — the project's local check passed.",
+        )),
+        (SETUP_SKILLS[1], (
+            "перед ними могут стоять краткое объяснение стадий и статус Stage 1",
+            "Stage 1 готова — штатная проверка проекта прошла.",
+        )),
     ):
-        assert phrase in _flat(path), (path.name, phrase)
+        text = _flat(path)
+        for phrase in phrases:
+            assert phrase in text, (path.name, phrase)
 
 
 def test_install_persists_the_language_once_for_future_runs_and_uninstall():

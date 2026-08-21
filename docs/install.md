@@ -307,7 +307,10 @@ question the person directly. Fold its surviving candidates into one short
 question. Keep the critic's technical findings internal: this is a product-use
 confirmation, not a defect report. Keep that product-use confirmation to at
 most two short sentences; the brief stage orientation and Stage 1 status may
-precede it. Name the
+precede it. Before the product-use question, give one plain status sentence in
+the selected language that names `Stage 1` and says its local check passed or
+is ready, for example: `Stage 1 is ready — the project's local check passed.`
+In Russian: `Stage 1 готова — штатная проверка проекта прошла.` Name the
 plausible surfaces in plain language and, when necessary, add only one brief
 uncertainty such as `the delivery route does not prove which one ships`. Do not
 list packaging errors, missing files, workflow defects, or implementation
