@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.0.11](https://github.com/concordloom/gopnik/compare/v4.0.10...v4.0.11) (2026-08-21)
+
+
+### Bug Fixes
+
+* enforce the language hard boundary ([d6fb42d](https://github.com/concordloom/gopnik/commit/d6fb42d3b06e0ca6cea8ca4c5bb2d043a17e36e8))
+
 ## [4.0.10](https://github.com/concordloom/gopnik/compare/v4.0.9...v4.0.10) (2026-08-20)
 
 
