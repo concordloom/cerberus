@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.0.15](https://github.com/concordloom/gopnik/compare/v4.0.14...v4.0.15) (2026-08-21)
+
+
+### Bug Fixes
+
+* make kind confirmation a single action ([94f6bf5](https://github.com/concordloom/gopnik/commit/94f6bf5adf3b9221ff6e79c55741ebeaf2faf900))
+
 ## [4.0.14](https://github.com/concordloom/gopnik/compare/v4.0.13...v4.0.14) (2026-08-21)
 
 
