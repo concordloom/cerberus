@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.0.19](https://github.com/concordloom/gopnik/compare/v4.0.18...v4.0.19) (2026-08-21)
+
+
+### Bug Fixes
+
+* simplify the install launcher ([5de54f7](https://github.com/concordloom/gopnik/commit/5de54f78018b7d7def2e99a8022d46d706e7098f))
+
 ## [4.0.18](https://github.com/concordloom/gopnik/compare/v4.0.17...v4.0.18) (2026-08-21)
 
 
