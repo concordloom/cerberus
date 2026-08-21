@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.0.17](https://github.com/concordloom/gopnik/compare/v4.0.16...v4.0.17) (2026-08-21)
+
+
+### Bug Fixes
+
+* accept safe localized setup turns ([834889e](https://github.com/concordloom/gopnik/commit/834889e3eaa8715d6a76eb941615eaae3983e10e))
+
 ## [4.0.16](https://github.com/concordloom/gopnik/compare/v4.0.15...v4.0.16) (2026-08-21)
 
 
