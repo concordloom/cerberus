@@ -1,5 +1,17 @@
 # Changelog
 
+# [5.1.0](https://github.com/concordloom/gopnik/compare/v5.0.0...v5.1.0) (2026-08-22)
+
+
+### Bug Fixes
+
+* a repo-scope install left the local-override ignore rule unshared ([#83](https://github.com/concordloom/gopnik/issues/83)) ([0eaa8f7](https://github.com/concordloom/gopnik/commit/0eaa8f796355306f9a4fe044507d54ca4d8b5716)), closes [#78](https://github.com/concordloom/gopnik/issues/78)
+
+
+### Features
+
+* confirmed delivery surfaces are now persisted and read ([#84](https://github.com/concordloom/gopnik/issues/84)) ([2be87bd](https://github.com/concordloom/gopnik/commit/2be87bd153d80c10f87ef8f1cdb14fac2faf0a5a)), closes [#77](https://github.com/concordloom/gopnik/issues/77)
+
 # [5.0.0](https://github.com/concordloom/gopnik/compare/v4.1.0...v5.0.0) (2026-08-22)
 
 
