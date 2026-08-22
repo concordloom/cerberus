@@ -1522,7 +1522,11 @@ def test_this_repository_verifies_it_with_a_live_session():
     """
     body = json.loads((ROOT / "gopnik.json").read_text(encoding="utf-8"))
     stage2 = body["verification"]["stage2"]
-    live = [c for c in stage2 if "claude -p" in c]
+    # Cell 0's two `claude -p` calls are the reachability probe that replaced the
+    # credential symlink: they prove each isolated tree can talk to the API at
+    # all, before anything expensive runs. They are not conversations under
+    # test, so they are not counted or oracled as such.
+    live = [c for c in stage2[1:] if "claude -p" in c]
     assert live, f"stage2 has no live agent session:\n" + "\n".join(stage2)
     # #73 added the gate's own pair. #76 added a second setup conversation and a
     # second gate pair. Sixteen setup turns, four gate runs, and every one of
@@ -1652,12 +1656,28 @@ def test_this_repository_verifies_it_with_a_live_session():
     assert any("scratch-ru/.claude/skills/gopnik/SKILL.md" in command
                for command in stage2), stage2
     assert any("expected-sha" in command and "git -C" in command for command in stage2), stage2
+    # Stage 2 must not authenticate as the operator. It used to symlink
+    # ~/.claude/.credentials.json into both isolated trees, and the assertions
+    # here pinned that design in place — they demanded the link and only banned
+    # copying, on the theory that a link touches nothing. A live run refreshed
+    # the token; an OAuth refresh token is single-use, so the operator's own
+    # sessions were logged out mid-work. The directory around a shared
+    # credential is not isolation, so the rule is now the whole file: the route
+    # never names the operator's configuration by any route.
     auth = stage2[0]
-    assert 'GOPNIK_CLAUDE_SOURCE_DIR=${CLAUDE_CONFIG_DIR:-"$HOME/.claude"}' in auth, auth
-    assert auth.count('.credentials.json') >= 5, auth
-    assert auth.count("claude auth status --json") == 2, auth
-    assert auth.count('"loggedIn": true') == 2, auth
-    assert "cp " not in auth and "install -m" not in auth, auth
+    assert "ANTHROPIC_API_KEY" in auth, auth
+    assert auth.count("claude -p") == 2, auth
+    joined_route = "\n".join(stage2)
+    for forbidden in (
+        "$HOME/.claude",
+        "CLAUDE_CONFIG_DIR:-",
+        ".credentials.json",
+        "credentials",
+    ):
+        assert forbidden not in joined_route, (
+            f"Stage 2 reaches for the operator's own credential via {forbidden!r}")
+    for name in ("claude-en", "claude-ru"):
+        assert f'"$GOPNIK_STAGE2_ROOT/{name}"' in auth, auth
     assert any("plugin details gopnik | grep -Eq" in command for command in stage2), stage2
     assert any("rm -rf" in command and "gopnik-stage2.*" in command for command in stage2), stage2
 

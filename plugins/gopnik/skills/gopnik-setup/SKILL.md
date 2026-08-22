@@ -401,6 +401,16 @@ Internally, the route must trigger or observe delivery for the exact revision,
 wait with a check that can fail, prove the deployed revision, exercise a real
 consumer path, and prove the check can fail safely.
 
+A recorded route never authenticates as the person running it. Do not read,
+copy, link, or write the operator's own session state — an agent's credential
+file, a browser profile, a cloud CLI's cached login, a `kubectl` context they
+are working in. A symlink is the file, not a copy of it, and a directory around
+a shared credential is not isolation. Refreshable credentials make this worse
+than it looks: an OAuth refresh token is single-use, so a verification run that
+borrows one logs the operator out of everything else using it, mid-work.
+Record a route that takes its own credential from the environment, and when
+none exists, say so as a setup blocker rather than reaching for theirs.
+
 If CI deploys only from the default branch, there is no honest pre-merge Stage
 2. Record a preview environment or a post-merge run before Done or release.
 Use `stage2_unreachable` only when the project truly has no reachable delivery
@@ -512,6 +522,8 @@ prompts for the person to copy.
 - [ ] Did I avoid batching unrelated Stage 2 questions?
 - [ ] Can the future runner access the target and prove the exact revision?
 - [ ] Can the Stage 2 check fail safely?
+- [ ] Does the recorded route take its own credential, rather than reading,
+      copying or linking the operator's own session state?
 - [ ] Is `stage2_unreachable` reserved for a true project-level absence?
 - [ ] Is shared verification portable, with private local values kept separate?
 - [ ] Did I keep configuration files and JSON out of normal user-facing text?
