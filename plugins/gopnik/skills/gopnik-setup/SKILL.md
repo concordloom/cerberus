@@ -104,6 +104,64 @@ After the answer:
 - **It cannot run on this machine at all.** Do not record it, and note why. Only
   a check that was run and passed may be written.
 
+## Revisit a record an earlier version wrote
+
+Everything above happens once, and the record it produces is only ever as good
+as the version that wrote it. Updating the software replaces the skills and
+leaves the project record exactly where it was, so a project set up before this
+reconciliation existed keeps its gap forever. A configured project is never
+re-onboarded and setup still refuses to rewrite it — but it can be *asked* what
+has drifted.
+
+Do this when the person asks, when an update guide sends you here, or before
+relying on a Stage 1 you did not record yourself. Not during ordinary
+onboarding: a project that was configured in this same conversation has nothing
+to revisit.
+
+```sh
+python3 PATH/gopnik_setup.py --refresh
+```
+
+It writes nothing, ever, and it says one of three things. That the record still
+matches the tree — then stop, say nothing about it, and do not manufacture a
+finding. That a recorded command names a path that no longer exists — a suite
+deleted, a wrapper renamed. That an executable check is in the tree which no
+recorded command names.
+
+That last one is a candidate, not a verdict. The helper compares the record with
+the filenames; it cannot see inside a wrapper, and it does not pretend to. Put
+each candidate in exactly one of the same three buckets as above — the recorded
+command runs it, only CI runs it, or nothing runs it — by reading what actually
+invokes it. Then ask the same question, in the selected language, and end the
+turn on it:
+
+> The project also has <check>, which <command> never runs. Should Stage 1 run it too?
+
+After the answer, **include it** by recording it and nothing else:
+
+```sh
+python3 PATH/gopnik_setup.py --add-stage1 './ui-tests/run.sh'
+```
+
+Repeat `--add-stage1` for each one, fastest to slowest. It runs each command
+first and records only what passes, so an answer of "add it" is never enough on
+its own. It edits the recorded Stage 1 and leaves every other byte of that file
+untouched — a hand-written `stage2`, a `stage2_unreachable` and its reason, an
+operational note, a local-override indirection all survive exactly as written.
+If it cannot locate the recorded Stage 1 it refuses and changes nothing rather
+than rewriting a document it does not understand; say so and let the person edit
+by hand. **Leave it out** and **it cannot run here** behave as above: nothing is
+written either way, and the reason is recorded in the notes.
+
+What this mode does not do is tell you the installed Gopnik itself is out of
+date. Where it was installed as a plugin, the host owns that and the
+installation guide already requires the version comparison. Where it was
+installed by `install.sh`, nothing does: that route copies the skill directories
+and nothing else, so there is no version on disk and no plugin record for a host
+or a guide to compare against. This mode does not close that gap — Stage 1 is
+offline and stays offline. What it reports is drift in the project's own record,
+which is a different kind of stale and the only one visible from here.
+
 ## Run the mechanical part silently
 
 Use whichever installed path exists:
@@ -501,6 +559,8 @@ prompts for the person to copy.
 - [ ] Was every recorded Stage 1 command run and shown passing?
 - [ ] Did I compare the recorded Stage 1 against what CI and the tree really
       run, and ask about every executable check the documented route misses?
+- [ ] On a record an earlier version wrote, did I revisit it rather than trust
+      it — and stay silent when there was nothing to report?
 - [ ] Did a loopback browser suite end up assigned to Stage 1 rather than
       dropped for failing the stand test?
 - [ ] If Stage 1 failed, did I stop before inspecting or discussing Stage 2?

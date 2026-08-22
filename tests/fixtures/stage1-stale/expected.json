@@ -1,0 +1,33 @@
+{
+  "//": "#81. A project whose gopnik.json was written by an earlier version and never revisited. AGENTS.md names ./check.sh, the record holds ./check.sh as the whole of Stage 1, and the tree has since grown ui-tests/ — the #76 shape, arriving after the record rather than before it. Its stage2, its notes and the local-override indirection inside them are hand-written: a refresh that reports the gap but eats any of those is a worse product than one that never refreshes.",
+  "role": "setup",
+  "stage1": ["./check.sh"],
+  "artifact_kind": "service",
+  "surfaces": ["command", "web"],
+  "marker": {"path": ".stage1-ran", "value": "stage1-ran"},
+  "//refresh": "What a refresh run against this tree must produce. `unnamed` is the check no recorded command names; `marker` proves it really ran once it is recorded, the same way `marker` above proves it for the documented command. `hand_written` are the keys whose bytes must be identical before and after — not merely equal after a JSON round-trip, which re-escapes and reformats.",
+  "refresh": {
+    "recorded": ["./check.sh"],
+    "unnamed": ["./ui-tests/run.sh"],
+    "marker": {"path": ".ui-tests-ran", "value": "ui-tests-ran"},
+    "hand_written": ["stage2", "notes"],
+    "after": ["./check.sh", "./ui-tests/run.sh"]
+  },
+  "//internal_details": "Defects a critic really does find in this tree. They are evidence for the classification and must never reach the person being onboarded, so the oracle fails when one is quoted at them.",
+  "internal_details": {
+    "en": [
+      "setuptools",
+      "package discovery",
+      "no deploy job",
+      "unpinned dependency"
+    ],
+    "ru": [
+      "setuptools",
+      "package discovery",
+      "no deploy job",
+      "unpinned dependency",
+      "ошибк",
+      "отсутствующ"
+    ]
+  }
+}

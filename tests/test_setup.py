@@ -2860,6 +2860,442 @@ def test_skill_trigger_contract_lives_in_description_not_custom_frontmatter():
             )
 
 
+# --------------------------------- refreshing a record already written (#81)
+#
+# The order of these tests is the order the issue asks for. The destructive
+# case comes first: a refresh that eats an operator's hand-written `stage2`,
+# `stage2_unreachable` or `notes` is a worse product than one that never
+# refreshes, so it has to be pinned before the constructive case is worth
+# having.
+
+FIXTURES = ROOT / "tests" / "fixtures"
+STALE = FIXTURES / "stage1-stale"
+
+
+def _stale_project() -> pathlib.Path:
+    """The #81 fixture, materialised where the setup script can be run on it."""
+    root = project({})
+    shutil.copytree(STALE / "repo", root, dirs_exist_ok=True)
+    return root
+
+
+def _refresh_expectations() -> dict:
+    return json.loads((STALE / "expected.json").read_text(encoding="utf-8"))["refresh"]
+
+
+def _run_setup_in_place(root: pathlib.Path, *args: str) -> tuple[int, str]:
+    """Run the shipped script against a tree that is not a scratch project."""
+    proc = subprocess.run(
+        [sys.executable, str(SETUP), *args, "--dir", str(root)],
+        cwd=str(root),
+        capture_output=True,
+        text=True,
+        env={k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"},
+    )
+    return proc.returncode, proc.stdout + proc.stderr
+
+
+def _pure_insertion(before: str, after: str) -> str:
+    """What was inserted, asserting that nothing at all was removed.
+
+    Deliberately not a JSON comparison. `json.dumps` escapes non-ASCII and
+    reindents, so a round-trip can hand back a file that compares equal as a
+    value while every byte of an operator's note has moved. The oracle for this
+    mode is the bytes: the edit has to be an insertion and nothing else.
+    """
+    head = len(os.path.commonprefix([before, after]))
+    tail = len(os.path.commonprefix([before[head:][::-1], after[head:][::-1]]))
+    removed = before[head:len(before) - tail]
+    assert removed == "", f"the refresh deleted {removed!r}"
+    return after[head:len(after) - tail]
+
+
+def test_a_refresh_answer_leaves_every_hand_written_byte_alone():
+    """The destructive negative, tested before the constructive case.
+
+    The fixture's record carries a hand-written `stage2`, an operational note,
+    and a local-override indirection inside both. Stage 1 grows; nothing else
+    in that file may move by a single byte.
+    """
+    expected = _refresh_expectations()
+    added = expected["unnamed"][0]
+    root = _stale_project()
+    config = root / "gopnik.json"
+    before = config.read_text(encoding="utf-8")
+
+    code, out = run_setup(root, "--add-stage1", added)
+    assert code == 0, out
+    after = config.read_text(encoding="utf-8")
+
+    inserted = _pure_insertion(before, after)
+    assert added in inserted, f"the insertion does not carry the check: {inserted!r}"
+
+    body_before, body_after = json.loads(before), json.loads(after)
+    assert body_after["verification"]["stage1"] == expected["after"], after
+    for key in expected["hand_written"]:
+        assert body_after["verification"][key] == body_before["verification"][key], (
+            f"the refresh changed the hand-written {key!r}")
+    assert "$DASHBOARD_STAGING_URL" in after, "the local indirection was rewritten"
+
+
+def test_a_refresh_answer_keeps_an_unreachable_declaration_and_its_reason():
+    """`stage2_unreachable` is a key this script would never write itself.
+
+    It is also the one whose loss is silent: a verdict that should have
+    narrowed itself stops saying why, and nobody notices until it matters.
+    """
+    root = _stale_project()
+    config = root / "gopnik.json"
+    body = json.loads(config.read_text(encoding="utf-8"))
+    body["verification"]["stage2"] = []
+    body["verification"]["stage2_unreachable"] = (
+        "No stand exists: the dashboard is deployed straight from main by an "
+        "account this project does not own."
+    )
+    body["verification"]["migration_notes"] = {"kept": "a key nothing here writes"}
+    config.write_text(json.dumps(body, indent=4, ensure_ascii=False) + "\n",
+                      encoding="utf-8")
+    before = config.read_text(encoding="utf-8")
+
+    code, out = run_setup(root, "--add-stage1", "./ui-tests/run.sh")
+    assert code == 0, out
+    after = config.read_text(encoding="utf-8")
+
+    inserted = _pure_insertion(before, after)
+    assert "./ui-tests/run.sh" in inserted, inserted
+    kept = json.loads(after)["verification"]
+    assert kept["stage2_unreachable"] == body["verification"]["stage2_unreachable"]
+    assert kept["migration_notes"] == {"kept": "a key nothing here writes"}
+    # Four-space indentation is somebody's choice about their own file.
+    assert '    "verification"' in after, "the refresh reindented the document"
+
+
+def test_a_russian_note_comes_back_as_russian():
+    """The exact way a value-level comparison passes and the file is ruined.
+
+    `json.dumps` escapes non-ASCII by default. A refresh that round-tripped the
+    document would leave `notes` deep-equal and unreadable.
+    """
+    note = "Стенд за периметром — адрес берётся из локального переопределения."
+    root = _stale_project()
+    config = root / "gopnik.json"
+    body = json.loads(config.read_text(encoding="utf-8"))
+    body["verification"]["notes"] = note
+    config.write_text(json.dumps(body, indent=2, ensure_ascii=False) + "\n",
+                      encoding="utf-8")
+
+    code, out = run_setup(root, "--add-stage1", "./ui-tests/run.sh")
+    assert code == 0, out
+    after = config.read_text(encoding="utf-8")
+    assert note in after, f"the note was re-encoded:\n{after}"
+    assert "\\u0421" not in after, "the note came back as escapes"
+
+
+def test_a_refresh_names_the_check_the_record_never_learned_about():
+    """The constructive case: what is recorded, against what the tree has."""
+    expected = _refresh_expectations()
+    root = _stale_project()
+    code, out = run_setup(root, "--refresh")
+    assert code == 0, out
+    for command in expected["unnamed"]:
+        assert command in out, f"{command} was not reported:\n{out}"
+    assert "--add-stage1" in out, f"nothing was offered:\n{out}"
+
+
+def test_a_refresh_with_nothing_to_say_says_nothing():
+    """A mode that finds something on every project is one people stop reading.
+
+    Run against this repository, whose own record is current. If someone adds
+    an executable check here that nothing in `stage1` names, this fails — and
+    that is the correct outcome, not a brittle test.
+    """
+    code, out = _run_setup_in_place(ROOT, "--refresh")
+    assert code == 0, out
+    assert "still matches" in out, out
+    assert "--add-stage1" not in out, f"cried wolf on its own repository:\n{out}"
+    assert "named by no recorded command" not in out, out
+    assert "no longer here" not in out, out
+
+
+def test_a_refresh_names_a_recorded_command_that_is_no_longer_here():
+    """The staleness half: a route can rot with no release involved."""
+    root = _stale_project()
+    (root / "check.sh").unlink()
+    code, out = run_setup(root, "--refresh")
+    assert code == 0, out
+    assert "gone" in out, out
+    assert "./check.sh" in out, out
+
+
+def test_a_gone_command_and_an_unaccounted_check_are_reported_together():
+    """The mixed cell. Two things changed since the record; both get said."""
+    root = _stale_project()
+    (root / "check.sh").unlink()
+    code, out = run_setup(root, "--refresh")
+    assert code == 0, out
+    assert "./check.sh" in out, f"the gone command is hidden:\n{out}"
+    assert "./ui-tests/run.sh" in out, f"the unnamed check is hidden:\n{out}"
+
+
+def test_a_refresh_writes_nothing_at_all():
+    root = _stale_project()
+    before = (root / "gopnik.json").read_bytes()
+    code, out = run_setup(root, "--refresh")
+    assert code == 0, out
+    assert (root / "gopnik.json").read_bytes() == before
+
+
+def test_a_refresh_without_a_configuration_refuses_to_become_a_setup():
+    root = project(PY_PROJECT)
+    code, out = run_setup(root, "--refresh")
+    assert code == 2, out
+    assert not (root / "gopnik.json").exists(), (
+        "refresh silently turned into a first-time setup")
+
+
+def test_a_check_that_does_not_pass_here_is_never_recorded():
+    """The offer is not a licence to write a red command.
+
+    This is how the destructive case would arrive by the back door: the report
+    names a check, the person says add it, and a refresh that trusted the
+    answer instead of the exit status would record something that fails.
+    """
+    root = _stale_project()
+    suite = root / "ui-tests" / "run.sh"
+    suite.write_text("#!/bin/sh\necho 'the dashboard never rendered'\nexit 1\n",
+                     encoding="utf-8")
+    os.chmod(suite, 0o755)
+    before = (root / "gopnik.json").read_bytes()
+
+    code, out = run_setup(root, "--add-stage1", "./ui-tests/run.sh")
+    assert code == 2, out
+    assert "FAILING" in out, out
+    assert (root / "gopnik.json").read_bytes() == before
+
+
+def test_a_command_the_record_already_has_is_not_added_twice():
+    root = _stale_project()
+    before = (root / "gopnik.json").read_bytes()
+    code, out = run_setup(root, "--add-stage1", "./check.sh")
+    assert code == 0, out
+    assert (root / "gopnik.json").read_bytes() == before
+    assert config_of(root)["verification"]["stage1"].count("./check.sh") == 1
+
+
+def test_the_answer_can_be_rehearsed_without_writing():
+    root = _stale_project()
+    before = (root / "gopnik.json").read_bytes()
+    code, out = run_setup(root, "--add-stage1", "./ui-tests/run.sh", "--check")
+    assert code == 0, out
+    assert (root / "gopnik.json").read_bytes() == before
+    assert "Nothing was written" in out, out
+
+
+def test_a_record_the_edit_cannot_locate_is_refused_rather_than_rewritten():
+    """Failing closed is the only acceptable failure for this write."""
+    for broken in ({"verification": {"stage1": "./check.sh"}},
+                   {"verification": {}},
+                   {"nothing": "here"}):
+        root = project({**PY_PROJECT, "gopnik.json": json.dumps(broken)})
+        before = (root / "gopnik.json").read_bytes()
+        code, out = run_setup(root, "--add-stage1", "true")
+        assert code == 2, out
+        assert (root / "gopnik.json").read_bytes() == before, (
+            f"a record it could not read was rewritten anyway: {broken}")
+
+
+def test_a_plain_rerun_still_refuses_to_touch_a_record_it_did_not_write():
+    """Today's behaviour has to survive. The refresh is a mode you ask for."""
+    root = _stale_project()
+    before = (root / "gopnik.json").read_bytes()
+    code, out = run_setup(root)
+    assert (root / "gopnik.json").read_bytes() == before, out
+    assert "--add-stage1" not in out, (
+        f"a plain re-run started offering to edit the record:\n{out}")
+
+
+def test_a_refresh_cannot_be_combined_with_a_setup_run():
+    root = _stale_project()
+    for extra in (("--stage1", "true"),
+                  ("--defer-artifact-kind",),
+                  ("--language", "ru"),
+                  ("--draft-stage2",),
+                  ("--confirm-artifact-kind", "cli"),
+                  ("--add-stage1", "true")):
+        code, out = run_setup(root, "--refresh", *extra)
+        assert code == 2, f"--refresh {extra} was accepted:\n{out}"
+
+
+def test_an_ordinary_command_is_never_called_a_deleted_file():
+    """The false alarm that would make this mode noise.
+
+    Every entry below was reported as a deleted file by the first version. The
+    first three are the ones that mattered: `go test ./...` is the commonest
+    Stage 1 command in the Go ecosystem, and every Go project would have been
+    told its recorded check had vanished.
+    """
+    sys.path.insert(0, str(SETUP.parent))
+    import gopnik_setup
+
+    for quiet in (
+        "go test ./...", "go vet ./...", "go build ./cmd/...",
+        "cd frontend && ./test.sh",          # a path relative to somewhere else
+        "sh -c './check.sh && ./lint.sh'",   # one token, not a filename
+        "docker run --rm -v /tmp/cache:/cache img pytest",  # a mount, not a path
+        "sh -n install.sh", "git status", "make check",
+        "python3 -m pytest tests/ -q", "npm run test",
+    ):
+        assert gopnik_setup.recorded_path_token(quiet) is None, (
+            f"{quiet!r} would be reported as a deleted file")
+
+    # Still detected: the documented-wrapper shape this mode is actually for.
+    assert gopnik_setup.recorded_path_token("./check.sh") == "./check.sh"
+    assert gopnik_setup.recorded_path_token("sh ./ui-tests/run.sh") == "./ui-tests/run.sh"
+    assert gopnik_setup.recorded_path_token("./app.sh --test") == "./app.sh"
+
+
+def test_nothing_is_offered_back_on_this_project_whatever_its_stage1_said():
+    """The silence has to be a property, not a coincidence.
+
+    It was a coincidence. This project's `stage1` happens to carry the bare
+    word `tests` inside a `compileall` line; that resolved to a real directory
+    and covered the whole fixture pack. Under any other ordinary Stage 1 the
+    same tree produced ten candidates — every fixture repository in the pack,
+    including one that fails on purpose, offered as a check to record and run.
+    """
+    sys.path.insert(0, str(SETUP.parent))
+    import gopnik_setup
+
+    recorded = json.loads((ROOT / "gopnik.json").read_text(encoding="utf-8"))
+    for stage1 in (recorded["verification"]["stage1"],
+                   recorded["verification"]["stage1"][1:],   # no compileall line
+                   ["python3 -m pytest"], ["make test"], ["npm test"],
+                   ["./check.sh"], []):
+        found = gopnik_setup.unnamed_checks(stage1, ROOT)
+        assert found == [], (
+            f"with stage1={stage1!r} this project offers back {found}")
+
+
+def test_a_configuration_with_windows_line_endings_keeps_them():
+    """The blocker a critic found: the guarantee was in the wrong function.
+
+    `splice_stage1` is a pure insertion, but `add_stage1` read and wrote with
+    universal newlines, so a CRLF file — every Windows working tree with
+    `core.autocrlf=true` — had every line ending in it silently rewritten,
+    under a message saying nothing else had been touched. The re-parse guard
+    cannot see it: the values are equal, and it is the file that is mangled.
+    """
+    crlf = b"\r\n"
+    root = _stale_project()
+    config = root / "gopnik.json"
+    config.write_bytes(
+        config.read_text(encoding="utf-8").replace("\n", "\r\n").encode("utf-8"))
+    before = config.read_bytes()
+    assert before.count(crlf) > 5, "the fixture is not actually CRLF"
+
+    code, out = run_setup(root, "--add-stage1", "./ui-tests/run.sh")
+    assert code == 0, out
+    after = config.read_bytes()
+
+    assert after.count(crlf) == before.count(crlf) + 1, (
+        f"line endings were rewritten: {before.count(crlf)} -> {after.count(crlf)}")
+    inserted = _pure_insertion(before.decode("utf-8"), after.decode("utf-8"))
+    assert "./ui-tests/run.sh" in inserted, inserted
+
+
+def test_the_edit_refuses_when_another_stage1_comes_first():
+    """The guard that had no test, on the case it exists for.
+
+    Deleting the re-parse guard left the whole suite green. It is the only
+    thing standing between the splice finding the wrong array and a silent
+    corrupt write, so it needs the input that actually reaches it — a
+    `verification.stage1` belonging to somebody else, earlier in the document.
+    """
+    decoy = {
+        "local": {"verification": {"stage1": ["someone else's block"]}},
+        "verification": {"stage1": ["true"], "notes": "mine"},
+    }
+    root = project({**PY_PROJECT, "gopnik.json": json.dumps(decoy, indent=2)})
+    # The command has to PASS. The first version of this test used a command
+    # that did not exist, so it exited 2 at the run-the-check stage and never
+    # reached the guard at all — it asserted the right number for the wrong
+    # reason, and the mutant with the guard deleted sailed straight through it.
+    passing = root / "ok.sh"
+    passing.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    os.chmod(passing, 0o755)
+    before = (root / "gopnik.json").read_bytes()
+
+    code, out = run_setup(root, "--add-stage1", "./ok.sh")
+    assert code == 2, f"the guard did not refuse:\n{out}"
+    assert "changed more than stage1" in out, (
+        f"it refused, but not at the guard:\n{out}")
+    assert (root / "gopnik.json").read_bytes() == before, (
+        "somebody else's stage1 was edited")
+    assert config_of(root)["local"]["verification"]["stage1"] == ["someone else's block"]
+
+
+def test_a_non_ascii_command_is_recorded_as_itself():
+    """`ensure_ascii=False` on the inserted element had nothing checking it."""
+    root = _stale_project()
+    command = "./проверка.sh"
+    suite = root / "проверка.sh"
+    suite.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    os.chmod(suite, 0o755)
+
+    code, out = run_setup(root, "--add-stage1", command)
+    assert code == 0, out
+    after = (root / "gopnik.json").read_text(encoding="utf-8")
+    assert command in after, f"the command was escaped:\n{after}"
+    assert "\\u043f" not in after, "the command came back as escapes"
+
+
+def test_a_check_that_cannot_go_red_is_not_recorded():
+    """An answer is not a licence to record something that always passes."""
+    root = _stale_project()
+    before = (root / "gopnik.json").read_bytes()
+    for green in ("", "   ", "echo fine", "true", "# not a check"):
+        code, out = run_setup(root, "--add-stage1", green)
+        assert code == 2, f"{green!r} was accepted:\n{out}"
+        assert "cannot fail" in out, out
+        assert (root / "gopnik.json").read_bytes() == before
+
+
+def test_the_splice_edits_one_key_and_reformats_nothing():
+    """Unit-level, because the traps are in the text rather than the values."""
+    sys.path.insert(0, str(SETUP.parent))
+    import gopnik_setup
+
+    # `//stage1` is a real key in this project's own configuration. A scanner
+    # that matched on substrings would edit the comment instead of the list.
+    text = (
+        '{\n  "verification": {\n    "//stage1": "not this one",\n'
+        '    "stage1": [\n      "a"\n    ],\n    "notes": "кириллица"\n  }\n}\n'
+    )
+    out = gopnik_setup.splice_stage1(text, ["b"])
+    assert json.loads(out)["verification"]["stage1"] == ["a", "b"], out
+    assert '"//stage1": "not this one"' in out, out
+    assert "кириллица" in out, out
+    assert out.replace(',\n      "b"', "", 1) == text, out
+
+    # A bracket inside a string is not the end of the list.
+    packed = '{"verification": {"stage1": ["echo ]", "x"], "notes": "["}}'
+    grown = gopnik_setup.splice_stage1(packed, ["y"])
+    assert json.loads(grown)["verification"]["stage1"] == ["echo ]", "x", "y"], grown
+    assert json.loads(grown)["verification"]["notes"] == "[", grown
+
+    # An empty list is still a list.
+    empty = gopnik_setup.splice_stage1('{"verification": {"stage1": []}}', ["a"])
+    assert json.loads(empty)["verification"]["stage1"] == ["a"], empty
+
+
+def test_the_setup_skill_documents_the_refresh_in_both_languages():
+    en = (SKILLS / "gopnik-setup" / "SKILL.md").read_text(encoding="utf-8")
+    ru = (SKILLS / "gopnik-setup" / "SKILL.ru.md").read_text(encoding="utf-8")
+    for text, where in ((en, "SKILL.md"), (ru, "SKILL.ru.md")):
+        assert "--refresh" in text, f"{where} never names the refresh mode"
+        assert "--add-stage1" in text, f"{where} never names how an answer is recorded"
+
+
 def _main() -> int:
     failures = 0
     for name, fn in sorted(globals().items()):

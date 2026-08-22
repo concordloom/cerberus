@@ -2,3 +2,4 @@ __pycache__/
 *.py[cod]
 .venv/
 tests/fixtures/*/repo/.stage1-ran
+tests/fixtures/*/repo/.ui-tests-ran
