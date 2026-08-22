@@ -839,9 +839,15 @@ def test_every_guided_setup_entry_defers_surface_classification():
     }
     for skill, language in expected_language.items():
         text = skill.read_text(encoding="utf-8")
+        # `--confirm-artifact-kind` finalizes a kind that was already deferred,
+        # and `--refresh`/`--add-stage1` revisit a record that was written in
+        # some earlier session. None of the three is guided setup, so none of
+        # them owes the deferral this rule is about.
+        not_guided_setup = ("--confirm-artifact-kind", "--refresh", "--add-stage1")
         invocations = [
             line for line in text.splitlines()
-            if "gopnik_setup.py" in line and "--confirm-artifact-kind" not in line
+            if "gopnik_setup.py" in line
+            and not any(flag in line for flag in not_guided_setup)
         ]
         assert invocations, skill.name
         for invocation in invocations:

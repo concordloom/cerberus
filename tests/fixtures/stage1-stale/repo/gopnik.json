@@ -1,0 +1,16 @@
+{
+  "language": "en",
+  "//": "Every command in stage1 was run once, in this project, before being written here.",
+  "verification": {
+    "artifact_kind": "service",
+    "stage1": [
+      "./check.sh"
+    ],
+    "stage2": [
+      "test -n \"$DASHBOARD_STAGING_URL\" || exit 2",
+      "curl -fsS \"$DASHBOARD_STAGING_URL/version\" | grep -qx \"$(git rev-parse HEAD)\"",
+      "curl -fsS \"$DASHBOARD_STAGING_URL/rows\" | grep -q '<tr><td>'"
+    ],
+    "notes": "DASHBOARD_STAGING_URL is set per machine in the ignored local override, never here — the stand is behind the office network and its host is not the team's to publish. Ask #ops before pointing this at anything other than the staging namespace."
+  }
+}

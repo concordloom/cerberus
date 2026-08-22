@@ -6,6 +6,8 @@ Run it from the project root:
     python3 gopnik_setup.py           # find the checks, run them, save them
     python3 gopnik_setup.py --check   # run them and print them, write nothing
     python3 gopnik_setup.py --defer-artifact-kind  # save Stage 1, wait for confirmation
+    python3 gopnik_setup.py --refresh # compare the record with the tree, write nothing
+    python3 gopnik_setup.py --add-stage1 './ui-tests/run.sh'  # answer the refresh
     python3 gopnik_setup.py --confirm-artifact-kind service --surfaces service,chart
 
 Why it exists: the skills need to know two things this repository cannot know —
@@ -32,6 +34,7 @@ import json
 import os
 import pathlib
 import re
+import shlex
 import subprocess
 import sys
 
@@ -599,6 +602,522 @@ def confirm_artifact_kind(
     return path
 
 
+# ----------------------------------------------------------------- refresh
+#
+# Why this is a mode of its own rather than more of `--check`, honestly.
+#
+# The first version of this comment argued that `--check` could not host the
+# refresh because "a flag whose contract is writes-nothing cannot host the step
+# that writes". A critic pointed out that this justifies nothing: `--refresh`
+# never writes either, the write lives in `--add-stage1`, and `--add-stage1`
+# would be a separate flag under either design — it already reuses `--check` as
+# its own dry-run modifier. The argument conflated two flags.
+#
+# The real reasons are smaller, and are ergonomics rather than impossibility:
+#
+# 1. `--check` already means "what would a *setup* run write here", and on a
+#    configured project it prints "Already configured, so nothing was changed".
+#    Hanging drift reporting off it gives one flag two unrelated questions, and
+#    the answer people want — has this record gone stale — is not discoverable
+#    under a name that reads as a dry run.
+# 2. Refresh has a state `--check` has no answer for: no configuration at all.
+#    That needs its own exit and its own sentence, not "nothing to dry-run".
+#
+# `--check` genuinely could have carried the report, and on one point it would
+# have been better: it *runs* each recorded command, so it detects a broken
+# check by its exit status rather than by a path lookup. That is why the path
+# rule below is so conservative — it is the weaker instrument of the two and it
+# is only allowed to speak when it is certain.
+#
+# So `--refresh` reports and never writes, and `--add-stage1` is the only way an
+# answer reaches the file. `--add-stage1` edits exactly one key and leaves every
+# other byte of the document alone.
+
+#: Names that make an executable look like a project check. Deliberately short:
+#: a name this does not recognise is not reported at all, because a mode that
+#: finds something on every project is one people stop reading.
+CHECK_NAME_HINTS = frozenset((
+    "test", "tests", "check", "checks", "spec", "specs", "e2e", "integration",
+    "smoke", "lint", "contract", "acceptance", "qa", "verify", "verification",
+))
+
+#: Directories whose executables are test *data* rather than this project's
+#: checks. Without this, every fixture repository in this project's own pack was
+#: offered back as a candidate Stage 1 command — including a fixture that fails
+#: on purpose, proposed as something to record and run.
+DATA_DIRS = frozenset((
+    "fixtures", "fixture", "testdata", "test-data", "__fixtures__",
+    "examples", "example", "samples", "sample", "mocks", "golden", "snapshots",
+))
+
+#: How deep an entry point is looked for. A project's own check sits at the top
+#: or one directory down — `./check.sh`, `./ui-tests/run.sh`. Deeper than this
+#: and it is a file inside somebody's test tree, not the command Stage 1 would
+#: run, and offering it is noise.
+MAX_CHECK_DEPTH = 3
+
+#: Never walked when looking for checks: not this project's own code.
+SKIPPED_DIRS = frozenset((
+    "node_modules", "vendor", "venv", "target", "dist", "build", "__pycache__",
+    "site-packages", "coverage", "htmlcov", "third_party", "Pods",
+))
+
+
+def _tokens(command: str) -> list[str]:
+    try:
+        return shlex.split(command)
+    except ValueError:
+        return command.split()
+
+
+#: A command containing any of these runs more than one thing, or runs it
+#: somewhere other than here. Which of its paths is missing is not visible from
+#: the string, so no claim is made about any of them.
+SHELL_OPERATORS = ("&&", "||", "|", ";", "`", "$(", ">", "<", "\n")
+
+#: Programs whose next argument is the script they run. `sh ./check.sh` names a
+#: path the same way `./check.sh` does.
+INTERPRETERS = frozenset((
+    "sh", "bash", "zsh", "dash", "ksh", "python", "python3", "node", "ruby",
+    "perl", "pwsh",
+))
+
+
+def recorded_path_token(command: str) -> str | None:
+    """The explicit path a recorded command runs, if it names one at all.
+
+    Deliberately almost always None. Only the documented-wrapper shape is
+    claimed: `./check.sh`, `./app.sh --test`, `sh ./ui-tests/run.sh`. Everything
+    else is refused, because the first version of this was far too eager and
+    every case it got wrong was a false alarm on an ordinary project:
+
+    - `go test ./...` — the most common Stage 1 command in the Go ecosystem —
+      was read as a path `./...` and reported as deleted, on every Go project.
+    - `cd frontend && ./test.sh` names a path relative to `frontend`, not here.
+    - `sh -c './check.sh && ./lint.sh'` is one token that is not a filename.
+    - `docker run -v /tmp/cache:/cache …` has a mount spec, not a path.
+
+    A missing check reported as present is a quiet gap; a present check reported
+    as missing is a mode people stop reading. This errs at the first.
+    """
+    text = str(command)
+    if any(operator in text for operator in SHELL_OPERATORS):
+        return None
+    tokens = _tokens(text)
+    if not tokens:
+        return None
+    candidates = [tokens[0]]
+    if tokens[0] in INTERPRETERS and len(tokens) > 1:
+        candidates.append(tokens[1])
+    for token in candidates:
+        if not token.startswith(("./", "../", "/")):
+            continue
+        # A glob is not a filename, and `:` means a mount or a host, not a path.
+        if token.endswith("...") or any(ch in token for ch in "*?:"):
+            continue
+        return token
+    return None
+
+
+def missing_recorded(commands: list[str], root: pathlib.Path) -> list[tuple[str, str]]:
+    """Recorded commands whose own path is no longer in the tree."""
+    gone: list[tuple[str, str]] = []
+    for command in commands:
+        token = recorded_path_token(str(command))
+        if token is None:
+            continue
+        target = pathlib.Path(token)
+        target = target if target.is_absolute() else root / token
+        try:
+            here = target.exists()
+        except OSError:
+            continue
+        if not here:
+            gone.append((str(command), token))
+    return gone
+
+
+def named_paths(commands: list[str], root: pathlib.Path) -> set[pathlib.Path]:
+    """Every existing path any recorded command names, however loosely.
+
+    Generous on purpose, and in the opposite direction to `recorded_path_token`:
+    here a bare `tests` that happens to be a real directory does count. The two
+    asymmetries point the same way — one refuses to call something gone, the
+    other refuses to call something unaccounted for — and both err into silence.
+    """
+    named: set[pathlib.Path] = set()
+    for command in commands:
+        for token in _tokens(str(command)):
+            if not token or token.startswith("-") or "://" in token:
+                continue
+            candidate = pathlib.Path(token)
+            candidate = candidate if candidate.is_absolute() else root / token
+            try:
+                if candidate.exists():
+                    named.add(candidate.resolve())
+            except OSError:
+                continue
+    return named
+
+
+def _check_shaped(name: str) -> bool:
+    stem = name.rsplit(".", 1)[0].lower() if "." in name else name.lower()
+    if stem in CHECK_NAME_HINTS:
+        return True
+    return any(word in CHECK_NAME_HINTS
+               for word in re.split(r"[^a-z0-9]+", stem) if word)
+
+
+def _walk(root: pathlib.Path):
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = sorted(d for d in dirnames
+                             if not d.startswith(".") and d not in SKIPPED_DIRS)
+        for name in sorted(filenames):
+            yield pathlib.Path(dirpath) / name
+
+
+def unnamed_checks(commands: list[str], root: pathlib.Path) -> list[str]:
+    """Executable checks in the tree that no recorded command names.
+
+    Bounded twice over, because the first version was silent on this project
+    only by accident. Its own `stage1` happens to contain the bare word `tests`
+    in a `compileall` line, which resolved to a real directory and covered the
+    whole fixture pack. For any ordinary Stage 1 — `make test`, `npm test`,
+    `./check.sh` — the same tree produced ten candidates, all of them test data.
+    A property that holds by coincidence is not a property.
+
+    Not "nothing runs it", and the wording of the report says so. This cannot
+    see inside a wrapper and must not pretend to: the #76 fixture's `check.sh`
+    carries a comment saying it never invokes `ui-tests/`, so a helper that
+    inferred invocation from a substring would read that very sentence as proof
+    of the opposite. Deciding what actually runs a check is the agent's job, and
+    SKILL.md gives it the three buckets to put each one in.
+    """
+    named = named_paths(commands, root)
+    found: list[str] = []
+    for path in _walk(root):
+        try:
+            relative = path.relative_to(root)
+        except ValueError:
+            continue
+        if relative.name.startswith(".") or path.is_symlink() or not path.is_file():
+            continue
+        if not os.access(path, os.X_OK):
+            continue
+        if len(relative.parts) > MAX_CHECK_DEPTH:
+            continue
+        if any(part.lower() in DATA_DIRS for part in relative.parts):
+            continue
+        if not any(_check_shaped(part) for part in relative.parts):
+            continue
+        here, covered = path, False
+        while True:
+            try:
+                if here.resolve() in named:
+                    covered = True
+                    break
+            except OSError:
+                pass
+            if here == root or here.parent == here:
+                break
+            here = here.parent
+        if not covered:
+            found.append("./" + relative.as_posix())
+    return found
+
+
+def _scan_string(text: str, i: int) -> int:
+    """Index just past the JSON string starting at `text[i] == '\"'`."""
+    i += 1
+    while i < len(text):
+        if text[i] == "\\":
+            i += 2
+            continue
+        if text[i] == '"':
+            return i + 1
+        i += 1
+    raise ValueError("unterminated string")
+
+
+def _find_key(text: str, start: int, key: str) -> int | None:
+    """Index of the colon after the next `"key":` at or after `start`.
+
+    Comparison is on the decoded literal, so the `//stage1` comment key that
+    this project's own configuration carries can never be mistaken for
+    `stage1`.
+    """
+    i = start
+    while i < len(text):
+        if text[i] == '"':
+            end = _scan_string(text, i)
+            try:
+                decoded = json.loads(text[i:end])
+            except ValueError:
+                decoded = None
+            if decoded == key:
+                j = end
+                while j < len(text) and text[j] in " \t\r\n":
+                    j += 1
+                if j < len(text) and text[j] == ":":
+                    return j
+            i = end
+            continue
+        i += 1
+    return None
+
+
+def _array_span(text: str, i: int) -> tuple[int, int]:
+    """`(index of '[', index of its matching ']')`, strings skipped."""
+    while i < len(text) and text[i] in " \t\r\n":
+        i += 1
+    if i >= len(text) or text[i] != "[":
+        raise ValueError("the recorded stage1 is not a list")
+    opened, depth = i, 0
+    while i < len(text):
+        char = text[i]
+        if char == '"':
+            i = _scan_string(text, i)
+            continue
+        if char in "[{":
+            depth += 1
+        elif char in "]}":
+            depth -= 1
+            if depth == 0:
+                return opened, i
+        i += 1
+    raise ValueError("unterminated list")
+
+
+def splice_stage1(text: str, additions: list[str]) -> str:
+    """Add commands to `verification.stage1`, leaving every other byte alone.
+
+    A `json.loads`/`json.dumps` round-trip is what the rest of this script does,
+    and it is the wrong tool here. `json.dumps` escapes non-ASCII by default, so
+    an operator's Russian note comes back as `\\uXXXX` — equal as a value,
+    mangled as a file — and it reformats a document nobody asked it to touch.
+    This mode edits one key, so it edits one key and nothing else moves.
+    """
+    verification = _find_key(text, 0, "verification")
+    if verification is None:
+        raise ValueError("no verification block to add to")
+    stage1 = _find_key(text, verification, "stage1")
+    if stage1 is None:
+        raise ValueError("no recorded stage1 to add to")
+    opened, closed = _array_span(text, stage1 + 1)
+
+    encoded = [json.dumps(command, ensure_ascii=False) for command in additions]
+    if not text[opened + 1:closed].strip():
+        return text[:opened + 1] + ", ".join(encoded) + text[closed:]
+
+    last = closed - 1
+    while last > opened and text[last] in " \t\r\n":
+        last -= 1
+    if "\n" in text[opened:closed]:
+        # Match the file's own line ending. Inserting an LF into a CRLF
+        # document leaves it mixed, which is not corruption but is somebody
+        # else's diff noise on the next commit.
+        newline = "\r\n" if "\r\n" in text[opened:closed] else "\n"
+        line_start = text.rfind("\n", 0, last) + 1
+        indent = ""
+        cursor = line_start
+        while cursor < len(text) and text[cursor] in " \t":
+            indent += text[cursor]
+            cursor += 1
+        insertion = "".join(f",{newline}{indent}{item}" for item in encoded)
+    else:
+        insertion = "".join(f", {item}" for item in encoded)
+    return text[:last + 1] + insertion + text[last + 1:]
+
+
+def add_stage1(
+    root: pathlib.Path,
+    additions: list[str],
+    dry: bool = False,
+) -> pathlib.Path:
+    """Grow the recorded Stage 1, and refuse if the edit reached anything else.
+
+    The splice can only insert, so the byte guarantee holds by construction.
+    The re-parse below is the second lock: if the resulting document differs
+    from the original in any way other than those commands appended to
+    `stage1`, nothing is written at all. Failing closed is the only acceptable
+    failure here — the alternative is a rewrite of somebody's hand-written
+    delivery route, which is worse than never refreshing.
+    """
+    path = resolve_config(root)
+    # Bytes, not text. `read_text`/`write_text` default to universal newlines,
+    # so a configuration checked out with CRLF endings — every Windows working
+    # tree with `core.autocrlf=true` — came back with every line ending
+    # rewritten, under a message saying nothing else had been touched. The
+    # re-parse guard below could never catch it: the values are equal, and it
+    # is the file that was mangled.
+    text = path.read_bytes().decode("utf-8")
+    before = json.loads(text)
+    recorded = [str(command) for command in before["verification"]["stage1"]]
+
+    spliced = splice_stage1(text, additions)
+    after = json.loads(spliced)
+
+    expected = dict(before)
+    verification = dict(before["verification"])
+    verification["stage1"] = recorded + list(additions)
+    expected["verification"] = verification
+    if after != expected:
+        raise ValueError("the edit would have changed more than stage1")
+
+    if not dry:
+        path.write_bytes(spliced.encode("utf-8"))
+    return path
+
+
+def _recorded_stage1(path: pathlib.Path) -> tuple[dict, list[str]]:
+    body = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(body, dict):
+        raise ValueError("not an object")
+    verification = body.get("verification")
+    if not isinstance(verification, dict):
+        raise ValueError("no verification block")
+    recorded = verification.get("stage1")
+    if not isinstance(recorded, list):
+        raise ValueError("no recorded stage1")
+    return body, [str(command) for command in recorded]
+
+
+def report_refresh(root: pathlib.Path) -> int:
+    """Compare the recorded Stage 1 with the tree. Write nothing, ever."""
+    path = resolve_config(root)
+    where = path.relative_to(root) if path.is_relative_to(root) else path
+    if not path.exists():
+        print("There is no configuration here to refresh, so nothing was compared.")
+        print("Run setup first; refresh only ever revisits a record that exists.")
+        return 2
+    try:
+        _, recorded = _recorded_stage1(path)
+    except Exception as exc:
+        print(f"{where} cannot be read as a configuration ({exc}).")
+        print("Fix it by hand, then run this again. Nothing was changed.")
+        return 2
+
+    gone = missing_recorded(recorded, root)
+    unnamed = unnamed_checks(recorded, root)
+
+    if not gone and not unnamed:
+        print(f"The Stage 1 recorded in {where} still matches this tree: nothing "
+              "it lists has gone missing, and no check here is unaccounted for.")
+        return 0
+
+    print(f"The Stage 1 recorded in {where}, against this tree:")
+    if gone:
+        print()
+        print("Recorded, and no longer here:")
+        for command, token in gone:
+            print(f"  gone     {command} — {token} does not exist")
+    if unnamed:
+        print()
+        print("Here, and named by no recorded command:")
+        for candidate in unnamed:
+            print(f"  unnamed  {candidate}")
+        print()
+        print("Whether something else already runs these is not visible from the")
+        print("configuration. Read them, then add only the ones Stage 1 should run:")
+        print("  --add-stage1 "
+              + " --add-stage1 ".join(shlex.quote(c) for c in unnamed))
+    print()
+    print("Nothing was changed.")
+    return 0
+
+
+def apply_stage1(
+    root: pathlib.Path,
+    commands: list[str],
+    timeout: int = 120,
+    dry: bool = False,
+) -> int:
+    """Record the answer to the refresh question, once each command passes."""
+    path = resolve_config(root)
+    where = path.relative_to(root) if path.is_relative_to(root) else path
+    if not path.exists():
+        print("There is no configuration here to add a check to.")
+        print("Run setup first. Nothing was changed.")
+        return 2
+    try:
+        _, recorded = _recorded_stage1(path)
+    except Exception as exc:
+        print(f"{where} cannot be read as a configuration ({exc}).")
+        print("Fix it by hand, then run this again. Nothing was changed.")
+        return 2
+
+    wanted: list[str] = []
+    already: list[str] = []
+    for command in commands:
+        if command in recorded or command in wanted:
+            already.append(command)
+        else:
+            wanted.append(command)
+
+    if not wanted:
+        print(f"Already recorded in {where}, so nothing was changed:")
+        for command in already:
+            print(f"  already  {command}")
+        return 0
+
+    # The same screen the stage2 draft has always had, applied here because a
+    # command typed in answer to an offer reaches the record the same way. An
+    # empty string runs as `sh -c ''`, exits 0, and would be written down as a
+    # green Stage 1 check that can never go red.
+    cannot_fail = []
+    for command in wanted:
+        if not command.strip():
+            cannot_fail.append((command, "an empty command is not a check"))
+            continue
+        why = unfailable(command)
+        if why:
+            cannot_fail.append((command, why))
+    if cannot_fail:
+        print("A check that cannot report a failure is not a check, "
+              "so nothing was added.")
+        for command, why in cannot_fail:
+            print(f"  cannot fail  {command!r} — {why}")
+        return 2
+
+    results = run_explicit_checks(wanted, root, timeout=timeout)
+    passing, missing, timed_out, broken = sort_results(results, explicit=True)
+    if missing or timed_out or broken or len(passing) != len(wanted):
+        print("A check offered for Stage 1 did not pass here, so nothing was added.")
+        for command in passing:
+            print(f"  ok       {command}")
+        for command, out in broken:
+            first = out.splitlines()[0][:60] if out else "no output"
+            print(f"  FAILING  {command} — {first}")
+        for command in timed_out:
+            print(f"  too slow {command} — gave up waiting")
+        ran = {result[0] for result in results}
+        for command in wanted:
+            if command not in ran:
+                print(f"  not run  {command} — an earlier command failed first")
+        print("Only a check that ran and passed here may be recorded.")
+        return 2
+
+    try:
+        add_stage1(root, wanted, dry=dry)
+    except Exception as exc:
+        print(f"Cannot add to the recorded Stage 1: {exc}.")
+        print("Nothing was changed. Add the command by hand instead.")
+        return 2
+
+    print(f"{'Would add' if dry else 'Added'} to Stage 1 in {where}, "
+          "after running each one here:")
+    for command in already:
+        print(f"  already  {command}")
+    for command in wanted:
+        print(f"  ok       {command}")
+    print()
+    if dry:
+        print(f"Nothing was written. Drop --check to save this to {where}.")
+    else:
+        print("Nothing else in that file was touched.")
+    return 0
+
+
 def report_state(root: pathlib.Path, kind: str = "library", first_run: bool = True) -> int:
     """Say what is still missing, and — the first time only — how to use this.
 
@@ -771,6 +1290,17 @@ def main(argv: list[str] | None = None) -> int:
         metavar="SECONDS",
         help="wall-clock limit for each Stage 1 command (default: 120)",
     )
+    parser.add_argument(
+        "--refresh",
+        action="store_true",
+        help="compare the recorded Stage 1 with this tree and report; write nothing",
+    )
+    parser.add_argument(
+        "--add-stage1",
+        action="append",
+        metavar="COMMAND",
+        help="run this command and, if it passes, add it to the recorded Stage 1",
+    )
     parser.add_argument("--dir", default=".", help="project directory")
     args = parser.parse_args(argv)
 
@@ -779,6 +1309,27 @@ def main(argv: list[str] | None = None) -> int:
 
     root = pathlib.Path(args.dir).resolve()
     config = resolve_config(root)
+
+    if args.refresh or args.add_stage1:
+        if args.refresh and args.add_stage1:
+            parser.error(
+                "--refresh writes nothing by contract; --add-stage1 is how an "
+                "answer reaches the file. Run them one after the other"
+            )
+        # `--surfaces` joins this list because it arrived on the same merge:
+        # it is a setup option, and revisiting an existing record is not setup.
+        if (args.stage1 or args.artifact_kind or args.defer_artifact_kind
+                or args.draft_stage2 or args.language or args.confirm_artifact_kind
+                or args.surfaces):
+            parser.error(
+                "--refresh and --add-stage1 revisit an existing record; "
+                "do not combine them with setup options"
+            )
+        if args.refresh:
+            return report_refresh(root)
+        return apply_stage1(
+            root, args.add_stage1, timeout=args.timeout_seconds, dry=args.check
+        )
 
     surfaces = None
     if args.surfaces is not None:

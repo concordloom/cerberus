@@ -162,6 +162,61 @@ def test_the_gate_pair_differs_only_in_product_code():
     assert differ == {"app/cli.py"}, f"the pair differs in more than the change: {differ}"
 
 
+def test_the_stale_record_fixture_is_the_shape_the_issue_asked_for():
+    """#81. The fixture claims a record that predates a check in its own tree.
+
+    Claimed in `expected.json` and checked here by running the thing: the
+    recorded Stage 1 really is short, the executable it never names really is
+    there, and a refresh really does name it. A fixture whose expectations
+    nobody executes rots into something no live cell could satisfy.
+    """
+    fixture = FIXTURES / "stage1-stale"
+    expected = json.loads((fixture / "expected.json").read_text(encoding="utf-8"))
+    refresh = expected["refresh"]
+    recorded = json.loads((fixture / "repo" / "gopnik.json").read_text(encoding="utf-8"))
+
+    assert recorded["verification"]["stage1"] == refresh["recorded"], (
+        "the fixture's record no longer matches what expected.json claims")
+    for key in refresh["hand_written"]:
+        assert key in recorded["verification"], (
+            f"{key} is what a refresh must not eat, and the fixture has none")
+    for command in refresh["unnamed"]:
+        assert command not in refresh["recorded"], (
+            f"{command} is recorded, so the fixture has no gap to find")
+        suite = fixture / "repo" / command[len("./"):]
+        assert suite.is_file(), f"{command} is claimed but not in the tree"
+
+    setup = ROOT / "plugins" / "gopnik" / "skills" / "gopnik-setup" / "gopnik_setup.py"
+    work = materialise(fixture)
+    before = (work / "gopnik.json").read_text(encoding="utf-8")
+
+    report = subprocess.run(
+        [sys.executable, str(setup), "--refresh", "--dir", str(work)],
+        capture_output=True, text=True)
+    assert report.returncode == 0, report.stdout + report.stderr
+    for command in refresh["unnamed"]:
+        assert command in report.stdout, (
+            f"a refresh does not name {command}:\n{report.stdout}")
+
+    applied = subprocess.run(
+        [sys.executable, str(setup), "--dir", str(work),
+         *sum([["--add-stage1", c] for c in refresh["unnamed"]], [])],
+        capture_output=True, text=True)
+    assert applied.returncode == 0, applied.stdout + applied.stderr
+
+    after = (work / "gopnik.json").read_text(encoding="utf-8")
+    assert json.loads(after)["verification"]["stage1"] == refresh["after"], after
+    for key in refresh["hand_written"]:
+        assert json.loads(after)["verification"][key] == recorded["verification"][key], (
+            f"the refresh changed the hand-written {key!r}")
+    # The marker is how a live run proves the suite really executed, rather
+    # than that a string was copied into the record.
+    marker = work / refresh["marker"]["path"]
+    assert marker.is_file() and marker.read_text(encoding="utf-8") == refresh["marker"]["value"], (
+        "the added check was recorded without having run")
+    assert len(after) > len(before), "nothing was added"
+
+
 def test_stage2_exercises_the_pack_as_delivered():
     """The pack has to survive delivery, not merely exist in the working tree.
 
@@ -179,7 +234,7 @@ def test_stage2_exercises_the_pack_as_delivered():
         "the delivered pack is never exercised")
     assert 'test -x "$GOPNIK_FIXTURE/check.sh"' in joined, (
         "a check that ships without its executable bit would not be noticed")
-    for name in ("stage1-gap", "gate-ui-covered"):
+    for name in ("stage1-gap", "gate-ui-covered", "stage1-stale"):
         assert f"tests/fixtures/{name}/repo/ui-tests/run.sh" in joined, (
             f"{name}'s browser suite is not checked for its executable bit")
         assert (FIXTURES / name / "repo" / "ui-tests" / "run.sh").is_file(), name
