@@ -1,0 +1,17 @@
+{
+  "language": "en",
+  "verification": {
+    "artifact_kind": "cli",
+    "surfaces": [
+      "command",
+      "chart"
+    ],
+    "stage1": [
+      "./check.sh"
+    ],
+    "stage2": [
+      "./stage2/command.sh"
+    ],
+    "notes": "The chart in chart/ is published beside the command and applied to a cluster by whoever consumes it. The command is installed and run by a person."
+  }
+}

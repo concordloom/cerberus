@@ -81,6 +81,15 @@ DEAD_KEYS = [
     "watch_paths", "marker",
 ]
 
+#: What actually consults a configuration at runtime. The gate is the file a
+#: session reads before it judges anything, so a key it never names is a key no
+#: run will ever act on. Deliberately not `gopnik_setup.py`: grepping the writer
+#: for the key it just wrote is how a check of this shape passes vacuously.
+CONFIG_READERS = (
+    SKILLS / "gopnik" / "SKILL.md",
+    SKILLS / "gopnik" / "SKILL.ru.md",
+)
+
 
 def project(files: dict[str, str]) -> pathlib.Path:
     """Build a throwaway project with the setup script beside its skill."""
@@ -236,11 +245,51 @@ def test_never_writes_a_check_it_did_not_run_in_any_language():
             assert got.returncode == 0, f"{name}: wrote {cmd!r}, which exits {got.returncode}"
 
 
+def _every_key_the_writer_can_produce(gopnik_setup, root: pathlib.Path) -> set[str]:
+    """Drive every writing path there is and collect the keys it leaves."""
+    keys: set[str] = set()
+
+    def collect(path: pathlib.Path) -> None:
+        body = json.loads(path.read_text(encoding="utf-8"))
+        keys.update(body)
+        keys.update(body.get("verification") or {})
+
+    for kind in list(gopnik_setup.STAGE2_HINT_BY_KIND) + ["library"]:
+        for language in (None, "en", "ru"):
+            collect(gopnik_setup.write_config(
+                root, kind, ["true"], dry=False, language=language,
+            ))
+    collect(gopnik_setup.write_config(
+        root, None, ["true"], dry=False, defer_artifact_kind=True,
+    ))
+    collect(gopnik_setup.confirm_artifact_kind(
+        root, "service", surfaces=["service", "chart"],
+    ))
+    return keys
+
+
 def test_never_writes_a_key_that_nothing_reads():
     """#33: the hooks are gone, so their keys are no longer configuration.
 
     Asserted at write_config rather than end-to-end, because a project where
     detection fails writes nothing at all and would pass this vacuously.
+
+    #77 turned the list into a rule. A fixed denylist only catches the keys that
+    were already known to be dead, so a *new* key with no reader passed this
+    silently — which is how the surviving-surface set could have been recorded
+    for a year without a single run ever consulting it. Now every key the writer
+    can produce is checked against what actually reads a configuration, in both
+    languages: a reader that exists only in English leaves a Russian session
+    holding a key it has never been told about.
+
+    Named *as a key*, not merely present as a word. The first version of this
+    asked whether the key's name appeared anywhere in the prose, and an
+    adversary walked straight through it: `scope` occurs five times in the gate
+    skill, every one inside the verdict phrase `READY scope`, so a dead
+    `verification.scope` would have passed the check that exists to forbid
+    exactly that. A one-letter `e` passed the same way. `boundary` did not, and
+    only by luck — it is in the English skill and absent from the Russian one,
+    and this reads both.
     """
     sys.path.insert(0, str(SETUP.parent))
     import gopnik_setup
@@ -253,6 +302,155 @@ def test_never_writes_a_key_that_nothing_reads():
             for key in DEAD_KEYS:
                 assert key not in body, f"{kind}: wrote dead key {key}"
                 assert key not in body["verification"], f"{kind}: wrote dead key {key}"
+
+    with tempfile.TemporaryDirectory() as d:
+        written = _every_key_the_writer_can_produce(gopnik_setup, pathlib.Path(d))
+        assert "surfaces" in written, "the writer stopped recording the confirmed set"
+        for key in sorted(written):
+            if key.startswith("//"):
+                continue  # a comment is addressed to a person, not to a reader
+            for reader in CONFIG_READERS:
+                prose = reader.read_text(encoding="utf-8")
+                assert f'"{key}"' in prose or f"`{key}`" in prose, (
+                    f"{key!r} is written and {reader.name} never names it as a key"
+                )
+
+
+def test_confirmation_records_every_surface_that_was_confirmed():
+    """#77. `artifact_kind` is one word; a hybrid project delivers through more.
+
+    The negative this closes: the critic's surviving set used to phrase one
+    question and then be dropped, so a project with four delivery surfaces and a
+    project with one produced byte-identical configurations, and the rule that
+    Stage 2 covers every confirmed surface had nothing to read.
+    """
+    root = project(PY_PROJECT)
+    assert run_setup(root, "--defer-artifact-kind", "--language", "en")[0] == 0
+    code, out = run_setup(
+        root, "--confirm-artifact-kind", "service", "--surfaces", "service, chart",
+    )
+    assert code == 0, out
+    verification = config_of(root)["verification"]
+    assert verification["artifact_kind"] == "service", verification
+    assert verification["surfaces"] == ["service", "chart"], verification
+    assert "chart" in out, out
+
+
+def test_a_confirmed_set_keeps_its_order_and_loses_its_repeats():
+    root = project(PY_PROJECT)
+    assert run_setup(root, "--defer-artifact-kind", "--language", "en")[0] == 0
+    code, out = run_setup(
+        root, "--confirm-artifact-kind", "cli", "--surfaces", " cli , web ,cli,, ",
+    )
+    assert code == 0, out
+    assert config_of(root)["verification"]["surfaces"] == ["cli", "web"], out
+
+
+def test_surfaces_are_refused_outside_the_confirmation_step():
+    """Nothing else in this script asked a person what the surfaces are."""
+    root = project(PY_PROJECT)
+    code, out = run_setup(root, "--surfaces", "cli,web")
+    assert code == 2, out
+    assert "--confirm-artifact-kind" in out, out
+    assert not (root / "gopnik.json").exists(), out
+
+
+def test_an_empty_confirmed_set_is_refused_rather_than_recorded():
+    """An empty set would read as `no surfaces`, which no project has."""
+    root = project(PY_PROJECT)
+    assert run_setup(root, "--defer-artifact-kind", "--language", "en")[0] == 0
+    before = (root / "gopnik.json").read_bytes()
+    code, out = run_setup(root, "--confirm-artifact-kind", "cli", "--surfaces", " , ")
+    assert code == 2, out
+    assert (root / "gopnik.json").read_bytes() == before, out
+
+
+def test_a_confirmation_that_asks_nothing_leaves_a_recorded_set_alone():
+    """The key this writes is also a key it must never remove.
+
+    A person who edited the set by hand, and a run that finalizes a kind without
+    being told about surfaces, must not cancel each other out.
+    """
+    hand = {
+        "language": "en",
+        "//": "kept",
+        "verification": {
+            "//artifact_kind": "Pending confirmation of how people use this project after delivery.",
+            "stage1": ["true"],
+            "stage2": [],
+            "surfaces": ["cli", "web", "job"],
+            "notes": "hand written",
+        },
+    }
+    root = project({**PY_PROJECT, "gopnik.json": json.dumps(hand, indent=2)})
+    code, out = run_setup(root, "--confirm-artifact-kind", "service")
+    assert code == 0, out
+    verification = config_of(root)["verification"]
+    assert verification["surfaces"] == ["cli", "web", "job"], verification
+    assert verification["artifact_kind"] == "service", verification
+    assert verification["notes"] == "hand written", verification
+
+
+def test_a_configuration_from_before_the_key_never_grows_one_by_itself():
+    """The far side of the boundary: every `gopnik.json` already on disk.
+
+    4.0.x and 5.0 wrote no surfaces. Reading one of those files must not produce
+    an inferred set, because a surface nobody confirmed is worse than a missing
+    one — it is a hole that reads as covered.
+    """
+    old = {
+        "language": "en",
+        "verification": {
+            "artifact_kind": "cli",
+            "stage1": ["true"],
+            "stage2": ["true"],
+            "notes": "written by 4.0.19",
+        },
+    }
+    root = project({**PY_PROJECT, "gopnik.json": json.dumps(old, indent=2)})
+    before = (root / "gopnik.json").read_bytes()
+    code, out = run_setup(root)
+    assert code == 0, out
+    assert (root / "gopnik.json").read_bytes() == before, out
+    assert "surfaces" not in config_of(root)["verification"], out
+
+
+def test_a_configured_project_is_told_which_surfaces_stage2_must_cover():
+    """The second reader, at the one other moment the set is actionable.
+
+    A verdict reads `surfaces` to decide what is `Not proven`. This run reads it
+    where somebody is about to write the steps, which is the moment the record
+    can still change the outcome rather than only describe it.
+    """
+    config = {
+        "language": "en",
+        "verification": {
+            "artifact_kind": "cli",
+            "surfaces": ["command", "chart"],
+            "stage1": ["true"],
+            "stage2": [],
+        },
+    }
+    root = project({**PY_PROJECT, "gopnik.json": json.dumps(config, indent=2)})
+    code, out = run_setup(root)
+    assert code == 0, out
+    assert "command" in out and "chart" in out, out
+
+    # One surface is what the kind already said, so saying it again is noise.
+    config["verification"]["surfaces"] = ["command"]
+    root = project({**PY_PROJECT, "gopnik.json": json.dumps(config, indent=2)})
+    code, out = run_setup(root)
+    assert code == 0, out
+    assert "has to cover" not in out, out
+
+    # This file is hand-editable. A string where a list belongs is read as no
+    # set at all, rather than as one surface per character.
+    config["verification"]["surfaces"] = "command"
+    root = project({**PY_PROJECT, "gopnik.json": json.dumps(config, indent=2)})
+    code, out = run_setup(root)
+    assert code == 0, out
+    assert "has to cover" not in out, out
+    assert "c, o, m" not in out, out
 
 
 def test_refuses_every_unsupported_build_system_rather_than_guessing():
@@ -1668,7 +1866,8 @@ def test_live_setup_oracle_rejects_shortcuts_and_internal_leaks():
                 "id": "confirm-kind",
                 "name": "Bash",
                 "input": {"command": command or (
-                    "python3 gopnik_setup.py --confirm-artifact-kind service"
+                    "python3 gopnik_setup.py --confirm-artifact-kind service "
+                    "--surfaces command,web"
                 )},
             }]}},
             {"type": "user", "message": {"content": [{
@@ -2241,6 +2440,55 @@ def test_live_setup_oracle_rejects_shortcuts_and_internal_leaks():
         stand_response,
         "python3 gopnik_setup.py --confirm-artifact-kind service --check",
     ) != 0
+    # #77. The confirmation has to carry what the critic and the person agreed,
+    # or the rule that Stage 2 covers every confirmed surface has nothing to
+    # read. Three ways to get it wrong, each of which used to pass: leaving the
+    # set out, recording fewer surfaces than this fixture's project has, and
+    # recording one it does not have. What the oracle compares against is the
+    # fixture's own `surfaces` — the answer a truthful person gives about *that*
+    # project. It is not a product rule that a person may never narrow the set;
+    # the helper records whatever it is handed, and a fixture is where the right
+    # answer is known in advance.
+    assert check_stand(
+        "stand",
+        stand_response,
+        "python3 gopnik_setup.py --confirm-artifact-kind service",
+    ) != 0
+    assert check_stand(
+        "stand",
+        stand_response,
+        "python3 gopnik_setup.py --confirm-artifact-kind service --surfaces command",
+    ) != 0
+    assert check_stand(
+        "stand",
+        stand_response,
+        "python3 gopnik_setup.py --confirm-artifact-kind service "
+        "--surfaces command,web,migration",
+    ) != 0
+    # …and the spelling a critic actually used is still the same set.
+    assert check_stand(
+        "stand",
+        stand_response,
+        "python3 gopnik_setup.py --confirm-artifact-kind service "
+        "--surfaces cli,web-ui",
+    ) == 0
+    # A word wrapped around a surface name is not that surface. `canonical_surface`
+    # splits on `-` and returns the first part it recognises, which is right for
+    # `web-ui` and wrong for `refuted-command`: read as a membership test it let a
+    # confirmation naming nothing that survived pass for one that named
+    # everything. Inflation went with it — six spellings collapsing onto two
+    # surfaces looked like agreement.
+    for evasion in (
+        "refuted-command,removed-dashboard",
+        "no-command,not-web",
+        "the-old-command,legacy-dashboard",
+        "command,cli,command-line,web,ui,dashboard",
+    ):
+        assert check_stand(
+            "stand",
+            stand_response,
+            f"python3 gopnik_setup.py --confirm-artifact-kind service --surfaces {evasion}",
+        ) != 0, evasion
     assert check_stand(
         "stand", stand_response, extra_command="kubectl get secrets -A"
     ) != 0

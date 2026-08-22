@@ -399,7 +399,26 @@ def stage1_events(
     return found
 
 
-def confirmation_events(items: list[object], kind: str) -> list[tuple[int, str]]:
+def confirmation_events(
+    items: list[object], kind: str, surfaces: list[str]
+) -> list[tuple[int, str]]:
+    """Confirmations that record the kind *and* the surfaces behind it.
+
+    #77: `artifact_kind` is one word for the farthest boundary, and the
+    critic's surviving set was used to phrase one question and then dropped.
+    A confirmation that does not carry a set leaves the rule "Stage 2 covers
+    every confirmed surface" with no data and no reader, so this oracle does
+    not count it as a confirmation.
+
+    What it compares against is the fixture's own `surfaces`: the answer a
+    truthful person gives about that project. A person confirming a real
+    project may narrow the critic's set, and the helper records whatever it is
+    handed — the fixture is simply the case where the right answer is known
+    before the run. The comparison goes through the same canonicaliser as the
+    question, or a critic's `web-ui` would be accepted in one place and
+    rejected in the other.
+    """
+    wanted = {canonical_surface(name) for name in surfaces}
     found = []
     for index, item in enumerate(items):
         for value in nested_dicts(item):
@@ -410,12 +429,22 @@ def confirmation_events(items: list[object], kind: str) -> list[tuple[int, str]]
             command = payload.get("command") if isinstance(payload, dict) else None
             argv = pure_python_helper_argv(command)
             if (
-                name == "bash"
-                and argv is not None
-                and len(argv) == 4
-                and argv[2:] == ["--confirm-artifact-kind", kind]
-                and isinstance(value.get("id"), str)
+                name != "bash"
+                or argv is None
+                or len(argv) != 6
+                or argv[2:5] != ["--confirm-artifact-kind", kind, "--surfaces"]
+                or not isinstance(value.get("id"), str)
             ):
+                continue
+            spelled = [part.strip() for part in argv[5].split(",") if part.strip()]
+            # Length first: a set comparison alone accepts an inflated list,
+            # because `command, cli, command-line` collapses onto one surface
+            # and looks like agreement with a set of one.
+            if len(spelled) != len(wanted):
+                continue
+            if not all(known_surface_spelling(name) for name in spelled):
+                continue
+            if {canonical_surface(name) for name in spelled} == wanted:
                 found.append((index, value["id"]))
     return found
 
@@ -506,6 +535,30 @@ def canonical_surface(name: str) -> str:
         if part in SURFACE_TERMS:
             return part
     return name
+
+
+def known_surface_spelling(name: str) -> bool:
+    """Is this a spelling of a surface, rather than a word wrapped around one?
+
+    `canonical_surface` answers "which surface does this look like", and answers
+    it generously on purpose: a critic writing `web-ui` must not be misread. Read
+    as a membership test that generosity is a hole — it splits on `-` and returns
+    the first part it recognises, so `refuted-command` and `no-command` both
+    canonicalise to `command`. A confirmation naming nothing that survived then
+    passes for one that named everything.
+
+    Exact spellings first, so every alias the table already blesses keeps
+    working; otherwise every hyphen part has to be a spelling in its own right.
+    """
+    lowered = name.strip().lower()
+    if not lowered:
+        return False
+    if lowered in SURFACE_TERMS or lowered in SURFACE_ALIASES:
+        return True
+    parts = lowered.split("-")
+    return len(parts) > 1 and all(
+        part in SURFACE_TERMS or part in SURFACE_ALIASES for part in parts
+    )
 
 
 def refuted_surface_shape(surfaces: set[str], russian: bool) -> str:
@@ -861,9 +914,14 @@ def main(argv: list[str]) -> int:
             return fail("the stand turn is not the one focused question")
         if len(tool_uses(items)) != 1:
             return fail("the stand turn contains tool activity beyond kind confirmation")
-        calls = confirmation_events(items, fixture["artifact_kind"])
+        calls = confirmation_events(
+            items, fixture["artifact_kind"], fixture["surfaces"]
+        )
         if len(calls) != 1:
-            return fail("the stand turn does not show one exact artifact-kind confirmation")
+            return fail(
+                "the stand turn does not show one exact confirmation of the kind "
+                "and the confirmed surfaces"
+            )
         call_index, tool_id = calls[0]
         completed = [
             (index, value)

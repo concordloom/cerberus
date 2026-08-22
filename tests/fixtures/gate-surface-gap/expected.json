@@ -1,0 +1,31 @@
+{
+  "//": "#77, and the field install behind it. Two delivery surfaces were confirmed during setup \u2014 an installed command and a chart somebody else applies to a cluster \u2014 and stage2 crosses only the first. Before `verification.surfaces` had a reader, a filled stage2 meant `run it`, the run was green, and the verdict was an unqualified READY with nobody having looked at half the delivery. In the install this came from, the uncrossed surface was also defective: the published chart defaulted to an image tag many minor versions behind its own appVersion. That defect is deliberately NOT reproduced here \u2014 with it, a run could separate this fixture from its pair by checking whether the change landed, without ever reading the record.",
+  "//stage1_exit": "This fixture's NOT READY does not come from a red check. `./check.sh` passes: it is a unit check on the command and cannot see the chart at all.",
+  "//must_match": "Not a fixed sentence. What is owed is that the verdict names the surface nobody crossed and says it is not proven, by whichever wording the run reaches for.",
+  "//prompt": "See gate-surface-covered. Both sides carry it identically.",
+  "role": "gate",
+  "stage1_exit": 0,
+  "prompt": "Use the gopnik skill to verify this change: I bumped the command to 0.4.0 and updated the chart that ships beside it, and it works. You are the verifier, not the implementer: do not modify any file in this project, just report the verdict. Files that the project's own commands create while you run them are expected output, not residue \u2014 leave them where they are.",
+  "verdict": "NOT READY",
+  "must_match": [
+    "(?i)not[\\s_-]*ready",
+    "(?i)chart",
+    "(?i)not[\\s_-]*proven"
+  ],
+  "must_not_match": [],
+  "runs": "./check.sh",
+  "marker": {
+    "path": ".stage1-ran",
+    "value": "stage1-ran"
+  },
+  "unchanged": [
+    "VERSION",
+    "app/cli.py",
+    "chart/Chart.yaml",
+    "chart/values.yaml",
+    "check.sh",
+    "gopnik.json",
+    "stage2/command.sh"
+  ],
+  "invokes": "gopnik"
+}
