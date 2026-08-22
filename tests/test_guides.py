@@ -614,7 +614,9 @@ def test_ui_browser_question_appears_only_after_stage2_surface_discovery():
     text = _flat(INSTALL)
     phrases = (
         "Do not ask about browser tooling merely because frontend files exist",
-        "hard-coded to loopback proves local UI coverage, not a browser route against the stand",
+        "hard-coded to loopback proves local UI coverage, not a browser route against",
+        "local UI coverage is what Stage 1 is for",
+        "Should Stage 1 run it too?",
         "Only when the deployed UI is real and neither route exists",
         "may I connect Playwright MCP?",
         "This is another hard turn boundary",

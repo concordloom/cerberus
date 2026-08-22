@@ -1,0 +1,6 @@
+[project]
+name = "stage1-gap-fixture"
+version = "0.1.0"
+
+[project.scripts]
+stage1-gap-fixture = "app.cli:main"

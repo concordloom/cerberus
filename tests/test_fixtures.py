@@ -112,10 +112,15 @@ def test_each_gate_fixture_produces_the_outcome_it_claims():
         body = json.loads((fixture / "expected.json").read_text(encoding="utf-8"))
         work = materialise(fixture)
         proc = subprocess.run(["./check.sh"], cwd=str(work), capture_output=True, text=True)
+        # A red check is the usual reason for NOT READY, not the definition of
+        # it. `gate-ui-gap` is green here and still cannot be called ready,
+        # because nobody looked at the interface it changed — so a fixture may
+        # state the exit code it expects instead of having it inferred.
         red = body["verdict"] == "NOT READY"
-        assert (proc.returncode != 0) == red, (
-            f"{fixture.name}: check.sh exited {proc.returncode} but expects "
-            f"verdict {body['verdict']}\n{proc.stdout}{proc.stderr}"
+        expected_exit = body.get("stage1_exit", 1 if red else 0)
+        assert proc.returncode == expected_exit, (
+            f"{fixture.name}: check.sh exited {proc.returncode}, expected "
+            f"{expected_exit}\n{proc.stdout}{proc.stderr}"
         )
         marker = work / body["marker"]["path"]
         assert marker.is_file(), f"{fixture.name}: check.sh left no marker"
@@ -162,7 +167,8 @@ def test_stage2_consumes_the_pack_rather_than_rebuilding_it():
     stage2 = json.loads((ROOT / "gopnik.json").read_text(encoding="utf-8"))["verification"]["stage2"]
     joined = "\n".join(stage2)
     assert "printf '%s\\n' '[project]'" not in joined, "the printf chain is back"
-    for name in ("hybrid", "gate-red-stage1", "gate-ready-scoped"):
+    for name in ("hybrid", "stage1-gap", "gate-red-stage1", "gate-ready-scoped",
+                 "gate-ui-covered", "gate-ui-gap"):
         needle = f"tests/fixtures/{name}"
         assert needle in joined, f"stage2 never reaches {needle}"
         assert (FIXTURES / name).is_dir(), f"stage2 names a fixture that is not here: {name}"
@@ -373,6 +379,27 @@ def test_a_gate_fixture_missing_its_expectations_fails_loudly():
 # ------------------------------- the setup oracle reads the fixture, not itself
 
 
+def test_a_compound_surface_spelling_is_read_as_the_surface_it_names():
+    """R2 of #76. A live critic answered `web-dashboard, cli` for `web, command`.
+
+    `cli` was an alias and `web-dashboard` was not, so the turn was rejected for
+    vocabulary rather than for anything it did. A critic names what it found, so
+    compound spellings are the normal case, not an odd one.
+    """
+    sys.path.insert(0, str(SETUP_ORACLE.parent))
+    import check_live_setup_turn as oracle
+
+    assert oracle.canonical_surface("web-dashboard") == "web"
+    assert oracle.canonical_surface("cli") == "command"
+    assert oracle.canonical_surface("operator-dashboard") == "web"
+    assert oracle.canonical_surface("http-service") == "service"
+    assert oracle.canonical_surface("web") == "web"
+    assert oracle.canonical_surface("command") == "command"
+    # Not everything with a hyphen is a surface, and an unknown name must stay
+    # unknown rather than being bent into the nearest one.
+    assert oracle.canonical_surface("telemetry-pipeline") == "telemetry-pipeline"
+
+
 def test_the_setup_oracle_takes_its_strings_from_the_fixture():
     """#73. The claim is parameterisation, so a second fixture has to move it.
 
@@ -452,6 +479,194 @@ def test_the_setup_oracle_takes_its_strings_from_the_fixture():
     marker.write_text("stage1-ran", encoding="utf-8")
     assert check(other, "make check", "library, migration", other_turn) != 0, (
         "the fixture's marker value is not being read")
+
+
+def test_the_coverage_oracle_rejects_everything_it_owes():
+    """#76. The gap question is a new cell, so it owes its own rejections.
+
+    A mode that returns 0 for any turn costs a live session and proves nothing.
+    The rejection that matters most is ordering: a run that asks about the gap
+    *after* recording Stage 1 produces the same short configuration the issue is
+    about, and a question that arrives too late to change it reads, in the
+    transcript, exactly like one that arrived in time.
+    """
+    fixture = FIXTURES / "stage1-gap"
+    root = pathlib.Path(tempfile.mkdtemp())
+    path = root / "turn.jsonl"
+
+    ORIENTATION = (
+        "Stage 0 maps what could break. Stage 1 checks the code inside the "
+        "repository. Stage 2 checks the delivered result, only after Stage 1 works."
+    )
+    QUESTION = (
+        "The project also has ui-tests, a browser suite that check.sh never "
+        "runs. Should Stage 1 run it too?"
+    )
+
+    def check(result: str, orientation: str = ORIENTATION, recorded: bool = False,
+              mode: str = "coverage", target: pathlib.Path = fixture) -> int:
+        events: list[dict] = [
+            {"type": "assistant", "message": {"content": [
+                {"type": "text", "text": orientation + " " + result}]}},
+        ]
+        if recorded:
+            events.append({"type": "assistant", "message": {"content": [{
+                "type": "tool_use", "id": "s1", "name": "Bash",
+                "input": {"command":
+                    "python3 gopnik_setup.py --defer-artifact-kind --language en "
+                    "--stage1 './check.sh'"}}]}})
+            events.append({"type": "user", "message": {"content": [{
+                "type": "tool_result", "tool_use_id": "s1", "is_error": False,
+                "content": "Stage 1 set up."}]}})
+        events.append({"type": "result", "result": result})
+        path.write_text("\n".join(json.dumps(e) for e in events) + "\n", encoding="utf-8")
+        return subprocess.run(
+            [sys.executable, str(SETUP_ORACLE), "--fixture", str(target),
+             mode, str(path)],
+            capture_output=True, text=True,
+        ).returncode
+
+    # The turn this mode exists to accept. Everything below is a mutation of it.
+    assert check(QUESTION) == 0, "the coverage turn this fixture accepts failed"
+
+    # Ordering: the question is owed before anything is recorded.
+    assert check(QUESTION, recorded=True) != 0, (
+        "a gap question asked after Stage 1 was already recorded passed")
+
+    # The question has to name what it is about, on both sides.
+    assert check(
+        "The project also has a browser suite nothing runs. Should Stage 1 run it too?"
+    ) != 0, "a question that names neither the suite nor the command passed"
+    assert check(
+        "The project also has ui-tests that nothing runs. Should Stage 1 run it too?"
+    ) != 0, "a question that never names the command missing it passed"
+
+    # One question, and the turn ends on it.
+    assert check(
+        "The project also has ui-tests, which check.sh never runs. Should Stage 1 "
+        "run it? Is there a staging environment?"
+    ) != 0, "a turn with two questions passed"
+    assert check(
+        "The project also has ui-tests, which check.sh never runs. I will add it."
+    ) != 0, "a turn that asks nothing passed"
+    assert check(
+        "The project also has ui-tests, which check.sh never runs. Should Stage 1 "
+        "run it too? I will proceed either way."
+    ) != 0, "a turn that continues past its own question passed"
+
+    # The orientation belongs to this turn now, so its absence is caught here.
+    assert check(QUESTION, orientation="") != 0, "a turn with no orientation passed"
+    assert check(QUESTION, orientation=(
+        "Stage 2 checks the delivered result. Stage 1 checks the code. "
+        "Stage 0 maps what could break.")) != 0, "an out-of-order orientation passed"
+    assert check(QUESTION, orientation=(
+        "Stage 0 maps what could break. Stage 1 checks the code. Stage 2 checks "
+        "the delivered result.")) != 0, "Stage 2 unbounded by Stage 1 passed"
+
+    # Internal detail must not reach the person, here as anywhere else.
+    assert check(
+        "The project also has ui-tests, which check.sh never runs, and the "
+        "workflow has no checkout. Should Stage 1 run it too?"
+    ) != 0, "a leaked internal defect passed"
+    assert check(
+        "I will write ui-tests into gopnik.json, which check.sh never runs. "
+        "Should Stage 1 run it too?"
+    ) != 0, "the configuration file named at the person passed"
+
+    # A fixture with no gap cannot drive this mode at all.
+    assert check(QUESTION, target=FIXTURES / "hybrid") != 0, (
+        "a fixture that declares no gap passed the coverage mode")
+
+    # R1 of #76: an independent critic built seven turns this mode accepted and
+    # should not have. Each one is here, and each fails for its own reason
+    # rather than because the previous rule happens to catch it too.
+    accepted_and_should_not_be = [
+        # Names both needles in the prose and then asks something else. The
+        # hard boundary becomes filler, and the decision was already taken.
+        "I found ui-tests, a browser suite that check.sh never runs, and I have "
+        "decided to leave it out of Stage 1. Shall I continue?",
+        # The question asked is the Stage 2 stand question, which the skill
+        # forbids at this point in the conversation.
+        "The project also has ui-tests, which check.sh never runs. Is there a "
+        "test or staging environment where Gopnik can verify the deployed version?",
+        # Both needles, an arbitrary question.
+        "I read AGENTS.md, check.sh and ui-tests. What is your name?",
+        # Proposes replacing the documented command rather than adding to it.
+        "Should Stage 1 run ui-tests/run.sh instead of check.sh?",
+        # A fait accompli dressed as a question.
+        "I already ran ui-tests, which check.sh never runs, and recorded it. "
+        "Ready to continue?",
+    ]
+    for turn in accepted_and_should_not_be:
+        assert check(turn) != 0, f"a turn that should not pass did: {turn}"
+
+    # Ordering again, by the two routes that used to be invisible. The parser
+    # the check went through refused any command containing `&&`, so the most
+    # ordinary shell in the world walked straight past it.
+    def with_call(name: str, payload: dict) -> int:
+        events = [
+            {"type": "assistant", "message": {"content": [
+                {"type": "text", "text": ORIENTATION + " " + QUESTION}]}},
+            {"type": "assistant", "message": {"content": [{
+                "type": "tool_use", "id": "s1", "name": name, "input": payload}]}},
+            {"type": "result", "result": QUESTION},
+        ]
+        path.write_text("\n".join(json.dumps(e) for e in events) + "\n", encoding="utf-8")
+        return subprocess.run(
+            [sys.executable, str(SETUP_ORACLE), "--fixture", str(fixture),
+             "coverage", str(path)],
+            capture_output=True, text=True,
+        ).returncode
+
+    assert with_call("Bash", {"command":
+        "cd /repo && python3 gopnik_setup.py --defer-artifact-kind --language en "
+        "--stage1 './check.sh'"}) != 0, "a compound shell command hid the recording"
+    assert with_call("Write", {"file_path": "/repo/gopnik.json", "content":
+        '{"verification": {"stage1": ["./check.sh"]}}'}) != 0, (
+        "writing the configuration by hand hid the recording")
+
+    # …and the opposite error. `--check` is documented as a dry run that writes
+    # nothing, so a run that looks before it records must not be rejected.
+    assert with_call("Bash", {"command":
+        "python3 gopnik_setup.py --check --stage1 './check.sh'"}) == 0, (
+        "a documented dry run was mistaken for a recording")
+
+    # The Russian half. No live cell drives `coverage-ru` yet — the gap
+    # conversation is English only — so without this the mode's Cyrillic branch
+    # would be text nothing had ever executed, which is the shape of defect
+    # this whole issue is about.
+    RU_ORIENTATION = (
+        "Stage 0 показывает, что может сломаться. Stage 1 проверяет код в "
+        "репозитории. Stage 2 проверяет доставленный результат, и только после "
+        "того, как Stage 1 заработает."
+    )
+    RU_QUESTION = (
+        "В проекте есть ещё ui-tests — браузерный набор, который check.sh "
+        "не запускает. Запускать его в Stage 1?"
+    )
+
+    def check_ru(result: str, orientation: str = RU_ORIENTATION) -> int:
+        events = [
+            {"type": "assistant", "message": {"content": [
+                {"type": "text", "text": orientation + " " + result}]}},
+            {"type": "result", "result": result},
+        ]
+        path.write_text("\n".join(json.dumps(e) for e in events) + "\n", encoding="utf-8")
+        return subprocess.run(
+            [sys.executable, str(SETUP_ORACLE), "--fixture", str(fixture),
+             "coverage-ru", str(path)],
+            capture_output=True, text=True,
+        ).returncode
+
+    assert check_ru(RU_QUESTION) == 0, "the Russian coverage turn this fixture accepts failed"
+    assert check_ru(QUESTION) != 0, "an English turn passed the Russian mode"
+    assert check_ru(
+        "В проекте есть ещё ui-tests, который check.sh не запускает. "
+        "Запускать его в Stage 1 вместо check.sh?"
+    ) != 0, "a Russian question proposing a replacement passed"
+    assert check_ru(
+        "В проекте есть ещё ui-tests, который check.sh не запускает. Продолжаем?"
+    ) != 0, "a Russian turn whose question is filler passed"
 
 
 def _run_all() -> int:

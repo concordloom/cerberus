@@ -190,6 +190,19 @@ confirms how the project is used. When no authoritative project instructions
 exist, the script may detect and run candidates itself. It must record only
 Stage 1 commands that actually passed.
 
+Before recording anything, compare the commands you are about to write with
+what this project actually runs: read what CI invokes job by job, and look for
+check or test directories the documented route never reaches. Nothing running a
+suite is the strongest case for recording it, not the weakest — Stage 1 would
+be the only place it ever executes. When such a check exists, ask one question
+about it and wait, in the selected language. In English:
+
+> The project also has <check>, which <command> never runs. Should Stage 1 run it too?
+
+Ask nothing when the documented route already runs everything executable in the
+tree. The installed skill carries the rest of this step, including what to do
+with each answer.
+
 Run fast, read-only checks without making the user supervise them. Ask before a
 lengthy suite or a command that mutates shared state. Order explicit checks from
 fastest to slowest; the setup script stops at the first failure.
@@ -415,7 +428,10 @@ project-owned browser route such as Playwright or Cypress against the stand,
 then for a browser or computer-use tool already available to the agent. A route
 counts only when it can target the stand without tracked-file edits. A test
 hard-coded to loopback proves local UI coverage, not a browser route against
-the stand.
+the stand — and local UI coverage is what Stage 1 is for. When such a suite
+exists and Stage 1 does not already run it, reconcile it as in step 6 instead
+of discarding it: the loopback rule disqualifies it from this stage, not from
+the project.
 
 Only when the deployed UI is real and neither route exists, explain the missing
 capability and ask one contextual question in the selected language. In

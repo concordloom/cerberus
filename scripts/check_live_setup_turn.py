@@ -73,8 +73,13 @@ def expectations(directory: pathlib.Path) -> dict:
     missing = [key for key in REQUIRED if key not in body]
     if missing:
         raise ValueError(f"{directory}: expected.json is missing {missing}")
-    if len(body["stage1"]) != 1:
-        raise ValueError(f"{directory}: this oracle reads one Stage 1 command")
+    if not body["stage1"]:
+        raise ValueError(f"{directory}: expected.json records no Stage 1 command")
+    gap = body.get("gap")
+    if gap is not None and not (
+        isinstance(gap, dict) and gap.get("named") and gap.get("command")
+    ):
+        raise ValueError(f"{directory}: gap needs `named` and `command`")
     return body
 
 
@@ -297,8 +302,44 @@ def pure_python_helper_argv(command: object) -> list[str] | None:
     return argv
 
 
+def helper_records_stage1(items: list[object]) -> bool:
+    """Whether any call already committed a Stage 1 command to the record.
+
+    The coverage question is owed *before* anything is recorded, so this is how
+    that ordering is proven from outside the prose: a run that asks the question
+    and has already written Stage 1 asked it too late to matter.
+
+    This deliberately does not go through `pure_python_helper_argv`. That parser
+    refuses any command containing `&&`, which made `cd repo && python3
+    gopnik_setup.py --stage1 …` invisible — the exact bypass this check exists
+    to catch, and one a run reaches by writing the most ordinary shell there is.
+    Recognising one command shape is not an ordering proof. `--check` is
+    excluded for the opposite reason: SKILL.md documents it as a dry run that
+    writes nothing, so rejecting it would fail a run for looking before it
+    recorded.
+    """
+    for item in items:
+        for value in nested_dicts(item):
+            if value.get("type") != "tool_use":
+                continue
+            name = str(value.get("name") or "").lower()
+            blob = json.dumps(value.get("input"), ensure_ascii=False)
+            if name == "bash":
+                if (
+                    "gopnik_setup.py" in blob
+                    and "--stage1" in blob
+                    and "--check" not in blob
+                ):
+                    return True
+            elif name in ("write", "edit", "multiedit", "notebookedit"):
+                # Writing the file by hand records Stage 1 just as effectively.
+                if "gopnik.json" in blob and "stage1" in blob:
+                    return True
+    return False
+
+
 def stage1_events(
-    items: list[object], expected_language: str, stage1: str
+    items: list[object], expected_language: str, stage1: list[str]
 ) -> list[tuple[int, str]]:
     found = []
     for index, item in enumerate(items):
@@ -312,6 +353,7 @@ def stage1_events(
             if argv is None:
                 continue
             flags: dict[str, str | bool] = {}
+            recorded: list[str] = []
             cursor = 2
             valid = True
             while cursor < len(argv):
@@ -323,7 +365,14 @@ def stage1_events(
                     flags[option] = True
                     cursor += 1
                     continue
-                if option in {"--language", "--stage1", "--timeout-seconds"}:
+                if option == "--stage1":
+                    if cursor + 1 >= len(argv):
+                        valid = False
+                        break
+                    recorded.append(argv[cursor + 1])
+                    cursor += 2
+                    continue
+                if option in {"--language", "--timeout-seconds"}:
                     if option in flags or cursor + 1 >= len(argv):
                         valid = False
                         break
@@ -337,12 +386,11 @@ def stage1_events(
                 and valid
                 and flags.get("--defer-artifact-kind") is True
                 and flags.get("--language") == expected_language
-                and flags.get("--stage1") == stage1
+                and recorded == list(stage1)
                 and flags.get("--timeout-seconds", "120") == "120"
                 and set(flags) <= {
                     "--defer-artifact-kind",
                     "--language",
-                    "--stage1",
                     "--timeout-seconds",
                 }
                 and isinstance(value.get("id"), str)
@@ -438,8 +486,26 @@ SURFACE_ALIASES = {
 
 
 def canonical_surface(name: str) -> str:
+    """The identifier a critic meant, whichever spelling it reached for.
+
+    A live run returned `web-dashboard, cli` for the pair this fixture calls
+    `web, command`. `cli` was already an alias; `web-dashboard` was not, and the
+    turn was rejected for vocabulary rather than for anything it did. Compound
+    spellings are common precisely because a critic describes what it found, so
+    a name that is not itself an alias is retried part by part before being
+    taken literally.
+    """
     name = name.strip().lower().replace("_", "-")
-    return SURFACE_ALIASES.get(name, name)
+    if name in SURFACE_ALIASES:
+        return SURFACE_ALIASES[name]
+    if name in SURFACE_TERMS:
+        return name
+    for part in name.split("-"):
+        if part in SURFACE_ALIASES:
+            return SURFACE_ALIASES[part]
+        if part in SURFACE_TERMS:
+            return part
+    return name
 
 
 def refuted_surface_shape(surfaces: set[str], russian: bool) -> str:
@@ -454,7 +520,10 @@ def refuted_surface_shape(surfaces: set[str], russian: bool) -> str:
 
 
 def candidate_is_named(candidate: str, result: str, russian: bool) -> bool:
-    candidate = candidate.replace("_", "-").strip().lower()
+    # Through the same canonicaliser as the set comparison, or a critic's
+    # `web-dashboard` is accepted as a surface and then not recognised in the
+    # question that names it `the dashboard`.
+    candidate = canonical_surface(candidate)
     patterns = {
         "command": r"\b(?:command|command-line|cli)\b" if not russian else r"\b(?:команд\w*|cli)\b",
         "command-line": r"\b(?:command|command-line|cli)\b" if not russian else r"\b(?:команд\w*|cli)\b",
@@ -536,7 +605,7 @@ def main(argv: list[str]) -> int:
     if len(argv) not in (3, 4):
         return fail(
             "usage: check_live_setup_turn.py [--fixture DIR] "
-            "LANGUAGE|SCOPE|SURFACES|STAND|ACCESS and -RU variants "
+            "LANGUAGE|SCOPE|COVERAGE|SURFACES|STAND|ACCESS and -RU variants "
             "TRANSCRIPT [STAGE1_MARKER]"
         )
 
@@ -571,23 +640,17 @@ def main(argv: list[str]) -> int:
         return 0 if result == SCOPE_QUESTION_RU else fail(result)
 
     lower = result.lower()
-    if mode in ("surfaces", "surfaces-ru"):
+    if mode in ("coverage", "coverage-ru"):
         russian = mode.endswith("-ru")
-        if len(argv) != 4:
-            return fail("Stage 1 marker is absent")
-        try:
-            marker = pathlib.Path(argv[3]).read_text(encoding="utf-8")
-        except OSError:
-            return fail("Stage 1 marker is absent")
-        if marker != fixture["marker"]["value"]:
-            return fail("Stage 1 marker has the wrong value")
-        stage1_calls = stage1_events(
-            items, "ru" if russian else "en", fixture["stage1"][0]
-        )
-        if not stage1_calls:
-            return fail("the live trace does not show the Stage 1 setup command")
-        stage1_call_index, stage1_id = stage1_calls[0]
-        orientation = assistant_text_before(items, stage1_call_index).lower()
+        gap = fixture.get("gap")
+        if gap is None:
+            return fail("this fixture declares no Stage 1 gap to ask about")
+        # Order is the whole point. A run that asks about the gap after writing
+        # Stage 1 has produced the same short configuration and a question that
+        # cannot change it, which is the defect wearing the fix as a costume.
+        if helper_records_stage1(items):
+            return fail("Stage 1 was recorded before the coverage question was asked")
+        orientation = assistant_text_before(items, len(items)).lower()
         stages = [orientation.find(label) for label in ("stage 0", "stage 1", "stage 2")]
         if any(index < 0 for index in stages) or stages != sorted(stages):
             return fail("the three-stage orientation is absent or out of order")
@@ -602,6 +665,88 @@ def main(argv: list[str]) -> int:
         )
         if orientation.count("stage 2") != 1 or not bounded:
             return fail("Stage 2 was not bounded behind Stage 1")
+        if not one_question(result):
+            return fail("the coverage turn must contain exactly one question")
+        if not result.endswith("?"):
+            return fail("the coverage turn must end with its hard-boundary question")
+        # The question itself, not the paragraph around it. Naming the suite in
+        # the prose and then asking something else — "shall I continue?", the
+        # Stage 2 stand question, anything — satisfied an earlier version of
+        # this and is how a run turns a hard boundary into filler.
+        question = re.split(r"(?<=[.!?])\s+", result)[-1].lower()
+        for needle in gap["named"]:
+            if needle.lower() not in lower:
+                return fail(f"the coverage turn does not name {needle}")
+        asking = (
+            r"\b(?:запуска|запусти|включ|добав)\w*"
+            if russian
+            else r"\b(?:run|runs|include|add)\b"
+        )
+        if not re.search(asking, question):
+            return fail("the coverage question does not ask about running the check")
+        if "stage 1" not in question:
+            return fail("the coverage question is not about what Stage 1 will run")
+        replacing = (
+            r"\b(?:вместо|заменит|замени|подменит|отказат)\w*"
+            if russian
+            else r"\b(?:instead of|rather than|replace|replacing|in place of)\b"
+        )
+        if re.search(replacing, question):
+            return fail("the coverage question proposes replacing the documented command")
+        banned_terms = ["gopnik.json", "artifact_kind"] + list(
+            fixture["internal_details"]["ru" if russian else "en"]
+        )
+        for banned in banned_terms:
+            if banned in lower:
+                return fail(f"internal defect detail leaked: {banned}")
+        if len(result.split()) > 140:
+            return fail("the coverage turn is too long")
+        if russian:
+            letters = [character for character in result if character.isalpha()]
+            cyrillic = [
+                character
+                for character in letters
+                if ("а" <= character.lower() <= "я") or character.lower() == "ё"
+            ]
+            if not letters or len(cyrillic) / len(letters) < 0.65:
+                return fail("the Russian turn contains too much non-Russian prose")
+        return 0
+
+    if mode in ("surfaces", "surfaces-ru"):
+        russian = mode.endswith("-ru")
+        if len(argv) != 4:
+            return fail("Stage 1 marker is absent")
+        try:
+            marker = pathlib.Path(argv[3]).read_text(encoding="utf-8")
+        except OSError:
+            return fail("Stage 1 marker is absent")
+        if marker != fixture["marker"]["value"]:
+            return fail("Stage 1 marker has the wrong value")
+        stage1_calls = stage1_events(
+            items, "ru" if russian else "en", fixture["stage1"]
+        )
+        if not stage1_calls:
+            return fail("the live trace does not show the Stage 1 setup command")
+        stage1_call_index, stage1_id = stage1_calls[0]
+        # A fixture with a gap owes the orientation to its coverage turn, which
+        # runs before this one. Demanding it again here would require the run to
+        # repeat itself, and repeating it is what the skill forbids.
+        if fixture.get("gap") is None:
+            orientation = assistant_text_before(items, stage1_call_index).lower()
+            stages = [orientation.find(label) for label in ("stage 0", "stage 1", "stage 2")]
+            if any(index < 0 for index in stages) or stages != sorted(stages):
+                return fail("the three-stage orientation is absent or out of order")
+            bounded = (
+                "после" in orientation
+                if russian
+                else bool(re.search(
+                    r"\b(?:after stage 1|only (?:once|when) stage 1 "
+                    r"(?:works|passes|is ready))\b",
+                    orientation,
+                ))
+            )
+            if orientation.count("stage 2") != 1 or not bounded:
+                return fail("Stage 2 was not bounded behind Stage 1")
         stage1_results = [
             (index, value)
             for index, value in tool_results(items, stage1_id)

@@ -215,6 +215,15 @@ Statically and locally, try to break it:
    removed dependencies, and *both* branches of every fallback. A fallback whose
    primary path is only ever mocked as empty has never been tested.
 
+5. **UI, when the change touches it and a local browser route exists.** A
+   project-owned browser suite pointed at loopback belongs here: bring the page
+   up, exercise the affected flow, and read the rendered result together with
+   console and network errors. This does not satisfy Stage 2, which still needs
+   the deployed stand. Where the change touches UI and no local route exists,
+   record that as a `GAP` rather than inferring the UI from a green backend.
+   A `GAP` on the surface the change touches is not something a `READY` can
+   be issued over, here any more than in Stage 2.
+
 ### Circular tests do not count
 
 A green test proves nothing if it assumes the result it is verifying. Before
@@ -630,6 +639,8 @@ Treat it as a `BLOCKER` on the configuration and say what is missing.
 - [ ] Stage 1: for a bug class — every call site, with search output as proof
       the filter excluded nothing?
 - [ ] Stage 1: negative cases run, both fallback branches?
+- [ ] Stage 1: for a UI change, did a local browser route exercise the affected
+      flow — or is its absence recorded as a `GAP`?
 - [ ] Stage 1: does each test invoke production code rather than hand-building
       the state it claims to prove?
 - [ ] Stage 2: deployed, healthy?

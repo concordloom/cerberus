@@ -787,21 +787,35 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         verification = verification or {}
 
+        # Setup is not finished while the delivery kind is still pending, and a
+        # check the documented route misses is often only found later — while
+        # classifying surfaces, which happens after this point. #76: until this
+        # existed the skill told a run to go back and add it, and the helper
+        # answered "Stage 1 already set up", exit 0, changing nothing. An
+        # instruction that fails green is worse than no instruction. Extending
+        # is allowed only while the kind is pending: once it is confirmed the
+        # configuration belongs to the project, and this is not the way to edit
+        # it.
+        extending_pending_stage1 = False
         if is_pending_kind_config(existing):
-            language_saved = (
-                args.language is not None
-                and existing.get("language") != args.language
-            )
-            if language_saved and not args.check:
-                existing = dict(existing)
-                existing["language"] = args.language
-                config.write_text(
-                    json.dumps(existing, indent=2) + "\n", encoding="utf-8"
+            recorded = [str(command) for command in verification.get("stage1") or []]
+            asked = [str(command) for command in args.stage1 or []]
+            extending_pending_stage1 = bool(asked) and asked != recorded
+            if not extending_pending_stage1:
+                language_saved = (
+                    args.language is not None
+                    and existing.get("language") != args.language
                 )
-            print("Stage 1 already set up. Delivery surfaces still need confirmation.")
-            return 0
+                if language_saved and not args.check:
+                    existing = dict(existing)
+                    existing["language"] = args.language
+                    config.write_text(
+                        json.dumps(existing, indent=2) + "\n", encoding="utf-8"
+                    )
+                print("Stage 1 already set up. Delivery surfaces still need confirmation.")
+                return 0
 
-        if not is_the_installers_copy(existing):
+        if not extending_pending_stage1 and not is_the_installers_copy(existing):
             language_saved = args.language is not None and existing.get("language") != args.language
             if language_saved and not args.check:
                 existing = dict(existing)

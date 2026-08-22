@@ -64,6 +64,46 @@ the commands you read with `--stage1` instead.
 
 Do not inspect or discuss Stage 2 yet. Finish Stage 1 first.
 
+## Reconcile the candidates with what the project really runs
+
+Project instructions name the route. They do not always name everything the
+project verifies, and a Stage 1 that is honest about what it ran can still be
+silent about what it never looked at.
+
+Before recording anything, enumerate the executable checks this repository
+actually contains, then compare that set with the commands you are about to
+write. Read what CI invokes job by job, and look for check or test directories
+the documented route never reaches: a suite in a second runtime, a browser
+suite, contract or migration checks, a linter wired only into a workflow. Place
+each one in exactly one of three: the documented command runs it, only CI runs it, or
+nothing runs it. Nothing running it is the strongest case for recording it, not
+the weakest — Stage 1 would be the only place it ever executes.
+
+Partial coverage is a gap. One file of a suite running in one CI job leaves the
+rest unrun, so read what a job invokes rather than whether the suite is
+mentioned somewhere in the workflow.
+
+When such a check exists, ask one question before recording Stage 1. Name the
+check and the command that misses it, in the selected language:
+
+> The project also has <check>, which <command> never runs. Should Stage 1 run it too?
+
+This is a hard turn boundary. End with it and wait. Ask nothing when the
+documented route already runs everything executable in the tree: a question
+raised on every project teaches people to ignore it.
+
+After the answer:
+
+- **Include it.** Treat it exactly like any other Stage 1 command. It is
+  recorded only if it runs and passes here, which may first need a user-scoped
+  dependency install inside the existing autonomy budget, and it is passed with
+  the others from fastest to slowest.
+- **Leave it out.** Record the gap in the operational notes and continue. A gap
+  the person declined is a decision; a gap nobody wrote down is the situation
+  this section exists to end.
+- **It cannot run on this machine at all.** Do not record it, and note why. Only
+  a check that was run and passed may be written.
+
 ## Run the mechanical part silently
 
 Use whichever installed path exists:
@@ -318,7 +358,12 @@ If the deployed product has a UI, first look for a project-owned browser route
 such as Playwright or Cypress against the stand, then for a browser or
 computer-use tool already available to the agent. A route counts only when it
 can target the stand without tracked-file edits. A test hard-coded to loopback
-proves local UI coverage, not a browser route against the stand.
+proves local UI coverage, not a browser route against the stand — and local UI
+coverage is exactly what Stage 1 is for. A suite that could be pointed at the
+stand but is configured for loopback here counts as loopback until something
+shows otherwise. When such a suite exists and Stage 1 does not already run it,
+reconcile it as above instead of discarding it: the loopback rule disqualifies
+it from this stage, not from the project.
 
 Only when the deployed UI is real and neither route exists, explain the missing
 capability and ask one contextual question:
@@ -444,6 +489,10 @@ prompts for the person to copy.
 - [ ] Did I use project-owned wrappers instead of generic commands?
 - [ ] Did I explain the three stages before internal work?
 - [ ] Was every recorded Stage 1 command run and shown passing?
+- [ ] Did I compare the recorded Stage 1 against what CI and the tree really
+      run, and ask about every executable check the documented route misses?
+- [ ] Did a loopback browser suite end up assigned to Stage 1 rather than
+      dropped for failing the stand test?
 - [ ] If Stage 1 failed, did I stop before inspecting or discussing Stage 2?
 - [ ] Did a blocker response contain one problem, one next step, and one question?
 - [ ] Did I ask before lengthy or shared-state-changing work?
