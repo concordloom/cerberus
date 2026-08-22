@@ -393,6 +393,40 @@ made in advance; a missing token is a thing to go and get, and dressing one as
 the other turns "we could not log in today" into a permanent lowering of the
 bar.
 
+### Surfaces the record names, and what `stage2` actually crosses
+
+`artifact_kind` is one word for the farthest boundary. A project can deliver
+through several at once — a service and a chart, a command and a web interface —
+and where guided setup asked, `verification.surfaces` holds the set the critic
+challenged and the person confirmed.
+
+Where that key is present it is part of the verdict rather than decoration:
+
+1. Take each surface the record names.
+2. Name the `stage2` step that crosses it — the one that drives *that surface*
+   to a real result. Publication is not crossing: proof that the artifact
+   carrying a surface exists says nothing about the surface doing its job.
+3. A surface with no such step is `Not proven`, named, with the reason. An
+   unqualified `READY` is available only when every named surface has a step
+   behind it. Otherwise state the `READY scope` as the surfaces actually
+   crossed and list the rest, and where the change under test touches an
+   uncovered surface the verdict is `NOT READY`.
+
+This is not the escape the paragraph above closes. A `stage2` you were handed is
+not a limit and you still have to run it; what it does not reach is still
+unreached, and the record now says how many surfaces there were to reach.
+
+Step 2 is the whole value of the key. `helm show chart --version "$(cat VERSION)"`
+proves a chart was published. The five alert rules, the dashboard and the values
+contract inside it were read by nothing, and the published default image tag sat
+many minor versions behind its own `appVersion` for exactly as long as that step
+was mistaken for coverage.
+
+An absent `surfaces` changes nothing. A configuration written before this key
+existed is complete as it stands and gets the three-state table above. Do not
+infer a set from the tree to fill the gap: a surface nobody confirmed turns a
+silent hole into a confident wrong answer, and a visible hole is worth more.
+
 ### Not proven needs an attempt (blocking)
 
 `Not proven` is the honest sentence for a limit you actually hit. It is not a
@@ -626,6 +660,8 @@ Treat it as a `BLOCKER` on the configuration and say what is missing.
       returned, rather than a conclusion about why it could not be?
 - [ ] If `stage2` was filled in, was it run — with no `Not proven` written
       about a boundary the project had already told you how to cross?
+- [ ] Does every surface the configuration names have a `stage2` step behind
+      it, or a `Not proven` that names it?
 - [ ] Stage 0: matrix built (axes × cells), mixed cells enumerated, coverage
       marked per cell (✅/⏳/🧊/❌)?
 - [ ] Stage 0: did *I* generate the cells, rather than the user supplying them?

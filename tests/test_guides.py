@@ -659,6 +659,44 @@ def test_new_mcp_never_pretends_to_be_loaded_before_restart():
             assert phrase in text, (path.name, phrase)
 
 
+def test_the_gate_reads_the_confirmed_surfaces_rather_than_only_the_kind():
+    """#77. The other half of the same rule, and the load-bearing one.
+
+    `gopnik-setup` was told to cover every confirmed surface in Stage 2, and the
+    gate had no way to tell a project with one surface from a project with four:
+    `artifact_kind` is one word, and after a successful setup `stage2` is filled,
+    which takes the `run it` row of the three-state table and stops consulting
+    the record at all. A key with no reader is dead data, so this pins the
+    reader.
+    """
+    for path, phrases in (
+        (RUNNER_SKILLS[0], (
+            "`verification.surfaces`",
+            "Publication is not crossing",
+            "A surface with no such step is `Not proven`",
+            "An absent `surfaces` changes nothing",
+        )),
+        (RUNNER_SKILLS[1], (
+            "`verification.surfaces`",
+            "Публикация — не пересечение",
+            "Отсутствующий `surfaces` не меняет ничего",
+        )),
+    ):
+        text = _flat(path)
+        for phrase in phrases:
+            assert phrase in text, (path.name, phrase)
+
+
+def test_the_confirmation_step_records_the_surfaces_it_confirmed():
+    """The writing half: without it the reader above has nothing to read."""
+    for path, phrase in (
+        (INSTALL, "`--surfaces <the confirmed surfaces, comma separated>`"),
+        (SETUP_SKILLS[0], "`--surfaces <the confirmed surfaces, comma separated>`"),
+        (SETUP_SKILLS[1], "`--surfaces <подтверждённые поверхности через запятую>`"),
+    ):
+        assert phrase in _flat(path), (path.name, phrase)
+
+
 def test_ui_changes_require_real_browser_evidence_or_not_ready():
     expected = {
         RUNNER_SKILLS[0]: (
