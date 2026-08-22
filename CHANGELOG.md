@@ -1,5 +1,12 @@
 # Changelog
 
+# [4.1.0](https://github.com/concordloom/gopnik/compare/v4.0.19...v4.1.0) (2026-08-22)
+
+
+### Features
+
+* Stage 1 was recorded honest but never checked for completeness ([#79](https://github.com/concordloom/gopnik/issues/79)) ([c52117b](https://github.com/concordloom/gopnik/commit/c52117b60ca269c6636405c8d890445ee9feebd1))
+
 ## [4.0.19](https://github.com/concordloom/gopnik/compare/v4.0.18...v4.0.19) (2026-08-21)
 
 
