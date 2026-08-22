@@ -1460,34 +1460,39 @@ def test_this_repository_verifies_it_with_a_live_session():
     stage2 = body["verification"]["stage2"]
     live = [c for c in stage2 if "claude -p" in c]
     assert live, f"stage2 has no live agent session:\n" + "\n".join(stage2)
-    # #73 added the gate's own pair. Ten setup turns, two gate runs, and every
-    # one of them handed to an oracle — a live session nothing reads is an
-    # expensive way to prove nothing.
-    assert len(live) == 12, live
+    # #73 added the gate's own pair. #76 added a second setup conversation and a
+    # second gate pair. Sixteen setup turns, four gate runs, and every one of
+    # them handed to an oracle — a live session nothing reads is an expensive
+    # way to prove nothing.
+    assert len(live) == 20, live
     setup_live = [c for c in live if "check_live_setup_turn.py" in c]
     gate_live = [c for c in live if "check_live_gate_turn.py" in c]
-    assert len(setup_live) == 10, setup_live
-    assert len(gate_live) == 2, gate_live
+    assert len(setup_live) == 16, setup_live
+    assert len(gate_live) == 4, gate_live
     unchecked = [c for c in live if c not in setup_live and c not in gate_live]
     assert not unchecked, f"a live session with no oracle: {unchecked}"
 
-    assert sum("--session-id" in command for command in setup_live) == 2, setup_live
-    assert sum("--resume" in command for command in setup_live) == 8, setup_live
+    assert sum("--session-id" in command for command in setup_live) == 3, setup_live
+    assert sum("--resume" in command for command in setup_live) == 13, setup_live
     assert not any("--continue" in command for command in live), live
     for command in setup_live:
-        assert (
-            'cd "$GOPNIK_STAGE2_ROOT/scratch-en"' in command
-            or 'cd "$GOPNIK_STAGE2_ROOT/scratch-ru"' in command
+        assert any(
+            f'cd "$GOPNIK_STAGE2_ROOT/{tree}"' in command
+            for tree in ("scratch-en", "scratch-ru", "gap-en")
         ), command
         # The oracle no longer holds this fixture's strings, so the route has to
         # say which fixture it is checking.
-        assert '--fixture "$GOPNIK_STAGE2_ROOT/src/tests/fixtures/hybrid"' in command, command
+        assert any(
+            f'--fixture "$GOPNIK_STAGE2_ROOT/src/tests/fixtures/{name}"' in command
+            for name in ("hybrid", "stage1-gap")
+        ), command
 
     # The gate pair. Opposite verdicts from one line of product code is the
     # whole check: two fixtures that agreed would pass a gate stuck on either
     # answer, so the verdicts are read from the files rather than assumed.
     verdicts = {}
-    for name, command in zip(("gate-red-stage1", "gate-ready-scoped"), gate_live):
+    pairs = (("gate-red-stage1", "gate-ready-scoped"), ("gate-ui-covered", "gate-ui-gap"))
+    for name, command in zip([n for pair in pairs for n in pair], gate_live):
         assert f'cd "$GOPNIK_STAGE2_ROOT/{name}"' in command, command
         assert f"src/tests/fixtures/{name}" in command, command
         assert "jq -r .prompt" in command, (
@@ -1496,14 +1501,45 @@ def test_this_repository_verifies_it_with_a_live_session():
         verdicts[name] = json.loads(
             (ROOT / "tests" / "fixtures" / name / "expected.json").read_text(encoding="utf-8")
         )["verdict"]
-    assert set(verdicts.values()) == {"READY", "NOT READY"}, verdicts
+    # Each pair has to disagree with itself. A pair that agreed would pass a
+    # gate stuck on either answer, which is the trap the first pair was built
+    # around and the second inherits.
+    for left, right in pairs:
+        assert {verdicts[left], verdicts[right]} == {"READY", "NOT READY"}, (
+            f"{left} and {right} reach the same verdict: {verdicts}")
+        prompts = {
+            json.loads((ROOT / "tests" / "fixtures" / name / "expected.json")
+                       .read_text(encoding="utf-8"))["prompt"]
+            for name in (left, right)
+        }
+        assert len(prompts) == 1, f"{left} and {right} are asked different questions"
 
-    materialise = next(c for c in stage2 if "gate-red-stage1 gate-ready-scoped" in c)
-    assert 'test ! -e "$GOPNIK_STAGE2_ROOT/$GOPNIK_FIXTURE/.stage1-ran"' in materialise, (
-        f"without a clean start the marker proves nothing: {materialise}")
+    for names in ("gate-red-stage1 gate-ready-scoped", "gate-ui-covered gate-ui-gap"):
+        materialise = next(c for c in stage2 if names in c)
+        assert 'test ! -e "$GOPNIK_STAGE2_ROOT/$GOPNIK_FIXTURE/.stage1-ran"' in materialise, (
+            f"without a clean start the marker proves nothing: {materialise}")
 
-    english = [command for command in setup_live if "session-en" in command]
-    russian = [command for command in setup_live if "session-ru" in command]
+    # #76. The second conversation is the one that has a gap to find, and the
+    # order is the claim: the coverage question comes before Stage 1 is written,
+    # or it cannot change what gets written.
+    gap = [command for command in setup_live if "session-gap" in command]
+    assert len(gap) == 6, gap
+    for index, mode in enumerate(
+        ("language", "scope", "coverage", "surfaces", "stand", "access")
+    ):
+        assert f" {mode} " in gap[index], (mode, gap)
+        assert '--fixture "$GOPNIK_STAGE2_ROOT/src/tests/fixtures/stage1-gap"' in gap[index]
+    assert "--forward-subagent-text" in gap[3], gap[3]
+    assert 'verification.stage1 == ["./check.sh", "./ui-tests/run.sh"]' in gap[3], gap[3]
+    assert '.ui-tests-ran' in gap[3], (
+        "nothing proves the suite the person agreed to actually ran")
+    gap_tree = next(c for c in stage2 if "tests/fixtures/stage1-gap/repo" in c)
+    assert 'test ! -e "$GOPNIK_STAGE2_ROOT/gap-en/.ui-tests-ran"' in gap_tree, gap_tree
+    assert "! grep -q ui-tests" in gap_tree, (
+        f"the fixture's premise is that the documented command misses it: {gap_tree}")
+
+    english = [command for command in setup_live if '"$GOPNIK_STAGE2_ROOT/session-en"' in command]
+    russian = [command for command in setup_live if '"$GOPNIK_STAGE2_ROOT/session-ru"' in command]
     assert len(english) == 5, english
     assert len(russian) == 5, russian
     for commands, modes in (

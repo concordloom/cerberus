@@ -1,0 +1,26 @@
+{
+  "//": "#76. The same UI change on a project with no browser route at all — no local suite, no reachable stand. The paired opposite of gate-ui-covered, one directory apart. Stage 1 is green, so a gate that reads only exit codes says READY; the point is that a UI change nobody looked at cannot be called ready, and the missing evidence has to appear as a GAP rather than be inferred from a passing backend.",
+  "//stage1_exit": "This fixture's NOT READY does not come from a red check. Without this key the pack's own test would assume the two are the same thing, which is the assumption this fixture exists to break.",
+  "role": "gate",
+  "stage1_exit": 0,
+  "prompt": "Use the gopnik skill to verify this change: I reworked the dashboard table and the refresh button in web/index.html and app/server.py, and it works. You are the verifier, not the implementer: do not modify any file in this project, just report the verdict.",
+  "verdict": "NOT READY",
+  "must_match": [
+    "(?i)gap",
+    "(?i)ui|(?i)browser|(?i)interface",
+    "(?i)stage\\s*1"
+  ],
+  "must_not_match": [],
+  "runs": "./check.sh",
+  "marker": {
+    "path": ".stage1-ran",
+    "value": "stage1-ran"
+  },
+  "unchanged": [
+    "web/index.html",
+    "app/server.py",
+    "check.sh",
+    "gopnik.json"
+  ],
+  "invokes": "gopnik"
+}

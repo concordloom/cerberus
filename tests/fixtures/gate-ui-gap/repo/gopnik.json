@@ -1,0 +1,10 @@
+{
+  "language": "en",
+  "verification": {
+    "artifact_kind": "service",
+    "stage1": ["./check.sh"],
+    "stage2": [],
+    "stage2_unreachable": "no stand exists for this project; it is run from a checkout by hand",
+    "notes": "There is no browser route of any kind here: no local suite, and no stand to point one at."
+  }
+}

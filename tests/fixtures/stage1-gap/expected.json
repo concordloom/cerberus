@@ -1,0 +1,34 @@
+{
+  "//": "#76. A project whose documented route runs part of what it verifies. AGENTS.md names ./check.sh as the only fast local command, and ./check.sh runs the unit checks; ui-tests/ is a browser suite against loopback that check.sh never invokes and no workflow mentions. Setup must notice the gap and ask about it before recording Stage 1, rather than recording a valid short set and reporting itself configured.",
+  "role": "setup",
+  "stage1": ["./check.sh", "./ui-tests/run.sh"],
+  "artifact_kind": "service",
+  "surfaces": ["command", "web"],
+  "marker": {"path": ".stage1-ran", "value": "stage1-ran"},
+  "//gap": "The check the documented route misses. `named` is what the coverage question must name: the suite itself and the command that skips it. `marker` proves the suite really ran once it is included, the same way `marker` above proves it for the documented command.",
+  "gap": {
+    "named": ["ui-tests", "check.sh"],
+    "command": "./ui-tests/run.sh",
+    "marker": {"path": ".ui-tests-ran", "value": "ui-tests-ran"}
+  },
+  "//internal_details": "Defects a critic really does find in this tree. They are evidence for the classification and must never reach the person being onboarded, so the oracle fails when one is quoted at them.",
+  "internal_details": {
+    "en": [
+      "setuptools",
+      "package discovery",
+      "workflow has no checkout",
+      "missing deploy",
+      "deploy.sh"
+    ],
+    "ru": [
+      "setuptools",
+      "package discovery",
+      "workflow has no checkout",
+      "missing deploy",
+      "deploy.sh",
+      "ошибк",
+      "отсутствующ",
+      "дефект workflow"
+    ]
+  }
+}

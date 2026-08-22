@@ -1,0 +1,10 @@
+{
+  "language": "en",
+  "verification": {
+    "artifact_kind": "service",
+    "stage1": ["./check.sh", "./ui-tests/run.sh"],
+    "stage2": [],
+    "stage2_unreachable": "no stand exists for this project; it is run from a checkout by hand",
+    "notes": "ui-tests/ is the browser suite for the dashboard. It runs against loopback, so it is Stage 1 coverage and not a route to any stand."
+  }
+}

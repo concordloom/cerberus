@@ -112,10 +112,15 @@ def test_each_gate_fixture_produces_the_outcome_it_claims():
         body = json.loads((fixture / "expected.json").read_text(encoding="utf-8"))
         work = materialise(fixture)
         proc = subprocess.run(["./check.sh"], cwd=str(work), capture_output=True, text=True)
+        # A red check is the usual reason for NOT READY, not the definition of
+        # it. `gate-ui-gap` is green here and still cannot be called ready,
+        # because nobody looked at the interface it changed — so a fixture may
+        # state the exit code it expects instead of having it inferred.
         red = body["verdict"] == "NOT READY"
-        assert (proc.returncode != 0) == red, (
-            f"{fixture.name}: check.sh exited {proc.returncode} but expects "
-            f"verdict {body['verdict']}\n{proc.stdout}{proc.stderr}"
+        expected_exit = body.get("stage1_exit", 1 if red else 0)
+        assert proc.returncode == expected_exit, (
+            f"{fixture.name}: check.sh exited {proc.returncode}, expected "
+            f"{expected_exit}\n{proc.stdout}{proc.stderr}"
         )
         marker = work / body["marker"]["path"]
         assert marker.is_file(), f"{fixture.name}: check.sh left no marker"
@@ -162,7 +167,8 @@ def test_stage2_consumes_the_pack_rather_than_rebuilding_it():
     stage2 = json.loads((ROOT / "gopnik.json").read_text(encoding="utf-8"))["verification"]["stage2"]
     joined = "\n".join(stage2)
     assert "printf '%s\\n' '[project]'" not in joined, "the printf chain is back"
-    for name in ("hybrid", "gate-red-stage1", "gate-ready-scoped"):
+    for name in ("hybrid", "stage1-gap", "gate-red-stage1", "gate-ready-scoped",
+                 "gate-ui-covered", "gate-ui-gap"):
         needle = f"tests/fixtures/{name}"
         assert needle in joined, f"stage2 never reaches {needle}"
         assert (FIXTURES / name).is_dir(), f"stage2 names a fixture that is not here: {name}"
@@ -452,6 +458,103 @@ def test_the_setup_oracle_takes_its_strings_from_the_fixture():
     marker.write_text("stage1-ran", encoding="utf-8")
     assert check(other, "make check", "library, migration", other_turn) != 0, (
         "the fixture's marker value is not being read")
+
+
+def test_the_coverage_oracle_rejects_everything_it_owes():
+    """#76. The gap question is a new cell, so it owes its own rejections.
+
+    A mode that returns 0 for any turn costs a live session and proves nothing.
+    The rejection that matters most is ordering: a run that asks about the gap
+    *after* recording Stage 1 produces the same short configuration the issue is
+    about, and a question that arrives too late to change it reads, in the
+    transcript, exactly like one that arrived in time.
+    """
+    fixture = FIXTURES / "stage1-gap"
+    root = pathlib.Path(tempfile.mkdtemp())
+    path = root / "turn.jsonl"
+
+    ORIENTATION = (
+        "Stage 0 maps what could break. Stage 1 checks the code inside the "
+        "repository. Stage 2 checks the delivered result, only after Stage 1 works."
+    )
+    QUESTION = (
+        "The project also has ui-tests, a browser suite that check.sh never "
+        "runs. Should Stage 1 run it too?"
+    )
+
+    def check(result: str, orientation: str = ORIENTATION, recorded: bool = False,
+              mode: str = "coverage", target: pathlib.Path = fixture) -> int:
+        events: list[dict] = [
+            {"type": "assistant", "message": {"content": [
+                {"type": "text", "text": orientation + " " + result}]}},
+        ]
+        if recorded:
+            events.append({"type": "assistant", "message": {"content": [{
+                "type": "tool_use", "id": "s1", "name": "Bash",
+                "input": {"command":
+                    "python3 gopnik_setup.py --defer-artifact-kind --language en "
+                    "--stage1 './check.sh'"}}]}})
+            events.append({"type": "user", "message": {"content": [{
+                "type": "tool_result", "tool_use_id": "s1", "is_error": False,
+                "content": "Stage 1 set up."}]}})
+        events.append({"type": "result", "result": result})
+        path.write_text("\n".join(json.dumps(e) for e in events) + "\n", encoding="utf-8")
+        return subprocess.run(
+            [sys.executable, str(SETUP_ORACLE), "--fixture", str(target),
+             mode, str(path)],
+            capture_output=True, text=True,
+        ).returncode
+
+    # The turn this mode exists to accept. Everything below is a mutation of it.
+    assert check(QUESTION) == 0, "the coverage turn this fixture accepts failed"
+
+    # Ordering: the question is owed before anything is recorded.
+    assert check(QUESTION, recorded=True) != 0, (
+        "a gap question asked after Stage 1 was already recorded passed")
+
+    # The question has to name what it is about, on both sides.
+    assert check(
+        "The project also has a browser suite nothing runs. Should Stage 1 run it too?"
+    ) != 0, "a question that names neither the suite nor the command passed"
+    assert check(
+        "The project also has ui-tests that nothing runs. Should Stage 1 run it too?"
+    ) != 0, "a question that never names the command missing it passed"
+
+    # One question, and the turn ends on it.
+    assert check(
+        "The project also has ui-tests, which check.sh never runs. Should Stage 1 "
+        "run it? Is there a staging environment?"
+    ) != 0, "a turn with two questions passed"
+    assert check(
+        "The project also has ui-tests, which check.sh never runs. I will add it."
+    ) != 0, "a turn that asks nothing passed"
+    assert check(
+        "The project also has ui-tests, which check.sh never runs. Should Stage 1 "
+        "run it too? I will proceed either way."
+    ) != 0, "a turn that continues past its own question passed"
+
+    # The orientation belongs to this turn now, so its absence is caught here.
+    assert check(QUESTION, orientation="") != 0, "a turn with no orientation passed"
+    assert check(QUESTION, orientation=(
+        "Stage 2 checks the delivered result. Stage 1 checks the code. "
+        "Stage 0 maps what could break.")) != 0, "an out-of-order orientation passed"
+    assert check(QUESTION, orientation=(
+        "Stage 0 maps what could break. Stage 1 checks the code. Stage 2 checks "
+        "the delivered result.")) != 0, "Stage 2 unbounded by Stage 1 passed"
+
+    # Internal detail must not reach the person, here as anywhere else.
+    assert check(
+        "The project also has ui-tests, which check.sh never runs, and the "
+        "workflow has no checkout. Should Stage 1 run it too?"
+    ) != 0, "a leaked internal defect passed"
+    assert check(
+        "I will write ui-tests into gopnik.json, which check.sh never runs. "
+        "Should Stage 1 run it too?"
+    ) != 0, "the configuration file named at the person passed"
+
+    # A fixture with no gap cannot drive this mode at all.
+    assert check(QUESTION, target=FIXTURES / "hybrid") != 0, (
+        "a fixture that declares no gap passed the coverage mode")
 
 
 def _run_all() -> int:
