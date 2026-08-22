@@ -1,5 +1,15 @@
 # Changelog
 
+# [5.0.0](https://github.com/concordloom/gopnik/compare/v4.1.0...v5.0.0) (2026-08-22)
+
+
+* fix!: Stage 2 authenticated as the operator and logged them out of everything ([#80](https://github.com/concordloom/gopnik/issues/80)) ([bf64798](https://github.com/concordloom/gopnik/commit/bf64798765289a738698df8d0b51439544cd8cf9))
+
+
+### BREAKING CHANGES
+
+* this repository's Stage 2 no longer proves live agent behaviour.
+
 # [4.1.0](https://github.com/concordloom/gopnik/compare/v4.0.19...v4.1.0) (2026-08-22)
 
 
