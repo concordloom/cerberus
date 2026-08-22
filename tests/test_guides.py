@@ -659,6 +659,44 @@ def test_new_mcp_never_pretends_to_be_loaded_before_restart():
             assert phrase in text, (path.name, phrase)
 
 
+def test_the_gate_reads_the_confirmed_surfaces_rather_than_only_the_kind():
+    """#77. The other half of the same rule, and the load-bearing one.
+
+    `gopnik-setup` was told to cover every confirmed surface in Stage 2, and the
+    gate had no way to tell a project with one surface from a project with four:
+    `artifact_kind` is one word, and after a successful setup `stage2` is filled,
+    which takes the `run it` row of the three-state table and stops consulting
+    the record at all. A key with no reader is dead data, so this pins the
+    reader.
+    """
+    for path, phrases in (
+        (RUNNER_SKILLS[0], (
+            "`verification.surfaces`",
+            "Publication is not crossing",
+            "A surface with no such step is `Not proven`",
+            "An absent `surfaces` changes nothing",
+        )),
+        (RUNNER_SKILLS[1], (
+            "`verification.surfaces`",
+            "Публикация — не пересечение",
+            "Отсутствующий `surfaces` не меняет ничего",
+        )),
+    ):
+        text = _flat(path)
+        for phrase in phrases:
+            assert phrase in text, (path.name, phrase)
+
+
+def test_the_confirmation_step_records_the_surfaces_it_confirmed():
+    """The writing half: without it the reader above has nothing to read."""
+    for path, phrase in (
+        (INSTALL, "`--surfaces <the confirmed surfaces, comma separated>`"),
+        (SETUP_SKILLS[0], "`--surfaces <the confirmed surfaces, comma separated>`"),
+        (SETUP_SKILLS[1], "`--surfaces <подтверждённые поверхности через запятую>`"),
+    ):
+        assert phrase in _flat(path), (path.name, phrase)
+
+
 def test_ui_changes_require_real_browser_evidence_or_not_ready():
     expected = {
         RUNNER_SKILLS[0]: (
@@ -862,6 +900,74 @@ def test_uninstall_confirmation_is_a_hard_turn_boundary():
         "only after the user explicitly confirms those targets",
     ):
         assert phrase in text, phrase
+
+
+def test_the_override_ignore_rule_travels_at_repository_scope():
+    """#78. `.git/info/exclude` is not committed, and the team is the point.
+
+    A repository-scope install exists so the team receives Gopnik with the
+    project. An ignore rule left only in `.git/info/exclude` reaches nobody
+    else, and the next person's own override — private hosts, an IaC directory,
+    a secret-store read command — has nothing stopping them committing it.
+    Editing a tracked project file still requires a question, so the rule is one
+    question plus a file that travels, not a silent edit. The user scope keeps
+    the current behaviour: asking there would be noise in someone else's
+    repository, and a change that asks in both places has moved the defect
+    rather than fixed it.
+    """
+    question = (
+        "Stage 2 here needs values that belong to this machine, so they go into "
+        "a separate local file. May I add that file to .gitignore, so it stays "
+        "out of commits for everyone working on this repository?"
+    )
+    question_ru = (
+        "Stage 2 здесь нужны значения, привязанные к этой машине, поэтому они "
+        "уйдут в отдельный локальный файл. Можно добавить этот файл в "
+        ".gitignore, чтобы он не попадал в коммиты ни у кого, кто работает с "
+        "этим репозиторием?"
+    )
+    guide = _flat(INSTALL)
+    english = _flat(SETUP_SKILLS[0])
+    russian = _flat(SETUP_SKILLS[1])
+
+    for phrase in (
+        "the rule has to travel with the repository",
+        "`.git/info/exclude` is never committed",
+        "ask once before editing it",
+        question,
+        question_ru,
+        "In the user scope, keep the current behaviour",
+        "Ask nothing in either scope when the run needs no override at all",
+        # A linked worktree and a submodule keep `.git` as a file, so the
+        # literal `.git/info/exclude` is a path that does not exist there.
+        "git rev-parse --git-path info/exclude",
+        "the repository decides",
+    ):
+        assert phrase in guide, f"install.md: {phrase}"
+
+    for phrase in (
+        "At repository scope the ignore rule has to end up in a file that travels with the repository",
+        "`.git/info/exclude` is not committed",
+        "ask before editing it, exactly once",
+        question,
+        "Do not ask the `.gitignore` question there",
+        "Ask nothing at either scope when the run needs no override at all",
+        "git rev-parse --git-path info/exclude",
+        "in a linked worktree or a submodule `.git` is a file",
+    ):
+        assert phrase in english, f"SKILL.md: {phrase}"
+
+    for phrase in (
+        "В области репозитория правило игнорирования обязано оказаться в файле, который уезжает вместе с репозиторием",
+        "`.git/info/exclude` не коммитится",
+        "спроси перед его правкой ровно один раз",
+        question_ru,
+        "Не задавай там вопрос про `.gitignore`",
+        "Не спрашивай ни в одной области, когда дополнение вообще не нужно",
+        "git rev-parse --git-path info/exclude",
+        "в подключённом рабочем дереве и в подмодуле `.git` — это файл",
+    ):
+        assert phrase in russian, f"SKILL.ru.md: {phrase}"
 
 
 def _main() -> int:

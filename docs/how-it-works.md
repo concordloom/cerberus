@@ -76,6 +76,10 @@ but it must name the missing proof.
 - `stage2` contains executable checks past the delivery boundary.
 - `artifact_kind` identifies the primary delivery boundary; hybrid products
   still need coverage for every confirmed surface.
+- `surfaces` is where those confirmed surfaces are kept — the set a critic
+  challenged and a person confirmed during setup. A verdict owes each of them a
+  `stage2` step or an explicit `Not proven` naming it. A configuration written
+  before the key existed has none, and is read exactly as it stands.
 - `notes` describe constraints and prerequisites. They do not grant authority.
 
 Private targets, credentials, and machine-specific paths do not belong in the

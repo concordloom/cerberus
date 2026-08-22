@@ -33,6 +33,31 @@ Not product rules. That the two-surface question is worded
 that *this* project's two surfaces are a command and a web interface is a fact
 about the fixture and stays here.
 
+## The surface pair
+
+`gate-surface-gap` and `gate-surface-covered` are one project with two confirmed
+delivery surfaces — an installed command and a chart somebody else applies —
+recorded in `verification.surfaces`. The gap side crosses only the command, and
+its chart really is broken in the way an uncrossed surface gets broken: the image
+tag it ships sits three minor versions behind its own `appVersion`, which no step
+in that configuration would ever read. The covered side crosses both and is
+clean.
+
+The pair exists because neither side alone is a check. A gate that answers
+`NOT READY` whenever a configuration names more than one surface passes the gap
+side; one that treats a filled `stage2` as "run it and stop" passes the covered
+side, since the run is green. Only the two together separate those.
+
+What the pair does **not** prove is that a run read `verification.surfaces`. An
+adversary scored six strategies against both sides and three passed without ever
+touching the key: reading the answer out of `notes`, comparing `stage2` against
+the directory listing, and simply checking whether the prompt was true. The first
+and the third were accidents of how the fixtures were written and are gone — the
+`notes` are identical on both sides now, and neither chart is defective. The
+second is not an accident and stays: a run can re-derive coverage from the tree,
+which the skill forbids and which no pair of fixtures can make impossible,
+because the tree is where surfaces come from in the first place.
+
 ## The gate pair
 
 `gate-red-stage1` and `gate-ready-scoped` differ by one line of `app/cli.py`.

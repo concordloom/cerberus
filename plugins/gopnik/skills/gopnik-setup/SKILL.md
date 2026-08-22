@@ -260,9 +260,11 @@ After Stage 1 succeeds, report the result in one short sentence.
 The script writes the selected language and the passing Stage 1 commands, but
 guided setup leaves the delivery kind unset until the confirmation step below.
 After the person answers, finalize the primary kind with
-`--confirm-artifact-kind KIND`. Invoke the setup helper exactly once in this
-step, with that as its only option: do not probe `--help`, repeat `--language`,
-or combine it with any setup option. The selected language is already stored;
+`--confirm-artifact-kind KIND`, and record what was confirmed with
+`--surfaces <the confirmed surfaces, comma separated>`. Invoke the setup helper
+exactly once in this step, with those two options and nothing else: do not probe
+`--help`, repeat `--language`, or combine it with any setup option. The selected
+language is already stored;
 this preserves the Stage 1 evidence without
 running it again. The script merges rather than replaces existing data. A
 hand-written artifact kind, operational note, or legacy config path must
@@ -297,6 +299,64 @@ absolute home-directory path into a file intended for the team.
 
 A package smoke test, build, or `--version` call is only a Stage 2 prerequisite
 unless it crosses the actual delivery boundary.
+
+## Ignore the local override where the install scope requires
+
+An ignored override protects only as far as the file that ignores it travels,
+and which file that has to be depends on how Gopnik reaches this project.
+Nobody passes you the install scope, and a standalone run has no conversation
+to remember it from, so read it off the repository instead. Repository scope
+means the team receives Gopnik with the project, so the question is whether
+this repository carries a Gopnik skills directory of its own: a
+`.claude/skills/gopnik-setup` or `.agents/skills/gopnik-setup` inside the
+working tree that git does not ignore. Check both halves — `git ls-files` and
+`git check-ignore` answer the second — because a skills directory the
+repository ignores reaches nobody, which makes it a user-scope install however
+it looks. Everything else is user scope too: a user-level plugin or skills
+directory, or a copy belonging to a different project.
+
+The copy you are running is a signal, not the answer. A project can carry a
+committed `.claude/skills/gopnik-setup` while the copy in use is the user-level
+one, and the team still receives the project's copy. If an answer carried from
+the installation conversation disagrees with what the repository shows, the
+repository decides.
+
+At repository scope the ignore rule has to end up in a file that travels with
+the repository: the project's `.gitignore`, or the nearest tracked ignore file
+that already governs the override's directory. `.git/info/exclude` is not
+committed, so a rule left only there protects the machine that ran setup and
+nobody else — while the point of a repository-scope install is that the team
+receives it with the project. The next person clones, creates their own
+override, and has nothing stopping them committing private infrastructure paths
+and the command that reads a secret.
+
+A tracked ignore file is a tracked project file, so the authority boundary
+above applies unchanged: ask before editing it, exactly once, in the selected
+language, and wait for the answer.
+
+> Stage 2 here needs values that belong to this machine, so they go into a separate local file. May I add that file to .gitignore, so it stays out of commits for everyone working on this repository?
+
+This ignore question is a hard turn boundary. The visible response is that
+question and nothing else: end with it and wait.
+
+If the person agrees, write a pattern that matches the override you actually
+created and nothing wider. If the person declines, still ignore the override
+where only this machine sees it, and say in one sentence that the protection
+now covers this machine only and the next person will not receive it. A decline
+is a limitation you report, not a quiet fall back to the machine-local route.
+
+At user scope none of that applies and nothing changes: a personal override
+belongs in this repository's own exclude file, which needs no permission
+because it is not part of the project. Write it where
+`git rev-parse --git-path info/exclude` points rather than to a literal
+`.git/info/exclude` — in a linked worktree or a submodule `.git` is a file and
+that literal path does not exist. Do not ask the `.gitignore` question there.
+It would propose an edit to someone else's project, for a file only you will
+ever write.
+
+Ask nothing at either scope when the run needs no override at all, when the
+override lives outside the repository, or when a tracked rule already covers
+it. An ignore rule that changes no file needs no question.
 
 ## Confirm how the project is used after delivery
 
@@ -374,7 +434,9 @@ tooling.
 After the answer, finalize the primary kind. For a hybrid project, choose the
 kind at the farthest confirmed delivery boundary, then cover every confirmed
 surface in Stage 2 and the operational notes. Never discard the other surfaces
-because the internal record has one primary kind.
+because the internal record has one primary kind: `artifact_kind` holds one
+word, `--surfaces` holds the set, and a verdict that has to decide whether
+Stage 2 covered every surface has nowhere else to read it.
 
 ## Ask whether Stage 2 has somewhere real to run
 
@@ -586,6 +648,10 @@ prompts for the person to copy.
       copying or linking the operator's own session state?
 - [ ] Is `stage2_unreachable` reserved for a true project-level absence?
 - [ ] Is shared verification portable, with private local values kept separate?
+- [ ] Did I read the install scope off the repository rather than assume it?
+- [ ] At repository scope, did the override's ignore rule reach a file the team
+      receives, after exactly one question — and at user scope did I ignore it
+      where only this machine sees it, and ask nothing?
 - [ ] Did I keep configuration files and JSON out of normal user-facing text?
 - [ ] Did I omit internal files, Git status, and commit advice from the final response?
 - [ ] If setup was blocked, did I stop before the recommendation and tracker example?

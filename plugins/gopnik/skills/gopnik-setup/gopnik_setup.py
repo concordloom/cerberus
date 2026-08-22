@@ -8,6 +8,7 @@ Run it from the project root:
     python3 gopnik_setup.py --defer-artifact-kind  # save Stage 1, wait for confirmation
     python3 gopnik_setup.py --refresh # compare the record with the tree, write nothing
     python3 gopnik_setup.py --add-stage1 './ui-tests/run.sh'  # answer the refresh
+    python3 gopnik_setup.py --confirm-artifact-kind service --surfaces service,chart
 
 Why it exists: the skills need to know two things this repository cannot know —
 the commands that check this project, and where the change stops being under
@@ -150,6 +151,22 @@ def unfinished(stage2: list) -> list[str]:
     for command in stage2:
         left += [m for m in PLACEHOLDER.findall(str(command)) if m not in left]
     return left
+
+
+def parse_surfaces(value: str) -> list[str]:
+    """The confirmed delivery surfaces, in the order they were confirmed.
+
+    Deduplicated and stripped, and nothing else: these identifiers come from a
+    critic and a person, not from a vocabulary this script owns. Normalising
+    them further would mean deciding that `web` and `dashboard` are the same
+    surface, which is a judgement about somebody else's product.
+    """
+    found = []
+    for part in value.split(","):
+        name = part.strip()
+        if name and name not in found:
+            found.append(name)
+    return found
 
 
 #: Returned when the key is present but says nothing. Distinct from None,
@@ -538,8 +555,20 @@ def confirm_artifact_kind(
     root: pathlib.Path,
     kind: str,
     dry: bool = False,
+    surfaces: list[str] | None = None,
 ) -> pathlib.Path:
-    """Finalize only the provisional kind; preserve the proven Stage 1 checks."""
+    """Finalize the provisional kind and the surfaces behind it.
+
+    `artifact_kind` is one word for the farthest boundary. A project that
+    delivers through several had nowhere to say so, and the requirement that
+    Stage 2 cover every confirmed surface therefore had no data behind it:
+    the critic's surviving set was used to phrase one question and then thrown
+    away. `surfaces` is that set, after the person confirmed it.
+
+    Written only when this step was given one. `None` means the question was
+    not asked in this run, and an existing set is then left exactly as it
+    stands — including one a person wrote by hand.
+    """
     path = resolve_config(root)
     try:
         body = json.loads(path.read_text(encoding="utf-8"))
@@ -559,6 +588,8 @@ def confirm_artifact_kind(
     )
     verification["artifact_kind"] = kind
     verification.pop("//artifact_kind", None)
+    if surfaces is not None:
+        verification["surfaces"] = list(surfaces)
     if fresh_setup:
         verification["notes"] = (
             "stage2 is still empty. Put here what proves it works where it really runs: "
@@ -1141,6 +1172,16 @@ def report_state(root: pathlib.Path, kind: str = "library", first_run: bool = Tr
               f"I can draft it from {seen} — run this again with --draft-stage2.")
     else:
         print(f"Still missing — stage2 in {where}: {hint}.")
+    # The kind names one boundary; a project can have been confirmed to deliver
+    # through several, and this is the moment somebody is about to write the
+    # steps. Saying nothing here is how the set stayed a fact nobody acted on.
+    # `isinstance` rather than a truth test: this file is hand-editable, and a
+    # `"surfaces": "command"` written by a person would otherwise be iterated
+    # one character at a time and reported as seven surfaces.
+    recorded = (body.get("verification") or {}).get("surfaces")
+    confirmed = [str(s) for s in recorded] if isinstance(recorded, list) else []
+    if len(confirmed) > 1:
+        print("It has to cover all of: " + ", ".join(confirmed) + ".")
     return 0
 
 
@@ -1232,6 +1273,12 @@ def main(argv: list[str] | None = None) -> int:
         help="finalize a kind previously deferred by guided setup without rerunning Stage 1",
     )
     parser.add_argument(
+        "--surfaces",
+        metavar="A,B",
+        help="the delivery surfaces confirmed in this run, comma separated; "
+             "pass with --confirm-artifact-kind",
+    )
+    parser.add_argument(
         "--language",
         choices=("en", "ru"),
         help="persist the selected operator-facing language in gopnik.json",
@@ -1269,8 +1316,11 @@ def main(argv: list[str] | None = None) -> int:
                 "--refresh writes nothing by contract; --add-stage1 is how an "
                 "answer reaches the file. Run them one after the other"
             )
+        # `--surfaces` joins this list because it arrived on the same merge:
+        # it is a setup option, and revisiting an existing record is not setup.
         if (args.stage1 or args.artifact_kind or args.defer_artifact_kind
-                or args.draft_stage2 or args.language or args.confirm_artifact_kind):
+                or args.draft_stage2 or args.language or args.confirm_artifact_kind
+                or args.surfaces):
             parser.error(
                 "--refresh and --add-stage1 revisit an existing record; "
                 "do not combine them with setup options"
@@ -1280,6 +1330,17 @@ def main(argv: list[str] | None = None) -> int:
         return apply_stage1(
             root, args.add_stage1, timeout=args.timeout_seconds, dry=args.check
         )
+
+    surfaces = None
+    if args.surfaces is not None:
+        if not args.confirm_artifact_kind:
+            parser.error(
+                "--surfaces records what the confirmation step confirmed; "
+                "pass it with --confirm-artifact-kind"
+            )
+        surfaces = parse_surfaces(args.surfaces)
+        if not surfaces:
+            parser.error("--surfaces was given without a surface in it")
 
     if args.confirm_artifact_kind:
         incompatible = (
@@ -1296,7 +1357,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         try:
             confirmed = confirm_artifact_kind(
-                root, args.confirm_artifact_kind, dry=args.check
+                root, args.confirm_artifact_kind, dry=args.check, surfaces=surfaces
             )
         except ValueError as exc:
             print(f"Cannot confirm artifact kind: {exc}.")
@@ -1306,6 +1367,12 @@ def main(argv: list[str] | None = None) -> int:
             f"{action} artifact kind '{args.confirm_artifact_kind}' in {confirmed.name}. "
             "Stage 1 checks were preserved and not rerun."
         )
+        if surfaces:
+            print(
+                f"{action} delivery surfaces: " + ", ".join(surfaces) + ". "
+                "stage2 owes each of them a step, or a written reason why it "
+                "has none."
+            )
         return 0
 
     if args.defer_artifact_kind and args.artifact_kind:

@@ -94,9 +94,39 @@ python3 scripts/check_live_setup_turn.py --fixture tests/fixtures/stage1-gap \
 ```
 
 `scripts/check_live_setup_turn.py` reads a conversation turn — modes `language`,
-`scope`, `coverage`, `surfaces`, `stand`, `access` and their `-ru` variants —
-and `scripts/check_live_gate_turn.py` reads a whole gate run against a fixture
-directory. Both fail closed, and `tests/test_fixtures.py` proves they can fail.
+`scope`, `coverage`, `surfaces`, `stand`, `access`, `override`,
+`override-declined`, `override-user` and their `-ru` variants, plus
+`override-applied` and `override-none`, which are the same in both languages
+because they judge which file was written rather than what was said — and
+`scripts/check_live_gate_turn.py` reads a whole gate run against a fixture
+directory. Both fail closed; `tests/test_fixtures.py` proves the coverage and
+gate oracles can fail, and `tests/test_setup.py` does the same for the
+`override` modes.
+
+The `override` modes are one check in several runs, not several checks. Where an
+override's ignore rule belongs depends on the install scope, so the
+repository-scope cell alone proves nothing: a version that asks about
+`.gitignore` everywhere passes it and has moved the defect into repositories
+that never installed Gopnik, and a version that asks and then writes
+`.git/info/exclude` anyway passes the question cell while shipping the original
+bug. Install the skills into the fixture's own `.claude/skills/`, answer the
+Stage 2 questions with a machine-specific target, and capture both the turn
+that asks and the turn that acts:
+
+```console
+python3 scripts/check_live_setup_turn.py override ask-turn.jsonl
+python3 scripts/check_live_setup_turn.py override-applied act-turn.jsonl
+python3 scripts/check_live_setup_turn.py override-declined declined-turn.jsonl
+python3 scripts/check_live_setup_turn.py override-user user-turn.jsonl
+python3 scripts/check_live_setup_turn.py override-none plain-turn.jsonl
+```
+
+`override-applied` and `override-declined` are the two answers to the same
+question and need one round each. `override-user` is the control and uses a
+user-scoped installation of the same skills against the same fixture;
+`override-none` uses a Stage 2 route that needs nothing machine-specific. A
+round is green only when the cells it ran are green together — the question
+cell on its own is not evidence about where the rule landed.
 
 A verdict that has not run these says so, rather than leaving the absence to be
 inferred.

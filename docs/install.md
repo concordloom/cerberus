@@ -348,13 +348,16 @@ infrastructure, draft or run Stage 2, or ask about a stand, access, or browser
 tooling.
 
 After the answer, finalize the primary kind with
-`--confirm-artifact-kind KIND`. Invoke the setup helper exactly once in this
-step, with that as its only option: do not probe `--help`, repeat `--language`,
-or combine it with any setup option. The selected language and Stage 1 evidence
-are already stored. For a hybrid project, choose the kind at the
-farthest confirmed delivery boundary, then cover every confirmed surface in
-Stage 2 and the operational notes. Never discard the other surfaces because the
-internal record has one primary kind.
+`--confirm-artifact-kind KIND`, and record what was confirmed with
+`--surfaces <the confirmed surfaces, comma separated>`. Invoke the setup helper
+exactly once in this step, with those two options and nothing else: do not probe
+`--help`, repeat `--language`, or combine it with any setup option. The selected
+language and Stage 1 evidence are already stored. For a hybrid project, choose
+the kind at the farthest confirmed delivery boundary, then cover every confirmed
+surface in Stage 2 and the operational notes. Never discard the other surfaces
+because the internal record has one primary kind: `artifact_kind` holds one
+word, `--surfaces` holds the set, and a verdict that has to decide whether
+Stage 2 covered every surface has nowhere else to read it.
 
 Choose that kind from this complete mapping without inspecting the helper or
 rediscovering its choices: a deployed web UI, API, or always-on application is
@@ -420,6 +423,36 @@ record and the shared route must refer to local values through environment
 variables or another project-owned indirection. Never put the shared project
 configuration in `.git/info/exclude`. Never copy a private target or an
 absolute home-directory path into a file intended for the team.
+
+Where that override's ignore rule belongs depends on the installation scope
+chosen in step 2, and the two scopes must diverge. In the repository scope the
+rule has to travel with the repository — the project's `.gitignore`, or the
+nearest tracked ignore file that already governs the override's directory.
+`.git/info/exclude` is never committed, so a rule left only there protects this
+machine while the skills and the configuration reach the whole team, and the
+next person to create their own override has nothing stopping them committing
+private infrastructure paths and a secret-store read command. A tracked ignore
+file is a tracked project file, so ask once before editing it, in the selected
+language, and wait. In English:
+
+> Stage 2 here needs values that belong to this machine, so they go into a separate local file. May I add that file to .gitignore, so it stays out of commits for everyone working on this repository?
+
+In Russian:
+
+> Stage 2 здесь нужны значения, привязанные к этой машине, поэтому они уйдут в отдельный локальный файл. Можно добавить этот файл в .gitignore, чтобы он не попадал в коммиты ни у кого, кто работает с этим репозиторием?
+
+This ignore question is a hard turn boundary too. The visible response is that
+question and nothing else.
+
+In the user scope, keep the current behaviour: a personal override belongs in
+this repository's own exclude file — the path `git rev-parse --git-path
+info/exclude` prints, which in a linked worktree or a submodule is not
+`.git/info/exclude` — and asking to edit `.gitignore` in someone else's
+repository would be noise. Ask nothing in either scope when the run needs no
+override at all. Setup invoked on its own, with no scope carried from this
+conversation, reads the scope off the repository instead, and where the answer
+carried from here disagrees with what the repository shows, the repository
+decides.
 
 As part of that investigation, inspect the product surfaces that Stage 2 must
 actually exercise. Do not ask about browser tooling merely because frontend
