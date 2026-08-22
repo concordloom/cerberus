@@ -1513,160 +1513,68 @@ def test_a_late_check_that_fails_is_not_written_either():
     assert config_of(root)["verification"]["stage1"] == ["./check.sh"], out
 
 
-def test_this_repository_verifies_it_with_a_live_session():
-    """#49, point 4. The only part that is mechanical rather than well-meant.
+def test_stage2_never_authenticates_as_the_operator():
+    """The rule that replaced the live cells, and the reason they are gone.
 
-    Every earlier fix here was text asking an agent to behave. This one is a
-    command in our own stage2, so the claim cannot be waved through again
-    without someone deleting a line.
+    Stage 2 used to run the setup and gate conversations live, which needs a
+    credential, and it took the operator's: a symlink from ~/.claude into two
+    CLAUDE_CONFIG_DIR trees, described in the notes as isolation. A live run
+    refreshed the token. An OAuth refresh token is single-use, so every session
+    on that credential was logged out mid-work.
+
+    The tests were part of that: they asserted the link was *present* and only
+    banned `cp`, on the theory that linking touches nothing. So this is now the
+    inverse, and it is over the whole route rather than its first cell — a
+    verification step that can log the operator out is worse than the coverage
+    it buys, whichever cell reintroduces it.
     """
     body = json.loads((ROOT / "gopnik.json").read_text(encoding="utf-8"))
     stage2 = body["verification"]["stage2"]
-    live = [c for c in stage2 if "claude -p" in c]
-    assert live, f"stage2 has no live agent session:\n" + "\n".join(stage2)
-    # #73 added the gate's own pair. #76 added a second setup conversation and a
-    # second gate pair. Sixteen setup turns, four gate runs, and every one of
-    # them handed to an oracle — a live session nothing reads is an expensive
-    # way to prove nothing.
-    assert len(live) == 20, live
-    setup_live = [c for c in live if "check_live_setup_turn.py" in c]
-    gate_live = [c for c in live if "check_live_gate_turn.py" in c]
-    assert len(setup_live) == 16, setup_live
-    assert len(gate_live) == 4, gate_live
-    unchecked = [c for c in live if c not in setup_live and c not in gate_live]
-    assert not unchecked, f"a live session with no oracle: {unchecked}"
+    joined = "\n".join(stage2)
 
-    assert sum("--session-id" in command for command in setup_live) == 3, setup_live
-    assert sum("--resume" in command for command in setup_live) == 13, setup_live
-    assert not any("--continue" in command for command in live), live
-    for command in setup_live:
-        assert any(
-            f'cd "$GOPNIK_STAGE2_ROOT/{tree}"' in command
-            for tree in ("scratch-en", "scratch-ru", "gap-en")
-        ), command
-        # The oracle no longer holds this fixture's strings, so the route has to
-        # say which fixture it is checking.
-        assert any(
-            f'--fixture "$GOPNIK_STAGE2_ROOT/src/tests/fixtures/{name}"' in command
-            for name in ("hybrid", "stage1-gap")
-        ), command
+    for forbidden in ("$HOME/.claude", "CLAUDE_CONFIG_DIR:-", "ANTHROPIC_API_KEY"):
+        assert forbidden not in joined, (
+            f"Stage 2 reaches for a credential via {forbidden!r}")
+    # No agent conversation, because there is no honest way to run one here
+    # without a login. The one mention of a credential file is the assertion
+    # that none was left behind, which is the guard rather than a use.
+    assert "claude -p" not in joined, joined
+    assert joined.count(".credentials.json") == 1, joined
+    assert 'test ! -e "$GOPNIK_STAGE2_ROOT/cfg/.credentials.json"' in joined, joined
+    for pattern in ("ln -s", "cp ~", "install -m"):
+        assert pattern not in joined, f"Stage 2 moves a credential with {pattern!r}"
 
-    # The gate pair. Opposite verdicts from one line of product code is the
-    # whole check: two fixtures that agreed would pass a gate stuck on either
-    # answer, so the verdicts are read from the files rather than assumed.
-    verdicts = {}
-    pairs = (("gate-red-stage1", "gate-ready-scoped"), ("gate-ui-covered", "gate-ui-gap"))
-    for name, command in zip([n for pair in pairs for n in pair], gate_live):
-        assert f'cd "$GOPNIK_STAGE2_ROOT/{name}"' in command, command
-        assert f"src/tests/fixtures/{name}" in command, command
-        assert "jq -r .prompt" in command, (
-            f"the prompt belongs to the fixture, not to this file: {command}")
-        assert "--output-format stream-json" in command and "--verbose" in command, command
-        verdicts[name] = json.loads(
-            (ROOT / "tests" / "fixtures" / name / "expected.json").read_text(encoding="utf-8")
-        )["verdict"]
-    # Each pair has to disagree with itself. A pair that agreed would pass a
-    # gate stuck on either answer, which is the trap the first pair was built
-    # around and the second inherits.
-    for left, right in pairs:
-        assert {verdicts[left], verdicts[right]} == {"READY", "NOT READY"}, (
-            f"{left} and {right} reach the same verdict: {verdicts}")
-        prompts = {
-            json.loads((ROOT / "tests" / "fixtures" / name / "expected.json")
-                       .read_text(encoding="utf-8"))["prompt"]
-            for name in (left, right)
-        }
-        assert len(prompts) == 1, f"{left} and {right} are asked different questions"
-
-    for names in ("gate-red-stage1 gate-ready-scoped", "gate-ui-covered gate-ui-gap"):
-        materialise = next(c for c in stage2 if names in c)
-        assert 'test ! -e "$GOPNIK_STAGE2_ROOT/$GOPNIK_FIXTURE/.stage1-ran"' in materialise, (
-            f"without a clean start the marker proves nothing: {materialise}")
-
-    # #76. The second conversation is the one that has a gap to find, and the
-    # order is the claim: the coverage question comes before Stage 1 is written,
-    # or it cannot change what gets written.
-    gap = [command for command in setup_live if "session-gap" in command]
-    assert len(gap) == 6, gap
-    for index, mode in enumerate(
-        ("language", "scope", "coverage", "surfaces", "stand", "access")
-    ):
-        assert f" {mode} " in gap[index], (mode, gap)
-        assert '--fixture "$GOPNIK_STAGE2_ROOT/src/tests/fixtures/stage1-gap"' in gap[index]
-    assert "--forward-subagent-text" in gap[3], gap[3]
-    assert 'verification.stage1 == ["./check.sh", "./ui-tests/run.sh"]' in gap[3], gap[3]
-    assert '.ui-tests-ran' in gap[3], (
-        "nothing proves the suite the person agreed to actually ran")
-    gap_tree = next(c for c in stage2 if "tests/fixtures/stage1-gap/repo" in c)
-    assert 'test ! -e "$GOPNIK_STAGE2_ROOT/gap-en/.ui-tests-ran"' in gap_tree, gap_tree
-    assert "! grep -q ui-tests" in gap_tree, (
-        f"the fixture's premise is that the documented command misses it: {gap_tree}")
-
-    english = [command for command in setup_live if '"$GOPNIK_STAGE2_ROOT/session-en"' in command]
-    russian = [command for command in setup_live if '"$GOPNIK_STAGE2_ROOT/session-ru"' in command]
-    assert len(english) == 5, english
-    assert len(russian) == 5, russian
-    for commands, modes in (
-        (english, ("language", "scope", "surfaces", "stand", "access")),
-        (russian, ("language", "scope-ru", "surfaces-ru", "stand-ru", "access-ru")),
-    ):
-        for index, mode in enumerate(modes):
-            assert f" {mode} " in commands[index], (mode, commands)
-
-    for boundary in english[:2] + [english[4]] + russian[:2] + [russian[4]]:
-        assert "--output-format stream-json" in boundary, boundary
-        assert "--verbose" in boundary, boundary
-
-    for surfaces in (english[2], russian[2]):
-        assert "--output-format stream-json" in surfaces, surfaces
-        assert "--verbose" in surfaces, surfaces
-        assert "--forward-subagent-text" in surfaces, surfaces
-        assert ".stage1-ran" in surfaces, surfaces
-        assert "jq -e" in surfaces and "gopnik.json" in surfaces, surfaces
-        assert 'verification.stage1 == ["./check.sh"]' in surfaces, surfaces
-        assert "Pending confirmation of how people use this project after delivery." in surfaces
-    for stand in (english[3], russian[3]):
-        assert "--output-format stream-json" in stand, stand
-        assert "--verbose" in stand, stand
-        assert "jq -e" in stand and 'verification.artifact_kind == "service"' in stand
-        assert 'has("//artifact_kind") | not' in stand, stand
-    # #73: the fixture is a tree in tests/fixtures, copied from the clone at the
-    # revision under test. It used to be a 1179-character printf chain here,
-    # which is why there was only ever one of it.
-    fixture = next(command for command in stage2 if "scratch-en scratch-ru" in command)
-    assert "src/tests/fixtures/hybrid/repo" in fixture, fixture
-    assert "printf" not in fixture, f"the printf chain is back: {fixture}"
-    assert 'test ! -e "$GOPNIK_STAGE2_ROOT/$GOPNIK_FIXTURE/.stage1-ran"' in fixture, fixture
-    assert (ROOT / "tests" / "fixtures" / "hybrid" / "repo" / "check.sh").is_file(), (
-        "stage2 copies a fixture that is not in the tree")
-
-    joined = "\n".join(setup_live)
-    assert "read this complete raw guide via stdout only" in joined, joined
-    assert "прочитай эту полную raw-инструкцию только через stdout" in joined, joined
-    assert "For this agent across my projects." in joined, joined
-    assert "Both the installed command and the deployed web interface are used." in joined, joined
-    assert "Russian" in joined and "Только в этом репозитории." in joined, joined
-
-    assert any("scratch-en/.claude/skills/gopnik" in command and "test ! -e" in command
-               for command in stage2), stage2
-    assert any("scratch-ru/.claude/skills/gopnik/SKILL.md" in command
-               for command in stage2), stage2
-    assert any("expected-sha" in command and "git -C" in command for command in stage2), stage2
-    auth = stage2[0]
-    assert 'GOPNIK_CLAUDE_SOURCE_DIR=${CLAUDE_CONFIG_DIR:-"$HOME/.claude"}' in auth, auth
-    assert auth.count('.credentials.json') >= 5, auth
-    assert auth.count("claude auth status --json") == 2, auth
-    assert auth.count('"loggedIn": true') == 2, auth
-    assert "cp " not in auth and "install -m" not in auth, auth
-    assert any("plugin details gopnik | grep -Eq" in command for command in stage2), stage2
-    assert any("rm -rf" in command and "gopnik-stage2.*" in command for command in stage2), stage2
-
-    sys.path.insert(0, str(SETUP.parent))
-    import gopnik_setup
+    # The isolated host config is asserted empty rather than assumed to be, and
+    # every command that touches the loader uses it.
+    assert 'test -z "$(ls -A "$GOPNIK_STAGE2_ROOT/cfg")"' in stage2[0], stage2[0]
     for command in stage2:
-        why = gopnik_setup.unfailable(command)
-        assert why is None, f"self Stage 2 contains a non-check: {command!r} — {why}"
+        if "claude plugin" in command:
+            assert 'CLAUDE_CONFIG_DIR="$GOPNIK_STAGE2_ROOT/cfg"' in command, command
 
+    # What is left still crosses the boundary: the loader, and the installer
+    # from the exact pushed revision.
+    assert any("claude plugin install gopnik@concordloom" in c for c in stage2), stage2
+    assert any("Skills[^0-9]*3" in c for c in stage2), stage2
+    revision = next(c for c in stage2 if "git clone --branch main" in c)
+    assert "expected-sha" in revision, revision
+    assert "install.sh\" --claude" in revision, revision
+    assert "sha256sum -c" in revision, (
+        "the installer must be shown preserving a file the project owned")
+
+    # And the gap it leaves is written down where a contributor will meet it,
+    # rather than left to be inferred from an absence.
+    contributing = (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
+    for phrase in (
+        "never your working login",
+        "single-use",
+        "Stage 2 does not run",
+    ):
+        assert phrase in contributing, (
+            f"CONTRIBUTING.md does not carry {phrase!r}: the live procedure and "
+            "the reason it is manual have to be documented somewhere")
+    notes = body["verification"]["notes"]
+    assert "authenticates nothing" in notes, notes
+    assert "does not prove" in notes, notes
 
 def test_live_setup_oracle_rejects_shortcuts_and_internal_leaks():
     root = pathlib.Path(tempfile.mkdtemp())

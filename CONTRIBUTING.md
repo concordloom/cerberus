@@ -56,14 +56,50 @@ This repository ships a plugin. Its delivery boundaries are the native plugin
 loader, the repository-local installer, and a real agent session. Static tests
 cannot prove those surfaces.
 
-The executable Stage 2 route lives in `gopnik.json`. It uses isolated temporary
-host configuration, verifies the exact pushed revision, installs all three
-skills, exercises English and Russian onboarding, and removes its temporary
-state. Never point this route at an operator's real host configuration.
+The executable Stage 2 route lives in `gopnik.json`. It authenticates nothing:
+an isolated temporary host configuration, asserted empty before the loader runs
+and credential-free after, the marketplace and all three skills installed into
+it, the raw installer run from a clone pinned to the exact pushed revision over
+a file the project already owned, and the fixture pack exercised by its own test
+from that clone. Then it removes its temporary state.
 
 Do not call a local clone or unpushed commit full Stage 2: the marketplace and
 raw installer consume GitHub. The remote revision must match the local commit
 under verdict.
+
+### The one thing Stage 2 does not run
+
+**Stage 2 does not run a live agent session**, so it does not prove that the
+skills behave as written when an agent actually follows them. That is the one
+surface no static check reaches, and it is deliberately manual.
+
+It is manual because the route used to do it automatically and took the
+operator's login to do so — a symlink from `~/.claude/.credentials.json` into
+two `CLAUDE_CONFIG_DIR` trees, which reads as isolation and is not. A live run
+refreshed the token; an OAuth refresh token is **single-use**, so the operator's
+own file kept a credential the server had already invalidated, and every session
+using it was logged out mid-work. A verification step that can do that to the
+person running it is worse than the coverage it buys.
+
+Run the conversations by hand when a change touches the skills' behaviour, with
+a credential issued for verification and **never your working login**:
+
+```console
+export CLAUDE_CONFIG_DIR=$(mktemp -d)      # log in separately, in this tree only
+cp -r tests/fixtures/stage1-gap/repo /tmp/gap && cd /tmp/gap
+claude -p 'Set up Gopnik for this project.' --session-id "$SESSION" \
+  --permission-mode bypassPermissions --output-format stream-json --verbose > turn.jsonl
+python3 scripts/check_live_setup_turn.py --fixture tests/fixtures/stage1-gap \
+  coverage turn.jsonl
+```
+
+`scripts/check_live_setup_turn.py` reads a conversation turn — modes `language`,
+`scope`, `coverage`, `surfaces`, `stand`, `access` and their `-ru` variants —
+and `scripts/check_live_gate_turn.py` reads a whole gate run against a fixture
+directory. Both fail closed, and `tests/test_fixtures.py` proves they can fail.
+
+A verdict that has not run these says so, rather than leaving the absence to be
+inferred.
 
 ## Product identity
 
