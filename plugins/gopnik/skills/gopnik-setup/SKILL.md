@@ -240,6 +240,64 @@ absolute home-directory path into a file intended for the team.
 A package smoke test, build, or `--version` call is only a Stage 2 prerequisite
 unless it crosses the actual delivery boundary.
 
+## Ignore the local override where the install scope requires
+
+An ignored override protects only as far as the file that ignores it travels,
+and which file that has to be depends on how Gopnik reaches this project.
+Nobody passes you the install scope, and a standalone run has no conversation
+to remember it from, so read it off the repository instead. Repository scope
+means the team receives Gopnik with the project, so the question is whether
+this repository carries a Gopnik skills directory of its own: a
+`.claude/skills/gopnik-setup` or `.agents/skills/gopnik-setup` inside the
+working tree that git does not ignore. Check both halves — `git ls-files` and
+`git check-ignore` answer the second — because a skills directory the
+repository ignores reaches nobody, which makes it a user-scope install however
+it looks. Everything else is user scope too: a user-level plugin or skills
+directory, or a copy belonging to a different project.
+
+The copy you are running is a signal, not the answer. A project can carry a
+committed `.claude/skills/gopnik-setup` while the copy in use is the user-level
+one, and the team still receives the project's copy. If an answer carried from
+the installation conversation disagrees with what the repository shows, the
+repository decides.
+
+At repository scope the ignore rule has to end up in a file that travels with
+the repository: the project's `.gitignore`, or the nearest tracked ignore file
+that already governs the override's directory. `.git/info/exclude` is not
+committed, so a rule left only there protects the machine that ran setup and
+nobody else — while the point of a repository-scope install is that the team
+receives it with the project. The next person clones, creates their own
+override, and has nothing stopping them committing private infrastructure paths
+and the command that reads a secret.
+
+A tracked ignore file is a tracked project file, so the authority boundary
+above applies unchanged: ask before editing it, exactly once, in the selected
+language, and wait for the answer.
+
+> Stage 2 here needs values that belong to this machine, so they go into a separate local file. May I add that file to .gitignore, so it stays out of commits for everyone working on this repository?
+
+This ignore question is a hard turn boundary. The visible response is that
+question and nothing else: end with it and wait.
+
+If the person agrees, write a pattern that matches the override you actually
+created and nothing wider. If the person declines, still ignore the override
+where only this machine sees it, and say in one sentence that the protection
+now covers this machine only and the next person will not receive it. A decline
+is a limitation you report, not a quiet fall back to the machine-local route.
+
+At user scope none of that applies and nothing changes: a personal override
+belongs in this repository's own exclude file, which needs no permission
+because it is not part of the project. Write it where
+`git rev-parse --git-path info/exclude` points rather than to a literal
+`.git/info/exclude` — in a linked worktree or a submodule `.git` is a file and
+that literal path does not exist. Do not ask the `.gitignore` question there.
+It would propose an edit to someone else's project, for a file only you will
+ever write.
+
+Ask nothing at either scope when the run needs no override at all, when the
+override lives outside the repository, or when a tracked rule already covers
+it. An ignore rule that changes no file needs no question.
+
 ## Confirm how the project is used after delivery
 
 Only after Stage 1 passes, inspect the candidate delivery surfaces. Treat an
@@ -526,6 +584,10 @@ prompts for the person to copy.
       copying or linking the operator's own session state?
 - [ ] Is `stage2_unreachable` reserved for a true project-level absence?
 - [ ] Is shared verification portable, with private local values kept separate?
+- [ ] Did I read the install scope off the repository rather than assume it?
+- [ ] At repository scope, did the override's ignore rule reach a file the team
+      receives, after exactly one question — and at user scope did I ignore it
+      where only this machine sees it, and ask nothing?
 - [ ] Did I keep configuration files and JSON out of normal user-facing text?
 - [ ] Did I omit internal files, Git status, and commit advice from the final response?
 - [ ] If setup was blocked, did I stop before the recommendation and tracker example?

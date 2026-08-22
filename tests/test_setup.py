@@ -23,6 +23,7 @@ Run with: python3 tests/test_setup.py
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import pathlib
@@ -2858,6 +2859,237 @@ def test_skill_trigger_contract_lives_in_description_not_custom_frontmatter():
             assert "when_to_use:" not in head, (
                 f"{path.relative_to(ROOT)} uses unsupported when_to_use frontmatter"
             )
+
+
+def _live_setup_oracle_module():
+    spec = importlib.util.spec_from_file_location(
+        "live_setup_oracle", LIVE_SETUP_ORACLE
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _flat_text(path: pathlib.Path) -> str:
+    return " ".join(path.read_text(encoding="utf-8").split())
+
+
+def test_the_ignore_question_is_one_string_in_the_skills_and_the_oracle():
+    """#78. The oracle holds the question; the skills tell the agent to say it.
+
+    Every question literal in the oracle already lives in a skill file too, and
+    nothing compares them, so a reworded skill and an untouched oracle would
+    both keep passing while the live procedure checked a sentence nobody is
+    told to say any more.
+    The ignore question is the first pair that is actually compared. The
+    Russian skill writes non-breaking spaces after single-letter prepositions,
+    which `str.split()` treats as whitespace, so the comparison is on the
+    flattened text rather than on the bytes.
+    """
+    module = _live_setup_oracle_module()
+    english = _flat_text(SKILLS / "gopnik-setup" / "SKILL.md")
+    russian = _flat_text(SKILLS / "gopnik-setup" / "SKILL.ru.md")
+    guide = _flat_text(ROOT / "docs" / "install.md")
+
+    assert module.OVERRIDE_QUESTION in english, "SKILL.md lost the ignore question"
+    assert module.OVERRIDE_QUESTION in guide, "install.md lost the ignore question"
+    assert module.OVERRIDE_QUESTION_RU in russian, "SKILL.ru.md lost the ignore question"
+    assert module.OVERRIDE_QUESTION_RU in guide, "install.md lost the Russian ignore question"
+
+
+def test_the_skill_reads_the_install_scope_off_the_repository():
+    """#78. Nothing passes setup the install scope, and it needs it.
+
+    `docs/install.md` asks the scope question and keeps the answer "for the rest
+    of this setup conversation", but a standalone setup run has no such
+    conversation and only `--language` is passed on. The substitute has to
+    answer the question the scope stands for — does the team receive Gopnik with
+    this project — so it is the repository that is read, not the path the
+    running copy happens to have: a project can carry a committed skills
+    directory while a user-level copy executes, and a skills directory the
+    repository ignores travels to nobody however local it looks.
+    """
+    english = _flat_text(SKILLS / "gopnik-setup" / "SKILL.md")
+    russian = _flat_text(SKILLS / "gopnik-setup" / "SKILL.ru.md")
+
+    for phrase in (
+        "read it off the repository instead",
+        "`.claude/skills/gopnik-setup` or `.agents/skills/gopnik-setup` inside the working tree that git does not ignore",
+        "`git ls-files` and `git check-ignore` answer the second",
+        "The copy you are running is a signal, not the answer",
+        "the repository decides",
+    ):
+        assert phrase in english, f"SKILL.md: {phrase}"
+
+    for phrase in (
+        "определи её по самому репозиторию",
+        "в рабочем дереве, который git не игнорирует",
+        "на вторую отвечают `git ls-files` и `git check-ignore`",
+        "это признак, а не ответ",
+        "решает репозиторий",
+    ):
+        assert phrase in russian, f"SKILL.ru.md: {phrase}"
+
+
+def test_live_setup_oracle_separates_repository_scope_from_user_scope():
+    """#78, and the control is half of it.
+
+    A field install at repository scope put the override — a private host, a
+    namespace, an IaC directory and a secret-store read command — in
+    `.git/info/exclude`, which is not committed. The protection stayed on one
+    machine while the skills and `gopnik.json` travelled to the team. The fix is
+    not "ask about `.gitignore`": a run that asks at user scope too has moved
+    the defect into someone else's repository. Both polarities are checked here,
+    and so is the third case, where no override is needed and nothing should be
+    asked at all.
+    """
+    module = _live_setup_oracle_module()
+    root = pathlib.Path(tempfile.mkdtemp())
+    transcript = root / "turn.jsonl"
+
+    def run(mode: str, result: str, calls: tuple = ()) -> int:
+        events = []
+        for index, (name, payload) in enumerate(calls):
+            tool_id = f"call-{index}"
+            events.append({"type": "assistant", "message": {"content": [{
+                "type": "tool_use",
+                "id": tool_id,
+                "name": name,
+                "input": payload,
+            }]}})
+            events.append({"type": "user", "message": {"content": [{
+                "type": "tool_result",
+                "tool_use_id": tool_id,
+                "is_error": False,
+                "content": "done",
+            }]}})
+        events.append({"type": "result", "result": result})
+        transcript.write_text(
+            "\n".join(json.dumps(event) for event in events) + "\n",
+            encoding="utf-8",
+        )
+        return subprocess.run(
+            [sys.executable, str(LIVE_SETUP_ORACLE), mode, str(transcript)],
+            capture_output=True,
+            text=True,
+        ).returncode
+
+    ask = module.OVERRIDE_QUESTION
+    ask_ru = module.OVERRIDE_QUESTION_RU
+    silent = "Stage 1 passed. I will look at the deployed version next."
+    silent_ru = "Stage 1 прошла. Дальше посмотрю на развёрнутую версию."
+    write_override = ("Write", {"file_path": "gopnik.local.json", "content": "{}"})
+    write_exclude = ("Bash", {"command": "printf 'gopnik.local.json' >> .git/info/exclude"})
+    write_gitignore = ("Bash", {"command": "printf 'gopnik.local.json' >> .gitignore"})
+    read_exclude = ("Bash", {"command": "cat .git/info/exclude"})
+    read_rules = ("Bash", {"command": "git check-ignore -v gopnik.local.json"})
+
+    # Repository scope: the question is the whole turn, and it precedes any
+    # ignore rule. Reading the existing rules first is how you find out whether
+    # one is needed, so reading is not writing.
+    assert run("override", ask, (write_override,)) == 0
+    assert run("override", ask, (write_override, read_exclude, read_rules)) == 0
+    assert run("override-ru", ask_ru, (write_override,)) == 0
+
+    # The defect itself: the machine-local route taken because it needs no
+    # question. It must not pass at repository scope.
+    assert run("override", silent, (write_override, write_exclude)) != 0, (
+        "an override ignored only in .git/info/exclude passed at repository scope"
+    )
+    assert run("override", ask, (write_override, write_exclude)) != 0, (
+        "the question passed while the rule had already been written elsewhere"
+    )
+    assert run("override", ask, (write_override, write_gitignore)) != 0, (
+        "a tracked project file was edited before the question was answered"
+    )
+    assert run("override", ask_ru, (write_override,)) != 0
+    assert run("override-ru", ask, (write_override,)) != 0
+
+    # The control. At user scope the override is personal: `.git/info/exclude`
+    # is right, and the question is noise in someone else's repository.
+    assert run("override-user", silent, (write_override, write_exclude)) == 0
+    assert run("override-user-ru", silent_ru, (write_override, write_exclude)) == 0
+    assert run("override-user", ask, (write_override, write_exclude)) != 0, (
+        "the repository-scope question passed at user scope: the defect moved"
+    )
+    assert run(
+        "override-user",
+        "Should I ignore that file for you?",
+        (write_override, write_exclude),
+    ) != 0
+    assert run(
+        "override-user-ru",
+        "Добавить этот файл в игнорируемые?",
+        (write_override, write_exclude),
+    ) != 0
+    assert run("override-user", silent, (write_override, write_gitignore)) != 0, (
+        "a personal override was ignored in a file the whole team receives"
+    )
+    assert run("override-user", silent, (write_override,)) != 0, (
+        "an override nobody ignored passed at user scope"
+    )
+
+    # Prose is not a question. A user-scope turn that names the file while
+    # explaining what it did is not the defect, and reddening it would only
+    # teach the next author to say less.
+    assert run(
+        "override-user",
+        "Your .gitignore is untouched; the override is ignored locally.",
+        (write_override, write_exclude),
+    ) == 0
+
+    # The turn after consent, which is where the defect actually lands. Asking
+    # the question proves nothing about which file then received the rule, and
+    # the field install asked nobody anything.
+    assert run("override-applied", "Added it to .gitignore.", (write_gitignore,)) == 0
+    assert run("override-applied", "Ignored it locally.", (write_exclude,)) != 0, (
+        "a rule that reached only this machine passed the applied cell"
+    )
+    assert run("override-applied", "All set.", ()) != 0
+
+    # The decline branch: still ignored here, and reported as machine-local.
+    declined = (
+        "Understood — I have kept it out of commits on this machine only, "
+        "so the next person will not receive that protection."
+    )
+    assert run("override-declined", declined, (write_exclude,)) == 0
+    assert run("override-declined", "Understood, done.", (write_exclude,)) != 0, (
+        "a silent downgrade passed the decline cell"
+    )
+    assert run("override-declined", declined, (write_gitignore,)) != 0
+    assert run("override-declined", declined, ()) != 0
+    assert run(
+        "override-declined-ru",
+        "Понял — защита теперь распространяется только на эту машину.",
+        (write_exclude,),
+    ) == 0
+
+    # #80 removed a Stage 2 route that borrowed the operator's login. These
+    # turns bounded nothing, so the same reach passed them.
+    assert run("override", ask, (("Read", {"file_path": "/home/u/.claude/.credentials.json"}),)) != 0
+    assert run("override", ask, (("Bash", {"command": "kubectl get secrets -A"}),)) != 0
+    assert run("override-user", silent, (write_exclude, ("Read", {"file_path": "~/.claude/.claude.json"}))) != 0
+
+    # The exclude file is not at `.git/info/exclude` in a linked worktree or a
+    # submodule, where `.git` is a file. The correct spelling has to count.
+    worktree_exclude = ("Bash", {
+        "command": 'printf "gopnik.local.json\n" >> "$(git rev-parse --git-dir)/info/exclude"',
+    })
+    assert run("override-user", silent, (write_override, worktree_exclude)) == 0, (
+        "the worktree-correct exclude path was not recognised as ignoring anything"
+    )
+    assert run("override", ask, (write_override, worktree_exclude)) != 0, (
+        "a machine-local write hid behind the worktree-correct spelling"
+    )
+
+    # No override, no question, in either scope and either language.
+    assert run("override-none", silent, ()) == 0
+    assert run("override-none", silent_ru, ()) == 0
+    assert run("override-none", ask, ()) != 0
+    assert run("override-none", silent, (write_exclude,)) != 0
+    assert run("override-none", silent, (write_gitignore,)) != 0
+
+    shutil.rmtree(root, ignore_errors=True)
 
 
 def _main() -> int:
