@@ -162,16 +162,27 @@ def test_the_gate_pair_differs_only_in_product_code():
     assert differ == {"app/cli.py"}, f"the pair differs in more than the change: {differ}"
 
 
-def test_stage2_consumes_the_pack_rather_than_rebuilding_it():
-    """The relocation is only real if the live route reads these files."""
+def test_stage2_exercises_the_pack_as_delivered():
+    """The pack has to survive delivery, not merely exist in the working tree.
+
+    Stage 2 used to name each fixture directly, because it drove a live
+    conversation against each one. Those cells are gone — they needed a
+    credential, and the only one to hand was the operator's. What is checked
+    instead is the property that still crosses the boundary without a login:
+    this file, run from the delivered clone, plus the executable bits a live
+    procedure would need and that packaging is exactly what loses.
+    """
     stage2 = json.loads((ROOT / "gopnik.json").read_text(encoding="utf-8"))["verification"]["stage2"]
     joined = "\n".join(stage2)
     assert "printf '%s\\n' '[project]'" not in joined, "the printf chain is back"
-    for name in ("hybrid", "stage1-gap", "gate-red-stage1", "gate-ready-scoped",
-                 "gate-ui-covered", "gate-ui-gap"):
-        needle = f"tests/fixtures/{name}"
-        assert needle in joined, f"stage2 never reaches {needle}"
-        assert (FIXTURES / name).is_dir(), f"stage2 names a fixture that is not here: {name}"
+    assert 'cd "$GOPNIK_STAGE2_ROOT/src" && python3 tests/test_fixtures.py' in joined, (
+        "the delivered pack is never exercised")
+    assert 'test -x "$GOPNIK_FIXTURE/check.sh"' in joined, (
+        "a check that ships without its executable bit would not be noticed")
+    for name in ("stage1-gap", "gate-ui-covered"):
+        assert f"tests/fixtures/{name}/repo/ui-tests/run.sh" in joined, (
+            f"{name}'s browser suite is not checked for its executable bit")
+        assert (FIXTURES / name / "repo" / "ui-tests" / "run.sh").is_file(), name
 
 
 # --------------------------------------------- the gate oracle can fail
