@@ -421,6 +421,36 @@ variables or another project-owned indirection. Never put the shared project
 configuration in `.git/info/exclude`. Never copy a private target or an
 absolute home-directory path into a file intended for the team.
 
+Where that override's ignore rule belongs depends on the installation scope
+chosen in step 2, and the two scopes must diverge. In the repository scope the
+rule has to travel with the repository — the project's `.gitignore`, or the
+nearest tracked ignore file that already governs the override's directory.
+`.git/info/exclude` is never committed, so a rule left only there protects this
+machine while the skills and the configuration reach the whole team, and the
+next person to create their own override has nothing stopping them committing
+private infrastructure paths and a secret-store read command. A tracked ignore
+file is a tracked project file, so ask once before editing it, in the selected
+language, and wait. In English:
+
+> Stage 2 here needs values that belong to this machine, so they go into a separate local file. May I add that file to .gitignore, so it stays out of commits for everyone working on this repository?
+
+In Russian:
+
+> Stage 2 здесь нужны значения, привязанные к этой машине, поэтому они уйдут в отдельный локальный файл. Можно добавить этот файл в .gitignore, чтобы он не попадал в коммиты ни у кого, кто работает с этим репозиторием?
+
+This ignore question is a hard turn boundary too. The visible response is that
+question and nothing else.
+
+In the user scope, keep the current behaviour: a personal override belongs in
+this repository's own exclude file — the path `git rev-parse --git-path
+info/exclude` prints, which in a linked worktree or a submodule is not
+`.git/info/exclude` — and asking to edit `.gitignore` in someone else's
+repository would be noise. Ask nothing in either scope when the run needs no
+override at all. Setup invoked on its own, with no scope carried from this
+conversation, reads the scope off the repository instead, and where the answer
+carried from here disagrees with what the repository shows, the repository
+decides.
+
 As part of that investigation, inspect the product surfaces that Stage 2 must
 actually exercise. Do not ask about browser tooling merely because frontend
 files exist. If the deployed product has a user interface, first look for a
