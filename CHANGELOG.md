@@ -1,5 +1,12 @@
 # Changelog
 
+# [5.2.0](https://github.com/concordloom/gopnik/compare/v5.1.0...v5.2.0) (2026-08-22)
+
+
+### Features
+
+* a configuration written by an older version can now be revisited ([#82](https://github.com/concordloom/gopnik/issues/82)) ([b4bed6f](https://github.com/concordloom/gopnik/commit/b4bed6f9cb9b3245564e853353c5d1bb29736265)), closes [#76](https://github.com/concordloom/gopnik/issues/76) [#81](https://github.com/concordloom/gopnik/issues/81)
+
 # [5.1.0](https://github.com/concordloom/gopnik/compare/v5.0.0...v5.1.0) (2026-08-22)
 
 
