@@ -486,8 +486,26 @@ SURFACE_ALIASES = {
 
 
 def canonical_surface(name: str) -> str:
+    """The identifier a critic meant, whichever spelling it reached for.
+
+    A live run returned `web-dashboard, cli` for the pair this fixture calls
+    `web, command`. `cli` was already an alias; `web-dashboard` was not, and the
+    turn was rejected for vocabulary rather than for anything it did. Compound
+    spellings are common precisely because a critic describes what it found, so
+    a name that is not itself an alias is retried part by part before being
+    taken literally.
+    """
     name = name.strip().lower().replace("_", "-")
-    return SURFACE_ALIASES.get(name, name)
+    if name in SURFACE_ALIASES:
+        return SURFACE_ALIASES[name]
+    if name in SURFACE_TERMS:
+        return name
+    for part in name.split("-"):
+        if part in SURFACE_ALIASES:
+            return SURFACE_ALIASES[part]
+        if part in SURFACE_TERMS:
+            return part
+    return name
 
 
 def refuted_surface_shape(surfaces: set[str], russian: bool) -> str:
@@ -502,7 +520,10 @@ def refuted_surface_shape(surfaces: set[str], russian: bool) -> str:
 
 
 def candidate_is_named(candidate: str, result: str, russian: bool) -> bool:
-    candidate = candidate.replace("_", "-").strip().lower()
+    # Through the same canonicaliser as the set comparison, or a critic's
+    # `web-dashboard` is accepted as a surface and then not recognised in the
+    # question that names it `the dashboard`.
+    candidate = canonical_surface(candidate)
     patterns = {
         "command": r"\b(?:command|command-line|cli)\b" if not russian else r"\b(?:команд\w*|cli)\b",
         "command-line": r"\b(?:command|command-line|cli)\b" if not russian else r"\b(?:команд\w*|cli)\b",

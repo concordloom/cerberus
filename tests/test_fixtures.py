@@ -379,6 +379,27 @@ def test_a_gate_fixture_missing_its_expectations_fails_loudly():
 # ------------------------------- the setup oracle reads the fixture, not itself
 
 
+def test_a_compound_surface_spelling_is_read_as_the_surface_it_names():
+    """R2 of #76. A live critic answered `web-dashboard, cli` for `web, command`.
+
+    `cli` was an alias and `web-dashboard` was not, so the turn was rejected for
+    vocabulary rather than for anything it did. A critic names what it found, so
+    compound spellings are the normal case, not an odd one.
+    """
+    sys.path.insert(0, str(SETUP_ORACLE.parent))
+    import check_live_setup_turn as oracle
+
+    assert oracle.canonical_surface("web-dashboard") == "web"
+    assert oracle.canonical_surface("cli") == "command"
+    assert oracle.canonical_surface("operator-dashboard") == "web"
+    assert oracle.canonical_surface("http-service") == "service"
+    assert oracle.canonical_surface("web") == "web"
+    assert oracle.canonical_surface("command") == "command"
+    # Not everything with a hyphen is a surface, and an unknown name must stay
+    # unknown rather than being bent into the nearest one.
+    assert oracle.canonical_surface("telemetry-pipeline") == "telemetry-pipeline"
+
+
 def test_the_setup_oracle_takes_its_strings_from_the_fixture():
     """#73. The claim is parameterisation, so a second fixture has to move it.
 
