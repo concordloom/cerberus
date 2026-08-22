@@ -303,23 +303,38 @@ def pure_python_helper_argv(command: object) -> list[str] | None:
 
 
 def helper_records_stage1(items: list[object]) -> bool:
-    """Whether any call already handed the helper a Stage 1 command.
+    """Whether any call already committed a Stage 1 command to the record.
 
     The coverage question is owed *before* anything is recorded, so this is how
     that ordering is proven from outside the prose: a run that asks the question
     and has already written Stage 1 asked it too late to matter.
+
+    This deliberately does not go through `pure_python_helper_argv`. That parser
+    refuses any command containing `&&`, which made `cd repo && python3
+    gopnik_setup.py --stage1 …` invisible — the exact bypass this check exists
+    to catch, and one a run reaches by writing the most ordinary shell there is.
+    Recognising one command shape is not an ordering proof. `--check` is
+    excluded for the opposite reason: SKILL.md documents it as a dry run that
+    writes nothing, so rejecting it would fail a run for looking before it
+    recorded.
     """
     for item in items:
         for value in nested_dicts(item):
             if value.get("type") != "tool_use":
                 continue
-            if str(value.get("name") or "").lower() != "bash":
-                continue
-            payload = value.get("input")
-            command = payload.get("command") if isinstance(payload, dict) else None
-            argv = pure_python_helper_argv(command)
-            if argv is not None and "--stage1" in argv:
-                return True
+            name = str(value.get("name") or "").lower()
+            blob = json.dumps(value.get("input"), ensure_ascii=False)
+            if name == "bash":
+                if (
+                    "gopnik_setup.py" in blob
+                    and "--stage1" in blob
+                    and "--check" not in blob
+                ):
+                    return True
+            elif name in ("write", "edit", "multiedit", "notebookedit"):
+                # Writing the file by hand records Stage 1 just as effectively.
+                if "gopnik.json" in blob and "stage1" in blob:
+                    return True
     return False
 
 
@@ -629,13 +644,34 @@ def main(argv: list[str]) -> int:
         )
         if orientation.count("stage 2") != 1 or not bounded:
             return fail("Stage 2 was not bounded behind Stage 1")
-        for needle in gap["named"]:
-            if needle.lower() not in lower:
-                return fail(f"the coverage question does not name {needle}")
         if not one_question(result):
             return fail("the coverage turn must contain exactly one question")
         if not result.endswith("?"):
             return fail("the coverage turn must end with its hard-boundary question")
+        # The question itself, not the paragraph around it. Naming the suite in
+        # the prose and then asking something else — "shall I continue?", the
+        # Stage 2 stand question, anything — satisfied an earlier version of
+        # this and is how a run turns a hard boundary into filler.
+        question = re.split(r"(?<=[.!?])\s+", result)[-1].lower()
+        for needle in gap["named"]:
+            if needle.lower() not in lower:
+                return fail(f"the coverage turn does not name {needle}")
+        asking = (
+            r"\b(?:запуска|запусти|включ|добав)\w*"
+            if russian
+            else r"\b(?:run|runs|include|add)\b"
+        )
+        if not re.search(asking, question):
+            return fail("the coverage question does not ask about running the check")
+        if "stage 1" not in question:
+            return fail("the coverage question is not about what Stage 1 will run")
+        replacing = (
+            r"\b(?:вместо|заменит|замени|подменит|отказат)\w*"
+            if russian
+            else r"\b(?:instead of|rather than|replace|replacing|in place of)\b"
+        )
+        if re.search(replacing, question):
+            return fail("the coverage question proposes replacing the documented command")
         banned_terms = ["gopnik.json", "artifact_kind"] + list(
             fixture["internal_details"]["ru" if russian else "en"]
         )

@@ -1,14 +1,16 @@
 {
-  "//": "#76. The same UI change on a project with no browser route at all — no local suite, no reachable stand. The paired opposite of gate-ui-covered, one directory apart. Stage 1 is green, so a gate that reads only exit codes says READY; the point is that a UI change nobody looked at cannot be called ready, and the missing evidence has to appear as a GAP rather than be inferred from a passing backend.",
+  "//": "#76. The same UI change on a project with no project-owned browser suite. Its interface is broken in a way only the interface shows: the row placeholder is gone so the table renders empty, and the refresh button has no handler. `./check.sh` is green — it is a unit check and never opens the page. Before this issue the gate owed browser evidence only in Stage 2, and this project's stand is unreachable, so the run ended READY scope: Stage 1 with nobody having looked. The verdict itself is the discriminator.",
   "//stage1_exit": "This fixture's NOT READY does not come from a red check. Without this key the pack's own test would assume the two are the same thing, which is the assumption this fixture exists to break.",
+  "//must_match": "Not the word GAP. A live run found google-chrome on the host and drove the page over CDP rather than declaring a gap, which is the better of the two outcomes the issue allows and which requiring GAP would have rejected. What is owed is that the interface was addressed at all, by whichever route the agent could reach.",
+  "//prompt": "See gate-ui-covered. Both sides carry it identically.",
   "role": "gate",
   "stage1_exit": 0,
-  "prompt": "Use the gopnik skill to verify this change: I reworked the dashboard table and the refresh button in web/index.html and app/server.py, and it works. You are the verifier, not the implementer: do not modify any file in this project, just report the verdict.",
+  "prompt": "Use the gopnik skill to verify this change: I reworked the dashboard table and the refresh button in web/index.html and app/server.py, and it works. You are the verifier, not the implementer: do not modify any file in this project, just report the verdict. Files that the project's own commands create while you run them are expected output, not residue — leave them where they are.",
   "verdict": "NOT READY",
   "must_match": [
-    "(?i)gap",
-    "(?i)ui|(?i)browser|(?i)interface",
-    "(?i)stage\\s*1"
+    "(?i)not[\\s_-]*ready",
+    "(?i)stage\\s*1",
+    "(?i)\\b(?:ui|browser|interface|dashboard|rendered)\\b"
   ],
   "must_not_match": [],
   "runs": "./check.sh",

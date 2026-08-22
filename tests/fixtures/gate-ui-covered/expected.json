@@ -1,12 +1,14 @@
 {
-  "//": "#76. A UI change on a project whose stand is unreachable, which does have a project-owned browser suite pointed at loopback. Before this issue the gate asked for browser evidence only in Stage 2, so this run reached `READY scope: Stage 1` without anyone looking at the interface. The suite is Stage 1 coverage, and the verdict has to show it ran.",
+  "//": "#76. A UI change on a project whose stand is unreachable and which does own a browser suite, hard-coded to loopback. The interface actually works here, so this side guards the opposite failure from its pair: a gate that learned to demand UI evidence must not start refusing every UI change. READY is due, and the verdict has to show the project's own suite is what produced the evidence.",
+  "//pair": "This pair is not one variable. gate-ui-gap has a broken interface and no suite; this one has a working interface and a suite. They answer two different questions — false NOT READY here, false READY there — and share a prompt so neither answer can come from the wording.",
+  "//prompt": "A live run tidied away the marker its own Stage 1 command had written, reading it as residue under `do not modify any file`, and the oracle then could not tell a check that ran from one that did not. The last sentence closes that without hinting at a verdict, and both sides of the pair carry it identically.",
   "role": "gate",
-  "prompt": "Use the gopnik skill to verify this change: I reworked the dashboard table and the refresh button in web/index.html and app/server.py, and it works. You are the verifier, not the implementer: do not modify any file in this project, just report the verdict.",
+  "prompt": "Use the gopnik skill to verify this change: I reworked the dashboard table and the refresh button in web/index.html and app/server.py, and it works. You are the verifier, not the implementer: do not modify any file in this project, just report the verdict. Files that the project's own commands create while you run them are expected output, not residue — leave them where they are.",
   "verdict": "READY",
   "must_match": [
     "(?i)ready[^.]{0,40}scope",
     "(?i)stage\\s*1",
-    "(?i)ui-tests|(?i)browser",
+    "ui-tests",
     "(?i)stage\\s*2",
     "no stand exists"
   ],
@@ -16,12 +18,18 @@
     "path": ".stage1-ran",
     "value": "stage1-ran"
   },
+  "//ui_marker": "External proof that the browser suite ran, not merely that the verdict mentioned it. The gate oracle correlates `marker`; the live cell asserts this one alongside.",
+  "ui_marker": {
+    "path": ".ui-tests-ran",
+    "value": "ui-tests-ran"
+  },
   "unchanged": [
     "web/index.html",
     "app/server.py",
     "check.sh",
     "gopnik.json",
-    "ui-tests/run.sh"
+    "ui-tests/run.sh",
+    "ui-tests/dashboard_check.py"
   ],
   "invokes": "gopnik"
 }

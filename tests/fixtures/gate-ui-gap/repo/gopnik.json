@@ -5,6 +5,6 @@
     "stage1": ["./check.sh"],
     "stage2": [],
     "stage2_unreachable": "no stand exists for this project; it is run from a checkout by hand",
-    "notes": "There is no browser route of any kind here: no local suite, and no stand to point one at."
+    "notes": "There is no project-owned browser suite here, and no stand to point one at. Whether the host offers a browser the agent can drive is a property of the machine, not of this project, so this file does not claim either way."
   }
 }

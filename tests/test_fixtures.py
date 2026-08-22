@@ -556,6 +556,97 @@ def test_the_coverage_oracle_rejects_everything_it_owes():
     assert check(QUESTION, target=FIXTURES / "hybrid") != 0, (
         "a fixture that declares no gap passed the coverage mode")
 
+    # R1 of #76: an independent critic built seven turns this mode accepted and
+    # should not have. Each one is here, and each fails for its own reason
+    # rather than because the previous rule happens to catch it too.
+    accepted_and_should_not_be = [
+        # Names both needles in the prose and then asks something else. The
+        # hard boundary becomes filler, and the decision was already taken.
+        "I found ui-tests, a browser suite that check.sh never runs, and I have "
+        "decided to leave it out of Stage 1. Shall I continue?",
+        # The question asked is the Stage 2 stand question, which the skill
+        # forbids at this point in the conversation.
+        "The project also has ui-tests, which check.sh never runs. Is there a "
+        "test or staging environment where Gopnik can verify the deployed version?",
+        # Both needles, an arbitrary question.
+        "I read AGENTS.md, check.sh and ui-tests. What is your name?",
+        # Proposes replacing the documented command rather than adding to it.
+        "Should Stage 1 run ui-tests/run.sh instead of check.sh?",
+        # A fait accompli dressed as a question.
+        "I already ran ui-tests, which check.sh never runs, and recorded it. "
+        "Ready to continue?",
+    ]
+    for turn in accepted_and_should_not_be:
+        assert check(turn) != 0, f"a turn that should not pass did: {turn}"
+
+    # Ordering again, by the two routes that used to be invisible. The parser
+    # the check went through refused any command containing `&&`, so the most
+    # ordinary shell in the world walked straight past it.
+    def with_call(name: str, payload: dict) -> int:
+        events = [
+            {"type": "assistant", "message": {"content": [
+                {"type": "text", "text": ORIENTATION + " " + QUESTION}]}},
+            {"type": "assistant", "message": {"content": [{
+                "type": "tool_use", "id": "s1", "name": name, "input": payload}]}},
+            {"type": "result", "result": QUESTION},
+        ]
+        path.write_text("\n".join(json.dumps(e) for e in events) + "\n", encoding="utf-8")
+        return subprocess.run(
+            [sys.executable, str(SETUP_ORACLE), "--fixture", str(fixture),
+             "coverage", str(path)],
+            capture_output=True, text=True,
+        ).returncode
+
+    assert with_call("Bash", {"command":
+        "cd /repo && python3 gopnik_setup.py --defer-artifact-kind --language en "
+        "--stage1 './check.sh'"}) != 0, "a compound shell command hid the recording"
+    assert with_call("Write", {"file_path": "/repo/gopnik.json", "content":
+        '{"verification": {"stage1": ["./check.sh"]}}'}) != 0, (
+        "writing the configuration by hand hid the recording")
+
+    # …and the opposite error. `--check` is documented as a dry run that writes
+    # nothing, so a run that looks before it records must not be rejected.
+    assert with_call("Bash", {"command":
+        "python3 gopnik_setup.py --check --stage1 './check.sh'"}) == 0, (
+        "a documented dry run was mistaken for a recording")
+
+    # The Russian half. No live cell drives `coverage-ru` yet — the gap
+    # conversation is English only — so without this the mode's Cyrillic branch
+    # would be text nothing had ever executed, which is the shape of defect
+    # this whole issue is about.
+    RU_ORIENTATION = (
+        "Stage 0 показывает, что может сломаться. Stage 1 проверяет код в "
+        "репозитории. Stage 2 проверяет доставленный результат, и только после "
+        "того, как Stage 1 заработает."
+    )
+    RU_QUESTION = (
+        "В проекте есть ещё ui-tests — браузерный набор, который check.sh "
+        "не запускает. Запускать его в Stage 1?"
+    )
+
+    def check_ru(result: str, orientation: str = RU_ORIENTATION) -> int:
+        events = [
+            {"type": "assistant", "message": {"content": [
+                {"type": "text", "text": orientation + " " + result}]}},
+            {"type": "result", "result": result},
+        ]
+        path.write_text("\n".join(json.dumps(e) for e in events) + "\n", encoding="utf-8")
+        return subprocess.run(
+            [sys.executable, str(SETUP_ORACLE), "--fixture", str(fixture),
+             "coverage-ru", str(path)],
+            capture_output=True, text=True,
+        ).returncode
+
+    assert check_ru(RU_QUESTION) == 0, "the Russian coverage turn this fixture accepts failed"
+    assert check_ru(QUESTION) != 0, "an English turn passed the Russian mode"
+    assert check_ru(
+        "В проекте есть ещё ui-tests, который check.sh не запускает. "
+        "Запускать его в Stage 1 вместо check.sh?"
+    ) != 0, "a Russian question proposing a replacement passed"
+    assert check_ru(
+        "В проекте есть ещё ui-tests, который check.sh не запускает. Продолжаем?"
+    ) != 0, "a Russian turn whose question is filler passed"
+
 
 def _run_all() -> int:
     failures = []

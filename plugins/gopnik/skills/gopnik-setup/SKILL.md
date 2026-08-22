@@ -75,7 +75,7 @@ actually contains, then compare that set with the commands you are about to
 write. Read what CI invokes job by job, and look for check or test directories
 the documented route never reaches: a suite in a second runtime, a browser
 suite, contract or migration checks, a linter wired only into a workflow. Place
-each one in exactly three: the documented command runs it, only CI runs it, or
+each one in exactly one of three: the documented command runs it, only CI runs it, or
 nothing runs it. Nothing running it is the strongest case for recording it, not
 the weakest — Stage 1 would be the only place it ever executes.
 

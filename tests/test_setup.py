@@ -1449,6 +1449,70 @@ def test_the_self_check_asks_for_it_at_verdict_time():
         assert any(needle in l for l in checklist), f"{path.name}: it is prose, not a check"
 
 
+def test_a_check_found_late_can_still_reach_a_pending_stage1():
+    """#76. The skill tells a late-found suite to be reconciled; make it possible.
+
+    Surfaces are classified after Stage 1 is written, so a browser suite the
+    documented command misses is often only noticed there. Before this, the
+    helper answered "Stage 1 already set up", exit 0, and changed nothing — the
+    instruction failed green, which is worse than not having it. Extending is
+    allowed only while the delivery kind is still pending: that is what "setup
+    is not finished" means in this file.
+    """
+    root = project({
+        **PY_PROJECT,
+        "AGENTS.md": "Use ./check.sh as the only fast local verification command.\n",
+        "check.sh": "#!/bin/sh\nexit 0\n",
+        "ui.sh": "#!/bin/sh\nprintf ui > .ui-ran\n",
+    })
+    for name in ("check.sh", "ui.sh"):
+        (root / name).chmod(0o755)
+
+    code, _ = run_setup(root, "--defer-artifact-kind", "--language", "en",
+                        "--stage1", "./check.sh")
+    assert code == 0
+    assert config_of(root)["verification"]["stage1"] == ["./check.sh"]
+    assert not (root / ".ui-ran").exists()
+
+    code, out = run_setup(root, "--defer-artifact-kind", "--language", "en",
+                          "--stage1", "./check.sh", "--stage1", "./ui.sh")
+    assert code == 0, out
+    assert config_of(root)["verification"]["stage1"] == ["./check.sh", "./ui.sh"], out
+    assert (root / ".ui-ran").is_file(), (
+        "the added check was written without being run: " + out)
+
+    # And once the kind is confirmed the configuration is the project's again.
+    assert run_setup(root, "--confirm-artifact-kind", "service")[0] == 0
+    (root / ".ui-ran").unlink()
+    code, out = run_setup(root, "--defer-artifact-kind", "--language", "en",
+                          "--stage1", "./check.sh", "--stage1", "./ui.sh",
+                          "--stage1", "./late.sh")
+    # `./late.sh` does not exist, so a run that tried to record it would fail
+    # loudly rather than quietly; what is asserted is that it never got there.
+    assert config_of(root)["verification"]["stage1"] == ["./check.sh", "./ui.sh"], out
+    assert "late.sh" not in json.dumps(config_of(root)), (
+        "a settled configuration was extended anyway: " + out)
+
+
+def test_a_late_check_that_fails_is_not_written_either():
+    """The rule that only a passing check is recorded does not get an exception."""
+    root = project({
+        **PY_PROJECT,
+        "AGENTS.md": "Use ./check.sh as the only fast local verification command.\n",
+        "check.sh": "#!/bin/sh\nexit 0\n",
+        "ui.sh": "#!/bin/sh\nexit 1\n",
+    })
+    for name in ("check.sh", "ui.sh"):
+        (root / name).chmod(0o755)
+
+    assert run_setup(root, "--defer-artifact-kind", "--language", "en",
+                     "--stage1", "./check.sh")[0] == 0
+    code, out = run_setup(root, "--defer-artifact-kind", "--language", "en",
+                          "--stage1", "./check.sh", "--stage1", "./ui.sh")
+    assert code != 0, out
+    assert config_of(root)["verification"]["stage1"] == ["./check.sh"], out
+
+
 def test_this_repository_verifies_it_with_a_live_session():
     """#49, point 4. The only part that is mechanical rather than well-meant.
 
